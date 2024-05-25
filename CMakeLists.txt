@@ -4,12 +4,15 @@ set(PROJECT engine)
 project(${PROJECT})
 set(EXEC ${PROJECT})
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 
 set(CMAKE_CXX_FLAGS_DEBUG "-ggdb -O0 -DDEBUG -lvulkan -Wall")
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -lvulkan -Wall")
 
-file(GLOB_RECURSE SOURCES "engine/src/*.cpp" "lib/imgui/*.cpp" "lib/SPIRV-Reflect/spirv_reflect.cpp")
+file(GLOB_RECURSE SOURCES "engine/src/*.cpp")
+
+file(GLOB EXTERNAL_SOURCES "lib/imgui/*.cpp" "lib/imgui/backends/imgui_impl_glfw.cpp" "lib/imgui/backends/imgui_impl_vulkan.cpp""lib/SPIRV-Reflect/spirv_reflect.cpp")
+list(APPEND SOURCES ${EXTERNAL_SOURCES})
 
 add_executable(${EXEC} ${SOURCES})
 target_include_directories(${PROJECT} PRIVATE engine/src/)
@@ -38,6 +41,9 @@ target_link_libraries(${PROJECT} vk-bootstrap::vk-bootstrap)
 
 add_subdirectory(lib/glm)
 target_link_libraries(${PROJECT} glm::glm)
+
+add_subdirectory(lib/tracy)
+target_link_libraries(${PROJECT} Tracy::TracyClient)
 
 add_definitions(-DGLFW_INCLUDE_NONE)
 
