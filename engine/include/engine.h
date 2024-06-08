@@ -1,5 +1,7 @@
 #pragma once
 
+#include <print>
+
 #if defined(DEBUG)
     #if defined(__linux__)
         #include <signal.h>
