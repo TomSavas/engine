@@ -96,8 +96,11 @@ struct VulkanBackend
     AllocatedImage backbufferImage;
 
     // TEMP: concrete compute pipeline we for test render
-    VkPipeline pipeline;
     VkPipelineLayout pipelineLayout;
+    VkPipeline pipeline;
+
+    VkPipelineLayout trianglePipelineLayout;
+    VkPipeline trianglePipeline;
 
     // Frames
     static constexpr int MaxFramesInFlight = 2;

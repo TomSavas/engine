@@ -4,6 +4,7 @@
 #define VMA_IMPLEMENTATION
 #include "rhi/vulkan/backend.h"
 
+#include "rhi/vulkan/pipeline_builder.h"
 #include "rhi/vulkan/utils/inits.h"
 #include "rhi/vulkan/utils/images.h"
 
@@ -329,6 +330,30 @@ void VulkanBackend::initPipelines()
     VkPipelineShaderStageCreateInfo pipelineShaderStageInfo = vkutil::init::shaderStageCreateInfo(VK_SHADER_STAGE_COMPUTE_BIT, (*shaderModule)->module);
     VkComputePipelineCreateInfo pipelineCreateInfo = vkutil::init::computePipelineCreateInfo(pipelineLayout, pipelineShaderStageInfo);
     VK_CHECK(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &pipeline));
+
+    // TEMP(savas): triangle pipeline
+    pipelineLayoutInfo = vkutil::init::layoutCreateInfo();
+    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &trianglePipelineLayout));
+
+    std::optional<ShaderModule*> vertexShader = shaderModuleCache.loadModule(device, SHADER_PATH("colored_triangle.vert.glsl"));
+    std::optional<ShaderModule*> fragmentShader = shaderModuleCache.loadModule(device, SHADER_PATH("colored_triangle.frag.glsl"));
+    if (!vertexShader || !fragmentShader)
+    {
+        std::println("Error loading shaders");
+        return;
+    }
+
+    trianglePipeline = PipelineBuilder()
+        .shaders((*vertexShader)->module, (*fragmentShader)->module)
+        .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+        .polyMode(VK_POLYGON_MODE_FILL)
+        .cullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
+        .disableMultisampling()
+        .disableBlending()
+        .disableDepthTest()
+        .colorAttachmentFormat(backbufferImage.format)
+        .depthFormat(VK_FORMAT_UNDEFINED)
+        .build(device, trianglePipelineLayout);
 }
 
 void VulkanBackend::initImgui()
@@ -399,6 +424,7 @@ void VulkanBackend::initProfiler()
     auto fenceInfo = vkutil::init::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
     VK_CHECK(vkCreateFence(device, &fenceInfo, nullptr, &tracyRenderFence));
 
+    // TODO(savas): change to calibrated context
     tracyCtx = TracyVkContext(gpu, device, graphicsQueue, tracyCmdBuffer);
 }
 
@@ -448,25 +474,56 @@ void VulkanBackend::draw()
         auto cmdBeginInfo = vkutil::init::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
         VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
-        vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         {
+            ZoneScopedCpuGpuAuto("Compute gradient");
+
+            vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &drawDescriptorSet, 0, nullptr);
             vkCmdDispatch(cmd, std::ceil(viewport.width / 16.f), std::ceil(viewport.height / 16.f), 1);
         }        
 
+        VkExtent2D swapchainSize { static_cast<uint32_t>(viewport.width), static_cast<uint32_t>(viewport.height) };
+        {
+            ZoneScopedCpuGpuAuto("Render triangle");
+
+            vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+            VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, nullptr);
+
+            VkViewport viewport = {};
+            viewport.width = swapchainSize.width;
+            viewport.height = swapchainSize.height;
+            viewport.maxDepth = 1.f;
+
+            VkRect2D scissor = {};
+            scissor.extent = swapchainSize;
+
+            vkCmdBeginRendering(cmd, &renderingInfo);
+
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, trianglePipeline);
+            vkCmdSetViewport(cmd, 0, 1, &viewport);
+            vkCmdSetScissor(cmd, 0, 1, &scissor);
+            vkCmdDraw(cmd, 3, 1, 0, 0);
+
+            vkCmdEndRendering(cmd);
+        }
+
         VkExtent2D backbufferSize { backbufferImage.extent.width, backbufferImage.extent.height };
-        VkExtent2D swapchainSize  { static_cast<uint32_t>(viewport.width), static_cast<uint32_t>(viewport.height) };
         {
             ZoneScopedCpuGpuAuto("Blit to swapchain");
             
-            vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+            //vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+            vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
             vkutil::image::transitionImage(cmd, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
             vkutil::image::blitImageToImage(cmd, backbufferImage.image, backbufferSize, swapchainImages[swapchainImageIndex], swapchainSize);
         }
 
         {
             ZoneScopedCpuGpuAuto("Render Imgui");
+
             vkutil::image::transitionImage(cmd, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
             VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(swapchainImageViews[swapchainImageIndex], nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -499,7 +556,6 @@ void VulkanBackend::draw()
         auto presentInfo = vkutil::init::presentInfo(&swapchain, &frame.renderSem, &swapchainImageIndex);
         VK_CHECK(vkQueuePresentKHR(graphicsQueue, &presentInfo));
     }
-    FrameMark;
 
     TracyVkCollect(tracyCtx, tracyCmdBuffer);
 
@@ -507,6 +563,8 @@ void VulkanBackend::draw()
     auto cmdInfo = vkutil::init::commandBufferSubmitInfo(tracyCmdBuffer);
     auto submit = vkutil::init::submitInfo2(&cmdInfo, nullptr, nullptr);
     VK_CHECK(vkQueueSubmit2(graphicsQueue, 1, &submit, tracyRenderFence));
+
+    FrameMark;
 
     //TracyVkDestroy(tracyCtx);
 
