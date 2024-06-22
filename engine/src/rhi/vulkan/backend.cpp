@@ -1,12 +1,16 @@
-#include "imgui.h"
-#include "utils/images.h"
-#include <vulkan/vulkan_core.h>
 #define VMA_IMPLEMENTATION
 #include "rhi/vulkan/backend.h"
+
+#include "glm/ext/matrix_clip_space.hpp"
+#include "glm/ext/matrix_transform.hpp"
+#include "imgui.h"
+#include "utils/images.h"
+#include "scene.h"
 
 #include "rhi/vulkan/pipeline_builder.h"
 #include "rhi/vulkan/utils/inits.h"
 #include "rhi/vulkan/utils/images.h"
+#include "rhi/vulkan/utils/buffer.h"
 
 #include "tracy/Tracy.hpp"
 #include "tracy/TracyVulkan.hpp"
@@ -15,7 +19,11 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
 
+#include "GLFW/glfw3.h"
+
 #include <cmath>
+#include <vulkan/vulkan_core.h>
+#include <glm/glm.hpp>
 
 // TEMP: test for tracy allocations
 void* operator new(std::size_t size) noexcept(false)
@@ -294,6 +302,17 @@ void VulkanBackend::initSyncStructs()
     //});
 }
 
+// TODO(savas): REMOVE ME! Testing purposes only
+struct SceneUniforms 
+{
+    glm::mat4 view;
+    glm::mat4 projection;
+};
+static SceneUniforms sceneUniforms;
+static AllocatedBuffer sceneUniformBuffer;
+static VkDescriptorSet sceneDescriptorSet;
+static VkDescriptorSetLayout sceneDescriptorSetLayout;
+
 void VulkanBackend::initDescriptors()
 {
     VkDescriptorPoolSize poolSizes[] =
@@ -303,15 +322,38 @@ void VulkanBackend::initDescriptors()
     descriptorAllocator.init(device, 10, poolSizes);
 
     // Allocating for the "draw" descriptor set
-    DescriptorSetLayoutBuilder builder;
-    builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-    drawDescriptorSetLayout = builder.build(device, VK_SHADER_STAGE_COMPUTE_BIT);
-    drawDescriptorSet = descriptorAllocator.allocate(device, drawDescriptorSetLayout);
+    {
+        DescriptorSetLayoutBuilder builder;
+        builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+        drawDescriptorSetLayout = builder.build(device, VK_SHADER_STAGE_COMPUTE_BIT);
+        drawDescriptorSet = descriptorAllocator.allocate(device, drawDescriptorSetLayout);
 
-    VkDescriptorImageInfo descriptorImage = vkutil::init::descriptorImageInfo(VK_NULL_HANDLE, backbufferImage.view, VK_IMAGE_LAYOUT_GENERAL);
-    VkWriteDescriptorSet descriptorImageWrite = vkutil::init::writeDescriptorImage(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, drawDescriptorSet, &descriptorImage, 0);
+        VkDescriptorImageInfo descriptorImage = vkutil::init::descriptorImageInfo(VK_NULL_HANDLE, backbufferImage.view, VK_IMAGE_LAYOUT_GENERAL);
+        VkWriteDescriptorSet descriptorImageWrite = vkutil::init::writeDescriptorImage(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, drawDescriptorSet, &descriptorImage, 0);
+        vkUpdateDescriptorSets(device, 1, &descriptorImageWrite, 0, nullptr);
+    }
 
-    vkUpdateDescriptorSets(device, 1, &descriptorImageWrite, 0, nullptr);
+    {
+        auto bufInfo = vkutil::init::bufferCreateInfo(sizeof(SceneUniforms), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+
+        VmaAllocationCreateInfo allocInfo = {};
+        // TODO: probably want this in tracy and on various debug tools in imgui
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
+        allocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        vmaCreateBuffer(allocator, &bufInfo, &allocInfo, &sceneUniformBuffer.buffer, &sceneUniformBuffer.allocation, nullptr);
+    }
+    {
+        DescriptorSetLayoutBuilder builder;
+        builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        sceneDescriptorSetLayout = builder.build(device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+        sceneDescriptorSet = descriptorAllocator.allocate(device, sceneDescriptorSetLayout);
+
+        VkDescriptorBufferInfo descriptorBufferInfo = vkutil::init::descriptorBufferInfo(sceneUniformBuffer.buffer, 0, sizeof(SceneUniforms));
+        VkWriteDescriptorSet descriptorImageWrite = vkutil::init::writeDescriptorBuffer(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, sceneDescriptorSet, &descriptorBufferInfo, 0);
+
+        vkUpdateDescriptorSets(device, 1, &descriptorImageWrite, 0, nullptr);
+    }
 }
 
 void VulkanBackend::initPipelines()
@@ -332,7 +374,7 @@ void VulkanBackend::initPipelines()
     VK_CHECK(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &pipeline));
 
     // TEMP(savas): triangle pipeline
-    pipelineLayoutInfo = vkutil::init::layoutCreateInfo();
+    pipelineLayoutInfo = vkutil::init::layoutCreateInfo(&sceneDescriptorSetLayout, 1);
     VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &trianglePipelineLayout));
 
     std::optional<ShaderModule*> vertexShader = shaderModuleCache.loadModule(device, SHADER_PATH("colored_triangle.vert.glsl"));
@@ -354,6 +396,30 @@ void VulkanBackend::initPipelines()
         .colorAttachmentFormat(backbufferImage.format)
         .depthFormat(VK_FORMAT_UNDEFINED)
         .build(device, trianglePipelineLayout);
+
+    // TEMP(savas): inf grid pipeline
+    pipelineLayoutInfo = vkutil::init::layoutCreateInfo(&sceneDescriptorSetLayout, 1);
+    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &infGridPipelineLayout));
+
+    vertexShader = shaderModuleCache.loadModule(device, SHADER_PATH("inf_grid.vert.glsl"));
+    fragmentShader = shaderModuleCache.loadModule(device, SHADER_PATH("inf_grid.frag.glsl"));
+    if (!vertexShader || !fragmentShader)
+    {
+        std::println("Error loading infinite grid shaders");
+        return;
+    }
+
+    infGridPipeline = PipelineBuilder()
+        .shaders((*vertexShader)->module, (*fragmentShader)->module)
+        .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+        .polyMode(VK_POLYGON_MODE_FILL)
+        .cullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
+        .disableMultisampling()
+        .enableAlphaBlending()
+        .disableDepthTest()
+        .colorAttachmentFormat(backbufferImage.format)
+        .depthFormat(VK_FORMAT_UNDEFINED)
+        .build(device, infGridPipelineLayout);
 }
 
 void VulkanBackend::initImgui()
@@ -433,10 +499,10 @@ FrameData& VulkanBackend::currentFrame()
     return frames[currentFrameNumber % MaxFramesInFlight];
 }
 
-void VulkanBackend::draw()
+void VulkanBackend::draw(const Scene& scene)
 {
     ZoneScoped;
-    constexpr int timeoutNs = 1'000'000'000;
+    constexpr uint64_t timeoutNs = 100'000'000'000'000;
 
     auto frame = currentFrame();
     auto cmd = frame.cmdBuffer;
@@ -475,13 +541,23 @@ void VulkanBackend::draw()
         VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
         {
-            ZoneScopedCpuGpuAuto("Compute gradient");
+            ZoneScopedCpuGpuAuto("Clear");
 
             vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
-            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
-            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &drawDescriptorSet, 0, nullptr);
-            vkCmdDispatch(cmd, std::ceil(viewport.width / 16.f), std::ceil(viewport.height / 16.f), 1);
+            VkClearColorValue clearColor = { { 0.f, 0.f, 0.f, 0.f } };
+            VkImageSubresourceRange range = vkutil::init::imageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT);
+            vkCmdClearColorImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_GENERAL, &clearColor, 1, &range);
+        }        
+
+        {
+            ZoneScopedCpuGpuAuto("Compute gradient");
+
+            // vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+
+            // vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &drawDescriptorSet, 0, nullptr);
+            // vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+            // vkCmdDispatch(cmd, std::ceil(viewport.width / 16.f), std::ceil(viewport.height / 16.f), 1);
         }        
 
         VkExtent2D swapchainSize { static_cast<uint32_t>(viewport.width), static_cast<uint32_t>(viewport.height) };
@@ -503,10 +579,59 @@ void VulkanBackend::draw()
 
             vkCmdBeginRendering(cmd, &renderingInfo);
 
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, trianglePipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, trianglePipeline);
             vkCmdSetViewport(cmd, 0, 1, &viewport);
             vkCmdSetScissor(cmd, 0, 1, &scissor);
             vkCmdDraw(cmd, 3, 1, 0, 0);
+
+            vkCmdEndRendering(cmd);
+        }
+
+        {
+            ZoneScopedCpuGpuAuto("Render inf plane");
+
+            VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, nullptr);
+
+            VkViewport viewport = {};
+            viewport.width = swapchainSize.width;
+            viewport.height = swapchainSize.height;
+            viewport.maxDepth = 1.f;
+
+            VkRect2D scissor = {};
+            scissor.extent = swapchainSize;
+
+            sceneUniforms.view = glm::mat4(1.0);
+            //sceneUniforms.projection = glm::perspectiveFov<float>(M_PI / 4.f, backbufferImage.extent.width, backbufferImage.extent.height, 0.1f, 100000.f);
+            sceneUniforms.projection = glm::mat4(1.0);
+            {
+                ZoneScopedCpuGpuAuto("Memcpy SceneUniforms to GPU");
+
+                // TODO(savas): fix recalculating this constantly
+                // sceneUniforms.view = glm::lookAt(scene.activeCamera.position,
+                //     scene.activeCamera.position + glm::vec3(toMat4(scene.activeCamera.rotation) * glm::vec4(0.f, 0.f, -1.f, 0.f)),
+                //     glm::vec3(toMat4(scene.activeCamera.rotation) * glm::vec4(0.f, 1.f, 0.f, 0.f)));
+                sceneUniforms.view = glm::inverse(glm::translate(glm::mat4(1.f), scene.activeCamera.position) * toMat4(scene.activeCamera.rotation));
+                // TODO(savas): fix fov
+                sceneUniforms.projection = glm::perspectiveFov<float>(scene.activeCamera.verticalFov, backbufferImage.extent.width, backbufferImage.extent.height, scene.activeCamera.nearClippingPlaneDist, scene.activeCamera.farClippingPlaneDist);
+                // Fix Vulkan's weird "+y is down"
+                sceneUniforms.projection[1][1] *= -1.f;
+
+                uint8_t* dataOnGpu;
+                vmaMapMemory(allocator, sceneUniformBuffer.allocation, (void**)&dataOnGpu);
+                memcpy(dataOnGpu, &sceneUniforms, sizeof(sceneUniforms));
+                vmaUnmapMemory(allocator, sceneUniformBuffer.allocation);
+            }
+
+            vkCmdBeginRendering(cmd, &renderingInfo);
+
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, infGridPipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, infGridPipeline);
+            // vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
+            vkCmdSetViewport(cmd, 0, 1, &viewport);
+            vkCmdSetScissor(cmd, 0, 1, &scissor);
+            vkCmdDraw(cmd, 6, 1, 0, 0);
 
             vkCmdEndRendering(cmd);
         }

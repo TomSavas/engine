@@ -5,8 +5,8 @@
 #include "rhi/vulkan/descriptors.h"
 #include "rhi/vulkan/shader.h"
 
-#define GLFW_INCLUDE_VULKAN
-#include "GLFW/glfw3.h"
+//#define GLFW_INCLUDE_VULKAN
+//#include "GLFW/glfw3.h"
 
 #include "VkBootstrap.h"
 #include "vk_mem_alloc.h"
@@ -52,6 +52,8 @@ struct FrameData
 };
 
 class GLFWwindow;
+class Scene;
+
 struct VulkanBackend 
 {
     VulkanBackend(GLFWwindow* window);
@@ -59,7 +61,7 @@ struct VulkanBackend
     void deinit();
 
     void registerCallbacks();
-    void draw();
+    void draw(const Scene& scene);
 
     FrameData& currentFrame();
 
@@ -101,6 +103,9 @@ struct VulkanBackend
 
     VkPipelineLayout trianglePipelineLayout;
     VkPipeline trianglePipeline;
+
+    VkPipelineLayout infGridPipelineLayout;
+    VkPipeline infGridPipeline;
 
     // Frames
     static constexpr int MaxFramesInFlight = 2;

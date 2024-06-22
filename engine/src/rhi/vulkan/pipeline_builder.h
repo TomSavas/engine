@@ -26,6 +26,7 @@ struct PipelineBuilder
     PipelineBuilder& cullMode(VkCullModeFlags cullMode, VkFrontFace frontFace);
     PipelineBuilder& disableMultisampling();
     PipelineBuilder& disableBlending();
+    PipelineBuilder& enableAlphaBlending();
     PipelineBuilder& colorAttachmentFormat(VkFormat format);
     PipelineBuilder& depthFormat(VkFormat format);
     PipelineBuilder& disableDepthTest();

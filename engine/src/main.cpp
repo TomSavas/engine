@@ -3,7 +3,9 @@
 #include <vector>
 #include <math.h>
 
+#define GLFW_INCLUDE_VULKAN
 #include "GLFW/glfw3.h"
+
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
@@ -39,13 +41,11 @@ int main(void) {
 
         glfwPollEvents();
 
-        scene.update(dt);
+        scene.update(dt, window);
         {
             ImGui_ImplVulkan_NewFrame();
             ImGui_ImplGlfw_NewFrame();
             ImGui::NewFrame();
-
-            ImGui::ShowDemoWindow();
         }
 
         {
@@ -98,11 +98,21 @@ int main(void) {
                 ImGui::Text("--- Avg ---");
                 ImGui::Text("CPU: %.9f msec", avgFrameTime * 1000.f);
                 ImGui::Text("     %.9f Hz", 1.0 / avgFrameTime);
+
+                ImGui::Separator();
+                ImGui::Text("Pos: %.2f, %.2f, %.2f", scene.activeCamera.position.x, scene.activeCamera.position.y, scene.activeCamera.position.z);
+
+                glm::vec3 fw = toMat4(scene.activeCamera.rotation) * glm::vec4(0.f, 0.f, -1.f, 0.f);
+                glm::vec3 r = toMat4(scene.activeCamera.rotation) * glm::vec4(1.f, 0.f, 0.f, 0.f);
+                glm::vec3 u = toMat4(scene.activeCamera.rotation) * glm::vec4(0.f, 1.f, 0.f, 0.f);
+                ImGui::Text("Forward: %.2f, %.2f, %.2f", fw.x, fw.y, fw.z);
+                ImGui::Text("Right: %.2f, %.2f, %.2f", r.x, r.y, r.z);
+                ImGui::Text("Up: %.2f, %.2f, %.2f", u.x, u.y, u.z);
             }
             ImGui::End();
         }
         ImGui::Render();
-        backend.draw();
+        backend.draw(scene);
 
         end = std::chrono::system_clock::now();
     }

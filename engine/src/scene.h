@@ -1,8 +1,17 @@
 #pragma once
 
+#include "camera.h"
+
+class GLFWwindow;
+
 struct Scene 
 {
-    static Scene empty();
+    Camera& activeCamera;
+    Camera mainCamera;
+    Camera debugCamera;
 
-    void update(float dt);
+    static Scene empty();
+    void update(float dt, GLFWwindow* window);
+private:
+    Scene() : activeCamera(mainCamera) {}
 };
