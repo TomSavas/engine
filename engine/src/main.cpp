@@ -103,9 +103,9 @@ int main(void) {
                 ImGui::Separator();
                 ImGui::Text("Pos: %.2f, %.2f, %.2f", scene.activeCamera.position.x, scene.activeCamera.position.y, scene.activeCamera.position.z);
 
-                glm::vec3 fw = toMat4(scene.activeCamera.rotation) * glm::vec4(0.f, 0.f, -1.f, 0.f);
-                glm::vec3 r = toMat4(scene.activeCamera.rotation) * glm::vec4(1.f, 0.f, 0.f, 0.f);
-                glm::vec3 u = toMat4(scene.activeCamera.rotation) * glm::vec4(0.f, 1.f, 0.f, 0.f);
+                glm::vec3 fw = scene.activeCamera.rotation * glm::vec4(0.f, 0.f, -1.f, 0.f);
+                glm::vec3 r = scene.activeCamera.rotation * glm::vec4(1.f, 0.f, 0.f, 0.f);
+                glm::vec3 u = scene.activeCamera.rotation * glm::vec4(0.f, 1.f, 0.f, 0.f);
                 ImGui::Text("Forward: %.2f, %.2f, %.2f", fw.x, fw.y, fw.z);
                 ImGui::Text("Right: %.2f, %.2f, %.2f", r.x, r.y, r.z);
                 ImGui::Text("Up: %.2f, %.2f, %.2f", u.x, u.y, u.z);

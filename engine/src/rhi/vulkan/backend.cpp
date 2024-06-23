@@ -612,7 +612,7 @@ void VulkanBackend::draw(const Scene& scene)
                 // sceneUniforms.view = glm::lookAt(scene.activeCamera.position,
                 //     scene.activeCamera.position + glm::vec3(toMat4(scene.activeCamera.rotation) * glm::vec4(0.f, 0.f, -1.f, 0.f)),
                 //     glm::vec3(toMat4(scene.activeCamera.rotation) * glm::vec4(0.f, 1.f, 0.f, 0.f)));
-                sceneUniforms.view = glm::inverse(glm::translate(glm::mat4(1.f), scene.activeCamera.position) * toMat4(scene.activeCamera.rotation));
+                sceneUniforms.view = glm::inverse(glm::translate(glm::mat4(1.f), scene.activeCamera.position) * scene.activeCamera.rotation);
                 // TODO(savas): fix fov
                 sceneUniforms.projection = glm::perspectiveFov<float>(scene.activeCamera.verticalFov, backbufferImage.extent.width, backbufferImage.extent.height, scene.activeCamera.nearClippingPlaneDist, scene.activeCamera.farClippingPlaneDist);
                 // Fix Vulkan's weird "+y is down"

@@ -16,6 +16,5 @@ struct Camera
     float aspectRatio = 16.f / 9.f;
 
     glm::vec3 position = glm::vec3(0.f, 5.f, 10.f);
-    // glm::mat4 rotation = glm::mat4(1.f);
-    glm::quat rotation = glm::quat();
+    glm::mat4 rotation = glm::mat4(1.f);
 };

@@ -10,16 +10,16 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/gtx/euler_angles.hpp>
 
-glm::vec3 right(glm::quat mat) {
-    return toMat4(mat) * glm::vec4(1.f, 0.f, 0.f, 0.f);
+glm::vec3 right(glm::mat4 mat) {
+    return mat * glm::vec4(1.f, 0.f, 0.f, 0.f);
 }
 
-glm::vec3 up(glm::quat mat) {
-    return toMat4(mat) * glm::vec4(0.f, 1.f, 0.f, 0.f);
+glm::vec3 up(glm::mat4 mat) {
+    return mat * glm::vec4(0.f, 1.f, 0.f, 0.f);
 }
 
-glm::vec3 forward(glm::quat mat) {
-    return toMat4(mat) * glm::vec4(0.f, 0.f, -1.f, 0.f);
+glm::vec3 forward(glm::mat4 mat) {
+    return mat * glm::vec4(0.f, 0.f, -1.f, 0.f);
 }
 
 static std::atomic<double> yOffsetAtomic;
@@ -76,8 +76,7 @@ void Scene::update(float dt, GLFWwindow* window)
         radToHorizon -= mousePosDif.y * activeCamera.rotationSpeed;
         radToHorizon = std::min(std::max(radToHorizon, -glm::pi<double>() / 2 + 0.01), glm::pi<double>() / 2 - 0.01);
 
-        // activeCamera.rotation = glm::eulerAngleYX(radToVertical, radToHorizon);
-        activeCamera.rotation = glm::quat(glm::vec3(radToHorizon, -radToVertical, 0.f));
+        activeCamera.rotation = glm::eulerAngleYX(-radToVertical, radToHorizon);
     }
     else
     {
