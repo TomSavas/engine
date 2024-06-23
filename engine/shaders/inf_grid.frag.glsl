@@ -31,12 +31,8 @@ vec4 calcGridColour(vec3 point, float scale, float intensity)
     return color;
 }
 
-float computeDepth(vec3 pos) {
-    vec4 clip_space_pos = scene.proj * scene.view * vec4(pos.xyz, 1.0);
-    return (clip_space_pos.z / clip_space_pos.w);
-}
-
-float computeLinearDepth(vec3 pos) {
+float computeLinearDepth(vec3 pos)
+{
     const float near = 0.1;
     const float far = 10000.0;
 
@@ -52,7 +48,7 @@ void main()
     vec3 point = nearPoint + t * (farPoint - nearPoint);
 
     float scale = 10.0;
-    float intensity = 0.02;
+    float intensity = 0.01;
     vec4 gridColor = vec4(0.0);
     for (int i = 0; i < 4; i++)
     {
@@ -63,6 +59,7 @@ void main()
 
     float linearDepth = computeLinearDepth(point);
     float fading = max(0.0, 1.0 - (50.0 * linearDepth));
+    fading = pow(fading, 5);
 
     outColor = vec4(gridColor.rgb, gridColor.a * float(t > 0) * fading);
 }

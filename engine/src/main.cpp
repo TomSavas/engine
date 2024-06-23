@@ -61,10 +61,11 @@ int main(void) {
             ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always, ImVec2(1.f, 0.f));
 
             static bool open = false;
-            static double frameTimes[256];
+            constexpr int sampleCount = 1024;
+            static double frameTimes[sampleCount];
             static int frameTimesIdx = 0;
             if (!open) {
-                for (int i =0; i < 256; ++i) {
+                for (int i = 0; i < sampleCount; ++i) {
                     frameTimes[i] = dt;
                 }
                 open = true;
@@ -72,11 +73,11 @@ int main(void) {
 
             frameTimes[frameTimesIdx] = dt;
             double avgFrameTime = dt;
-            for (int i = (frameTimesIdx + 1) % 256; i != frameTimesIdx; i = (i + 1) % 256) {
+            for (int i = (frameTimesIdx + 1) % sampleCount; i != frameTimesIdx; i = (i + 1) %  sampleCount) {
                 avgFrameTime += frameTimes[i];
             }
-            avgFrameTime /= 256.f;
-            frameTimesIdx = (frameTimesIdx + 1) % 256;
+            avgFrameTime /= static_cast<float>(sampleCount);
+            frameTimesIdx = (frameTimesIdx + 1) % sampleCount;
 
             ImGui::SetNextWindowBgAlpha(0.75f);
             if (ImGui::Begin("Info", &open, window_flags))
@@ -108,6 +109,9 @@ int main(void) {
                 ImGui::Text("Forward: %.2f, %.2f, %.2f", fw.x, fw.y, fw.z);
                 ImGui::Text("Right: %.2f, %.2f, %.2f", r.x, r.y, r.z);
                 ImGui::Text("Up: %.2f, %.2f, %.2f", u.x, u.y, u.z);
+
+                ImGui::Text("");
+                ImGui::Text("Movement speed: %.2f", scene.activeCamera.moveSpeed);
             }
             ImGui::End();
         }
