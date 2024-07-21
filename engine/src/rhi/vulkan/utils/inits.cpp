@@ -119,13 +119,28 @@ VkPipelineLayoutCreateInfo layoutCreateInfo() {
     return info;
 }
 
-VkPipelineLayoutCreateInfo layoutCreateInfo(VkDescriptorSetLayout* descriptorSetLayouts, uint32_t descriptorSetLayoutCount) {
+VkPipelineLayoutCreateInfo layoutCreateInfo(VkDescriptorSetLayout* descriptorSetLayouts, uint32_t descriptorSetLayoutCount, VkPushConstantRange* pushConstantRanges, uint32_t pushConsantRangeCount)
+{
     VkPipelineLayoutCreateInfo info = layoutCreateInfo();
 
     info.setLayoutCount = descriptorSetLayoutCount;
     info.pSetLayouts = descriptorSetLayouts;
 
+    info.pushConstantRangeCount = pushConsantRangeCount;
+    info.pPushConstantRanges = pushConstantRanges;
+
     return info;
+}
+
+VkPushConstantRange pushConstantRange(VkShaderStageFlags shaderStages, uint32_t size, uint32_t offset)
+{
+    VkPushConstantRange range = {};   
+
+    range.stageFlags = shaderStages;
+    range.size = size;
+    range.offset = offset;
+
+    return range;
 }
 
 VkComputePipelineCreateInfo computePipelineCreateInfo(VkPipelineLayout pipelineLayout, VkPipelineShaderStageCreateInfo shaderStageInfo)
@@ -513,6 +528,21 @@ VkRenderingAttachmentInfo renderingColorAttachmentInfo(VkImageView view, VkClear
     {
         info.clearValue = *clear;
     }
+
+    return info;       
+}
+
+VkRenderingAttachmentInfo renderingDepthAttachmentInfo(VkImageView view, VkImageLayout layout)
+{
+    VkRenderingAttachmentInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    info.pNext = nullptr;
+
+    info.imageView = view;
+    info.imageLayout = layout;
+    info.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    info.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    info.clearValue.depthStencil.depth = 1.f;
 
     return info;       
 }

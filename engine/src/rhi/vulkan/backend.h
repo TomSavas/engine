@@ -1,6 +1,7 @@
 #pragma once 
 
 #include "engine.h"
+#include "rhi/vulkan/utils/buffer.h"
 #include "rhi/vulkan/utils/images.h"
 #include "rhi/vulkan/descriptors.h"
 #include "rhi/vulkan/shader.h"
@@ -14,6 +15,7 @@
 #include "tracy/Tracy.hpp"
 #include "tracy/TracyVulkan.hpp"
 
+#include <glm/glm.hpp>
 #include <functional>
 
 #define ZoneScopedCpuGpuAuto(name) ZoneScopedCpuGpu(tracyCtx, tracyCmdBuffer, name)
@@ -51,8 +53,24 @@ struct FrameData
     VkCommandBuffer cmdBuffer;
 };
 
+struct PushConstants
+{
+    glm::mat4 model;
+    glm::vec4 color;
+    VkDeviceAddress vertexBufferAddr;  
+};
+
+// TEMP(savas): temporary solution for quick drawing of meshes
+struct GpuMeshBuffers 
+{
+    AllocatedBuffer vertexBuffer;
+    AllocatedBuffer indexBuffer;
+    VkDeviceAddress vertexBufferAddress;
+};
+
 class GLFWwindow;
 class Scene;
+class Mesh;
 
 struct VulkanBackend 
 {
@@ -61,7 +79,7 @@ struct VulkanBackend
     void deinit();
 
     void registerCallbacks();
-    void draw(const Scene& scene);
+    void draw(Scene& scene);
 
     FrameData& currentFrame();
 
@@ -96,6 +114,7 @@ struct VulkanBackend
 
     // Image we actually render to
     AllocatedImage backbufferImage;
+    AllocatedImage depthImage;
 
     // TEMP: concrete compute pipeline we for test render
     VkPipelineLayout pipelineLayout;
@@ -106,6 +125,10 @@ struct VulkanBackend
 
     VkPipelineLayout infGridPipelineLayout;
     VkPipeline infGridPipeline;
+
+    VkPipelineLayout meshPipelineLayout;
+    VkPipeline meshPipeline;
+    VkPipeline noDepthMeshPipeline;
 
     // Frames
     static constexpr int MaxFramesInFlight = 2;
@@ -131,6 +154,8 @@ struct VulkanBackend
 
     // Debug
     Stats       stats;
+
+    std::unordered_map<Mesh*, GpuMeshBuffers> gpuMeshBuffers;
 
 private:
     void initVulkan();

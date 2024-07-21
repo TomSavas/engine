@@ -21,6 +21,7 @@ struct PipelineBuilder
     void reset();
 
     PipelineBuilder& shaders(VkShaderModule vertexShader, VkShaderModule fragmentShader);
+    PipelineBuilder& shaders(VkShaderModule vertexShader, VkShaderModule geometryShader, VkShaderModule fragmentShader);
     PipelineBuilder& topology(VkPrimitiveTopology topology);
     PipelineBuilder& polyMode(VkPolygonMode polyMode);
     PipelineBuilder& cullMode(VkCullModeFlags cullMode, VkFrontFace frontFace);
@@ -29,6 +30,7 @@ struct PipelineBuilder
     PipelineBuilder& enableAlphaBlending();
     PipelineBuilder& colorAttachmentFormat(VkFormat format);
     PipelineBuilder& depthFormat(VkFormat format);
+    PipelineBuilder& enableDepthTest(bool depthWriteEnable, VkCompareOp compareOp);
     PipelineBuilder& disableDepthTest();
         
     VkPipeline build(VkDevice device, VkPipelineLayout layout);

@@ -5,7 +5,7 @@
 #include "glm/ext/matrix_transform.hpp"
 #include "imgui.h"
 #include "utils/images.h"
-#include "scene.h"
+#include "scenes/scene.h"
 
 #include "rhi/vulkan/pipeline_builder.h"
 #include "rhi/vulkan/utils/inits.h"
@@ -116,9 +116,13 @@ void VulkanBackend::initVulkan()
     features13.dynamicRendering = true;
     features13.synchronization2 = true;
 
+    VkPhysicalDeviceFeatures features = {};
+    features.geometryShader = true;
+
     vkb::PhysicalDeviceSelector selector { vkbInstance };
     vkb::PhysicalDevice physicalDevice = selector
         .set_minimum_version(1, 3)
+        .set_required_features(features)
         .set_required_features_12(features12)
         .set_required_features_13(features13)
         .set_surface(surface)
@@ -193,6 +197,7 @@ void VulkanBackend::initSwapchain()
     //    LOG_CALL(vkDestroyImageView(device, depthImageView, nullptr));
     //});
     
+    // Backbuffer
     backbufferImage.format = VK_FORMAT_R16G16B16A16_SFLOAT;
     backbufferImage.extent = { static_cast<uint32_t>(viewport.width), static_cast<uint32_t>(viewport.height), 1 };
     VkImageUsageFlags backbufferUsageFlags = {};
@@ -211,6 +216,23 @@ void VulkanBackend::initSwapchain()
 
     auto imgViewInfo = vkutil::init::imageViewCreateInfo(backbufferImage.format, backbufferImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
     VK_CHECK(vkCreateImageView(device, &imgViewInfo, nullptr, &backbufferImage.view));
+
+    // Depth
+    depthImage.format = VK_FORMAT_D32_SFLOAT;
+    depthImage.extent = backbufferImage.extent;
+    VkImageUsageFlags depthUsageFlags = {};
+    depthUsageFlags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+    imgInfo = vkutil::init::imageCreateInfo(depthImage.format, depthUsageFlags, depthImage.extent);
+
+    allocInfo = {};
+    // TODO: probably want this in tracy and on various debug tools in imgui
+    allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    allocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    vmaCreateImage(allocator, &imgInfo, &allocInfo, &depthImage.image, &depthImage.allocation, nullptr);
+
+    imgViewInfo = vkutil::init::imageViewCreateInfo(depthImage.format, depthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
+    VK_CHECK(vkCreateImageView(device, &imgViewInfo, nullptr, &depthImage.view));
 
     // TODO: delete later
 }
@@ -313,11 +335,27 @@ static AllocatedBuffer sceneUniformBuffer;
 static VkDescriptorSet sceneDescriptorSet;
 static VkDescriptorSetLayout sceneDescriptorSetLayout;
 
+AllocatedBuffer allocateBuffer(VmaAllocator allocator, VkBufferCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags, VkMemoryPropertyFlags requiredFlags)
+{
+    AllocatedBuffer buffer;
+    
+    VmaAllocationCreateInfo allocInfo
+    {
+        .flags = flags,
+        .usage = usage,
+        .requiredFlags = requiredFlags,    
+    };
+    VK_CHECK(vmaCreateBuffer(allocator, &info, &allocInfo, &buffer.buffer, &buffer.allocation, nullptr));
+
+    return buffer;
+}
+
 void VulkanBackend::initDescriptors()
 {
     VkDescriptorPoolSize poolSizes[] =
     {
         VkDescriptorPoolSize { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 10 },
+        VkDescriptorPoolSize { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10 },
     };
     descriptorAllocator.init(device, 10, poolSizes);
 
@@ -335,18 +373,23 @@ void VulkanBackend::initDescriptors()
 
     {
         auto bufInfo = vkutil::init::bufferCreateInfo(sizeof(SceneUniforms), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+        sceneUniformBuffer = allocateBuffer(allocator, bufInfo, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        
+        // auto bufInfo = vkutil::init::bufferCreateInfo(sizeof(SceneUniforms), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
 
-        VmaAllocationCreateInfo allocInfo = {};
-        // TODO: probably want this in tracy and on various debug tools in imgui
-        allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
-        allocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-        vmaCreateBuffer(allocator, &bufInfo, &allocInfo, &sceneUniformBuffer.buffer, &sceneUniformBuffer.allocation, nullptr);
+        // VmaAllocationCreateInfo allocInfo = {};
+        // // TODO: probably want this in tracy and on various debug tools in imgui
+        // allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+        // allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
+        // allocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        // VK_CHECK(vmaCreateBuffer(allocator, &bufInfo, &allocInfo, &sceneUniformBuffer.buffer, &sceneUniformBuffer.allocation, nullptr));
     }
     {
         DescriptorSetLayoutBuilder builder;
         builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        sceneDescriptorSetLayout = builder.build(device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+        // sceneDescriptorSetLayout = builder.build(device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+        sceneDescriptorSetLayout = builder.build(device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
         sceneDescriptorSet = descriptorAllocator.allocate(device, sceneDescriptorSetLayout);
 
         VkDescriptorBufferInfo descriptorBufferInfo = vkutil::init::descriptorBufferInfo(sceneUniformBuffer.buffer, 0, sizeof(SceneUniforms));
@@ -420,6 +463,51 @@ void VulkanBackend::initPipelines()
         .colorAttachmentFormat(backbufferImage.format)
         .depthFormat(VK_FORMAT_UNDEFINED)
         .build(device, infGridPipelineLayout);
+
+    VkPushConstantRange meshPushConstantRange = vkutil::init::pushConstantRange(VK_SHADER_STAGE_VERTEX_BIT, sizeof(PushConstants));
+    pipelineLayoutInfo = vkutil::init::layoutCreateInfo(&sceneDescriptorSetLayout, 1, &meshPushConstantRange, 1);
+    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &meshPipelineLayout));
+
+    vertexShader = shaderModuleCache.loadModule(device, SHADER_PATH("mesh.vert.glsl"));
+    fragmentShader = shaderModuleCache.loadModule(device, SHADER_PATH("mesh.frag.glsl"));
+    std::optional<ShaderModule*> geometryShader = shaderModuleCache.loadModule(device, SHADER_PATH("mesh.geom.glsl"));
+    if (!vertexShader || !fragmentShader || !geometryShader)
+    {
+        std::println("Error loading infinite grid shaders");
+        return;
+    }
+
+    meshPipeline = PipelineBuilder()
+        .shaders((*vertexShader)->module, (*geometryShader)->module, (*fragmentShader)->module)
+        // .shaders((*vertexShader)->module, (*fragmentShader)->module)
+        .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+        // .polyMode(VK_POLYGON_MODE_LINE)
+        .polyMode(VK_POLYGON_MODE_FILL)
+        // TODO(savas): uncomment once we get this working without culling
+        .cullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE)
+        // .cullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
+        .disableMultisampling()
+        .enableAlphaBlending()
+        .colorAttachmentFormat(backbufferImage.format)
+        .depthFormat(depthImage.format)
+        .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
+        .build(device, meshPipelineLayout);
+
+    noDepthMeshPipeline = PipelineBuilder()
+        .shaders((*vertexShader)->module, (*geometryShader)->module, (*fragmentShader)->module)
+        // .shaders((*vertexShader)->module, (*fragmentShader)->module)
+        .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+        // .polyMode(VK_POLYGON_MODE_LINE)
+        .polyMode(VK_POLYGON_MODE_FILL)
+        // TODO(savas): uncomment once we get this working without culling
+        .cullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE)
+        // .cullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
+        .disableMultisampling()
+        .enableAlphaBlending()
+        .colorAttachmentFormat(backbufferImage.format)
+        .depthFormat(depthImage.format)
+        .enableDepthTest(false, VK_COMPARE_OP_ALWAYS)
+        .build(device, meshPipelineLayout);
 }
 
 void VulkanBackend::initImgui()
@@ -499,7 +587,7 @@ FrameData& VulkanBackend::currentFrame()
     return frames[currentFrameNumber % MaxFramesInFlight];
 }
 
-void VulkanBackend::draw(const Scene& scene)
+void VulkanBackend::draw(Scene& scene)
 {
     ZoneScoped;
     constexpr uint64_t timeoutNs = 100'000'000'000'000;
@@ -541,9 +629,14 @@ void VulkanBackend::draw(const Scene& scene)
         VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
         {
-            ZoneScopedCpuGpuAuto("Clear");
-
+            ZoneScopedCpuGpuAuto("Transition resources");
+            
             vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+            vkutil::image::transitionImage(cmd, depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+        }
+
+        {
+            ZoneScopedCpuGpuAuto("Clear");
 
             VkClearColorValue clearColor = { { 0.f, 0.f, 0.f, 0.f } };
             VkImageSubresourceRange range = vkutil::init::imageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT);
@@ -560,33 +653,34 @@ void VulkanBackend::draw(const Scene& scene)
             // vkCmdDispatch(cmd, std::ceil(viewport.width / 16.f), std::ceil(viewport.height / 16.f), 1);
         }        
 
+        vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
         VkExtent2D swapchainSize { static_cast<uint32_t>(viewport.width), static_cast<uint32_t>(viewport.height) };
-        {
-            ZoneScopedCpuGpuAuto("Render triangle");
+        // {
+        //     ZoneScopedCpuGpuAuto("Render triangle");
 
-            vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-            VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-            VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, nullptr);
+        //     VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        //     VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, nullptr);
 
-            VkViewport viewport = {};
-            viewport.width = swapchainSize.width;
-            viewport.height = swapchainSize.height;
-            viewport.maxDepth = 1.f;
+        //     VkViewport viewport = {};
+        //     viewport.width = swapchainSize.width;
+        //     viewport.height = swapchainSize.height;
+        //     viewport.maxDepth = 1.f;
 
-            VkRect2D scissor = {};
-            scissor.extent = swapchainSize;
+        //     VkRect2D scissor = {};
+        //     scissor.extent = swapchainSize;
 
-            vkCmdBeginRendering(cmd, &renderingInfo);
+        //     vkCmdBeginRendering(cmd, &renderingInfo);
 
-            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, trianglePipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
-            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, trianglePipeline);
-            vkCmdSetViewport(cmd, 0, 1, &viewport);
-            vkCmdSetScissor(cmd, 0, 1, &scissor);
-            vkCmdDraw(cmd, 3, 1, 0, 0);
+        //     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, trianglePipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
+        //     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, trianglePipeline);
+        //     vkCmdSetViewport(cmd, 0, 1, &viewport);
+        //     vkCmdSetScissor(cmd, 0, 1, &scissor);
+        //     vkCmdDraw(cmd, 3, 1, 0, 0);
 
-            vkCmdEndRendering(cmd);
-        }
+        //     vkCmdEndRendering(cmd);
+        // }
 
         {
             ZoneScopedCpuGpuAuto("Render inf plane");
@@ -635,6 +729,123 @@ void VulkanBackend::draw(const Scene& scene)
 
             vkCmdEndRendering(cmd);
         }
+
+        // for (auto& model : scene.models)
+        std::vector<Model> models;
+        models.insert(models.end(), scene.models.begin(), scene.models.end());
+        if (scene.collisionModelsVisible)
+        {
+            models.insert(models.end(), scene.collisionModels.begin(), scene.collisionModels.end());
+        }
+
+        VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        VkRenderingAttachmentInfo depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(depthImage.view);
+        VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, &depthAttachmentInfo);
+
+        vkCmdBeginRendering(cmd, &renderingInfo);
+        // NOTE(savas): I don't think I need to re-bind this. Because the descriptor set is the same as the one
+        // from the inf grid pipeline above it should remain bound
+        // vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, noDepthMeshPipeline);
+        // for (auto& model : models)
+        for (int i = 0; i < models.size(); ++i)
+        {
+            if (i == 0)
+            {
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipeline);
+            }
+            else if (i == scene.models.size())
+            {
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, noDepthMeshPipeline);
+            }
+
+            Model& model = models[i];
+            
+            VkViewport viewport = {};
+            viewport.width = swapchainSize.width;
+            viewport.height = swapchainSize.height;
+            viewport.maxDepth = 1.f;
+
+            VkRect2D scissor = {};
+            scissor.extent = swapchainSize;
+
+            const uint32_t vertexBufferSize = model.mesh->vertices.size() * sizeof(decltype(model.mesh->vertices)::value_type);
+            const uint32_t indexBufferSize = model.mesh->indices.size() * sizeof(decltype(model.mesh->indices)::value_type);
+
+            if (gpuMeshBuffers.find(model.mesh) == gpuMeshBuffers.end()) 
+            {
+                GpuMeshBuffers buffers;
+                auto info = vkutil::init::bufferCreateInfo(vertexBufferSize,
+                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+                // buffers.vertexBuffer = allocateBuffer(allocator, info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+                //     VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+                buffers.vertexBuffer = allocateBuffer(allocator, info, VMA_MEMORY_USAGE_GPU_ONLY,
+                    VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+                info = vkutil::init::bufferCreateInfo(indexBufferSize,
+                    VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+                buffers.indexBuffer = allocateBuffer(allocator, info, VMA_MEMORY_USAGE_GPU_ONLY,
+                    VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+                // buffers.indexBuffer = allocateBuffer(allocator, info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+                //     VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+                VkBufferDeviceAddressInfo deviceAdressInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffers.vertexBuffer.buffer };
+            	buffers.vertexBufferAddress = vkGetBufferDeviceAddress(device, &deviceAdressInfo);
+
+                gpuMeshBuffers[model.mesh] = buffers;
+            }
+            GpuMeshBuffers& gpuMeshBuffer = gpuMeshBuffers[model.mesh];
+
+            PushConstants pushConstants 
+            {
+                .model = glm::mat4(1.f), //SRT 
+                .color = glm::vec4(model.color, 1.f),
+                // .vertexBufferAddr = mesh.vertexBufferAddress,
+                .vertexBufferAddr = gpuMeshBuffer.vertexBufferAddress,
+            };
+
+            {
+                auto bufInfo = vkutil::init::bufferCreateInfo(vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+                AllocatedBuffer staging = allocateBuffer(allocator, bufInfo, VMA_MEMORY_USAGE_CPU_ONLY,
+                    VMA_ALLOCATION_CREATE_MAPPED_BIT, 0);
+
+                //AllocatedBuffer staging = createBuffer(vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+                void* data = staging.allocation->GetMappedData();
+
+                memcpy(data, model.mesh->vertices.data(), vertexBufferSize);
+                memcpy(static_cast<char*>(data) + vertexBufferSize, model.mesh->indices.data(), indexBufferSize);
+
+                immediateSubmit([&](VkCommandBuffer cmd) 
+                    {
+                        VkBufferCopy vertexCopy 
+                        {
+                            .srcOffset = 0,
+                            .dstOffset = 0,
+                            .size = vertexBufferSize,
+                        };
+                        vkCmdCopyBuffer(cmd, staging.buffer, gpuMeshBuffer.vertexBuffer.buffer, 1, &vertexCopy);
+
+                        VkBufferCopy indexCopy
+                        {
+                            .srcOffset = vertexBufferSize,
+                            .dstOffset = 0,
+                            .size = indexBufferSize,
+                        };
+                        vkCmdCopyBuffer(cmd, staging.buffer, gpuMeshBuffer.indexBuffer.buffer, 1, &indexCopy);
+                    });
+
+                //destroy_buffer(staging);
+            }
+
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
+            vkCmdPushConstants(cmd, meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
+        	vkCmdBindIndexBuffer(cmd, gpuMeshBuffer.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+            vkCmdSetViewport(cmd, 0, 1, &viewport);
+            vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+            vkCmdDrawIndexed(cmd, model.mesh->indices.size(), 1, 0, 0, 0);
+
+        }
+        vkCmdEndRendering(cmd);
 
         VkExtent2D backbufferSize { backbufferImage.extent.width, backbufferImage.extent.height };
         {

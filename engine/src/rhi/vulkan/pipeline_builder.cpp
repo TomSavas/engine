@@ -31,6 +31,15 @@ PipelineBuilder& PipelineBuilder::shaders(VkShaderModule vertexShader, VkShaderM
     return *this;
 }
 
+PipelineBuilder& PipelineBuilder::shaders(VkShaderModule vertexShader, VkShaderModule geometryShader, VkShaderModule fragmentShader)
+{
+    shaderStages.push_back(vkutil::init::shaderStageCreateInfo(VK_SHADER_STAGE_VERTEX_BIT, vertexShader));
+    shaderStages.push_back(vkutil::init::shaderStageCreateInfo(VK_SHADER_STAGE_GEOMETRY_BIT, geometryShader));
+    shaderStages.push_back(vkutil::init::shaderStageCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, fragmentShader));
+
+    return *this;
+}
+
 PipelineBuilder& PipelineBuilder::topology(VkPrimitiveTopology topology)
 {
     inputAssembly.topology = topology;
@@ -109,6 +118,21 @@ PipelineBuilder& PipelineBuilder::depthFormat(VkFormat format)
 {
     renderInfo.depthAttachmentFormat = format;
     
+    return *this;
+}
+
+PipelineBuilder& PipelineBuilder::enableDepthTest(bool depthWriteEnable, VkCompareOp compareOp)
+{
+    depthStencil.depthTestEnable = VK_TRUE;
+    depthStencil.depthWriteEnable = depthWriteEnable;
+    depthStencil.depthCompareOp = compareOp;
+    depthStencil.depthBoundsTestEnable = VK_FALSE;
+    depthStencil.stencilTestEnable = VK_FALSE;
+    depthStencil.front = {};
+    depthStencil.back = {};
+    depthStencil.minDepthBounds = 0.f;
+    depthStencil.maxDepthBounds = 1.f;
+
     return *this;
 }
 

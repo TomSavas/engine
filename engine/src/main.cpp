@@ -1,5 +1,6 @@
 #include <chrono>
 #include <print>
+#include <thread>
 #include <vector>
 #include <math.h>
 
@@ -10,11 +11,13 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
 
-#include "scene.h"
+#include "scenes/scene.h"
 #include "rhi/vulkan/backend.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
+
+using namespace std::chrono_literals;
 
 int main(void) {
     if (!glfwInit()) {
@@ -33,20 +36,24 @@ int main(void) {
 
     auto start = std::chrono::high_resolution_clock::now();
     auto end = std::chrono::high_resolution_clock::now();
-    while(!glfwWindowShouldClose(window)) {
+    float totalTimeElapsed = 0.f;
+    while(!glfwWindowShouldClose(window)) 
+    {
         end = std::chrono::high_resolution_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
         double dt = (double)elapsed.count() / 1000000000.0;
+        totalTimeElapsed += dt;
         start = std::chrono::high_resolution_clock::now();
 
         glfwPollEvents();
 
-        scene.update(dt, window);
         {
             ImGui_ImplVulkan_NewFrame();
             ImGui_ImplGlfw_NewFrame();
             ImGui::NewFrame();
         }
+
+        scene.update(dt, totalTimeElapsed, window);
 
         {
             const float PAD = 10.0f;
@@ -119,6 +126,7 @@ int main(void) {
         backend.draw(scene);
 
         end = std::chrono::system_clock::now();
+        // std::this_thread::sleep_for(8ms);
     }
 
     backend.deinit();

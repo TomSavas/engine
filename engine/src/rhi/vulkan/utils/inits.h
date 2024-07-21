@@ -16,7 +16,9 @@ VkPipelineRasterizationStateCreateInfo rasterizationStateCreateInfo(VkPolygonMod
 VkPipelineMultisampleStateCreateInfo multisampleStateCreateInfo();
 VkPipelineColorBlendAttachmentState colorBlendAttachmentState();
 VkPipelineLayoutCreateInfo layoutCreateInfo();
-VkPipelineLayoutCreateInfo layoutCreateInfo(VkDescriptorSetLayout* descriptorSetLayouts, uint32_t descriptorSetLayoutCount);
+VkPipelineLayoutCreateInfo layoutCreateInfo(VkDescriptorSetLayout* descriptorSetLayouts, uint32_t descriptorSetLayoutCount, VkPushConstantRange* pushConstantRanges = nullptr, uint32_t pushConsantRangeCount = 0);
+
+VkPushConstantRange pushConstantRange(VkShaderStageFlags shaderStages, uint32_t size, uint32_t offset = 0);
 
 VkComputePipelineCreateInfo computePipelineCreateInfo(VkPipelineLayout pipelineLayout, VkPipelineShaderStageCreateInfo shaderStageInfo);
 
@@ -61,5 +63,6 @@ VkCommandBufferSubmitInfo commandBufferSubmitInfo(VkCommandBuffer cmd);
 VkSubmitInfo2 submitInfo2(VkCommandBufferSubmitInfo* cmdSubmitInfo, VkSemaphoreSubmitInfo* waitSemaphoreInfo, VkSemaphoreSubmitInfo* signalSemaphoreInfo);
 
 VkRenderingAttachmentInfo renderingColorAttachmentInfo(VkImageView view, VkClearValue* clear, VkImageLayout layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+VkRenderingAttachmentInfo renderingDepthAttachmentInfo(VkImageView view, VkImageLayout layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 VkRenderingInfo renderingInfo(VkExtent2D extent, VkRenderingAttachmentInfo* colorAttachments, VkRenderingAttachmentInfo* depthAttachments);
 }
