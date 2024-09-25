@@ -41,6 +41,16 @@ int main(void) {
     {
         end = std::chrono::high_resolution_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+        {
+            const auto target = 16.666ms;
+            auto toWait = target - elapsed;
+            // std::println("really elapsed: {}, waiting: {}, total: {}", elapsed, toWait, toWait + elapsed);
+            std::this_thread::sleep_for(toWait);
+        }
+
+        end = std::chrono::high_resolution_clock::now();
+        elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+        
         double dt = (double)elapsed.count() / 1000000000.0;
         totalTimeElapsed += dt;
         start = std::chrono::high_resolution_clock::now();
@@ -125,7 +135,6 @@ int main(void) {
         ImGui::Render();
         backend.draw(scene);
 
-        end = std::chrono::system_clock::now();
         // std::this_thread::sleep_for(8ms);
     }
 

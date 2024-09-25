@@ -1,6 +1,6 @@
 #pragma once
 
-#include "physics/collisions.h"
+//#include "physics/collisions.h"
 
 #include <glm/glm.hpp>
 
@@ -19,7 +19,7 @@ struct Particle
     float invMass;
     float edgeCompliance;
     float volumeCompliance;
-    bool dynamic;
+    int dynamic;
 };
 
 template <class T>
@@ -72,8 +72,17 @@ struct Tetrahedra
     float lambda;
 };
 
+class Model;
+struct Collision 
+{
+    Model* a;
+    Model* b;
+    glm::vec3 collisionVec;
+};
+
 void integratePositions(float dt, std::vector<Particle>& particles);
-void solveEdgeConstraints(float dt, std::vector<Particle>& particles, std::vector<std::unordered_map<IndexSet, Edge>>& edges);
+void solveEdgeConstraints(float dt, std::vector<Particle>& particles, std::vector<std::unordered_map<IndexSet, Edge>>& edges, float edgeCompliance, float dampingStiffness);
 void solveVolumeConstraints(float dt, std::vector<Particle>& particles, std::vector<std::unordered_map<IndexSet, Tetrahedra>>& tetrahedra);
 void solveCollisionConstraints(float substepDt, std::vector<Particle>& particles, std::vector<Collision>& collisions, std::vector<Model>& collisionModels);
+void solveNewCollisionConstraints(float substepDt, std::vector<Particle>& particles, std::vector<Collision>& collisions, std::vector<Model>& collisionModels);
 void adjustVelocities(float dt, std::vector<Particle>& particles);

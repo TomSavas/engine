@@ -1,8 +1,11 @@
 #pragma once
 
+#include "physics/xpbd.h"
+
 #include <glm/glm.hpp>
 
 #include <vector>
+#include <span>
 
 struct GjkInfo 
 {
@@ -11,20 +14,12 @@ struct GjkInfo
     glm::vec3 dir;
 };
 class Model;
-GjkInfo naiveGjk(Model* a, Model* b);
+GjkInfo naiveGjk(const std::span<glm::vec4>& a, const std::span<glm::vec4>& b);
 
-struct Collision 
-{
-    Model* a;
-    Model* b;
-    glm::vec3 collisionVec;
-};
-Collision epa(Model* a, Model* b, GjkInfo info);
+Collision epa(const std::span<glm::vec4>& a, const std::span<glm::vec4>& b, GjkInfo info);
 
 struct Constraints 
 {
     
 };
-std::vector<Constraints> generateXpbdCollisionConstraints(std::vector<Collision> collision);
-
-std::vector<Collision> detectCollisions(std::vector<Model>& models);
+std::vector<Collision> detectCollisions(std::vector<Model>& models, std::vector<Particle>& particles);

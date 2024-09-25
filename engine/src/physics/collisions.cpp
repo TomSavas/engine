@@ -1,28 +1,29 @@
 #include "physics/collisions.h"
+#include "physics/xpbd.h"
 #include "scenes/scene.h"
 
 #include <print>
 #include <glm/glm.hpp>
 
-glm::vec3 farthestAlongVector(Mesh* mesh, glm::vec3 dir)
+glm::vec3 farthestAlongVector(const std::span<glm::vec4>& positions, glm::vec3 dir)
 {
-    float maxDot = glm::dot(glm::vec3(mesh->vertices[0]), dir);
-    glm::vec3 maxVertex = mesh->vertices[0];
+    glm::vec3 maxVertex = positions[0];
+    float maxDot = glm::dot(glm::vec3(maxVertex), dir);
 
-    for (int i = 1; i < mesh->vertices.size(); ++i)
+    for (int i = 1; i < positions.size(); ++i)
     {
-        float dot = glm::dot(glm::vec3(mesh->vertices[i]), dir);
+        float dot = glm::dot(glm::vec3(positions[i]), dir);
         if (dot > maxDot)
         {
             maxDot = dot;
-            maxVertex = mesh->vertices[i];
+            maxVertex = positions[i];
         }
     }
 
     return maxVertex;
 }
 
-glm::vec3 support(Mesh* a, Mesh* b, glm::vec3 dir)
+glm::vec3 support(const std::span<glm::vec4>& a, const std::span<glm::vec4>& b, glm::vec3 dir)
 {
     // Minkowski diff
     return farthestAlongVector(a, dir) - farthestAlongVector(b, -dir);
@@ -107,18 +108,18 @@ bool enclosesOrigin(std::vector<glm::vec3>& simplex, glm::vec3& dir)
     return false;
 }
 
-GjkInfo naiveGjk(Model* a, Model* b)
+GjkInfo naiveGjk(const std::span<glm::vec4>& a, const std::span<glm::vec4>& b)
 {
     std::vector<glm::vec3> simplex;
 
     glm::vec3 dir = glm::normalize(glm::vec3(4.f));
-    simplex.push_back(support(a->mesh, b->mesh, dir));
+    simplex.push_back(support(a, b, dir));
 
     dir *= -1.f;
     int i = 0;
     while (i++ < 10)
     {
-        simplex.push_back(support(a->mesh, b->mesh, dir));
+        simplex.push_back(support(a, b, dir));
                 
         if (glm::dot(simplex.back(), dir) <= 0.0 || i > 10)
         {
@@ -187,7 +188,7 @@ void addIfUniqueEdge(
 	}
 }
 
-Collision epa(Model* aModel, Model* bModel, GjkInfo info)
+Collision epa(const std::span<glm::vec4>& a, const std::span<glm::vec4>& b, GjkInfo info)
 {
     std::vector<glm::vec3> polytope(info.simplex.begin(), info.simplex.end());
 	std::vector<size_t> faces = {
@@ -209,7 +210,7 @@ Collision epa(Model* aModel, Model* bModel, GjkInfo info)
         minNormal = normals[minFace];
         minDistance = normals[minFace].w;
 
-        glm::vec3 supportVec = support(aModel->mesh, bModel->mesh, minNormal);
+        glm::vec3 supportVec = support(a, b, minNormal);
         float sDistance = glm::dot(minNormal, supportVec);
 
         if (fabs(sDistance - minDistance) > 0.001f) 
@@ -282,30 +283,76 @@ Collision epa(Model* aModel, Model* bModel, GjkInfo info)
 
 	// collision.collisionVec = glm::normalize(minNormal) * (minDistance + 0.001f);
 	collision.collisionVec = glm::normalize(minNormal) * (minDistance);
-	collision.a = aModel;
-	collision.b = bModel;
+	// collision.a = aModel;
+	// collision.b = bModel;
  
 	return collision;
 }
 
-std::vector<Constraints> generateXpbdCollisionConstraints(std::vector<Collision> collision)
-{
-     std::vector<Constraints> constraints;   
+std::vector<Collision> detectCollisions(std::vector<Model>& models, std::vector<Particle>& particles) {
+    // For now let's simply test all the pairs
+    std::vector<Collision> collisions;
 
-     return constraints;
-}
+    for (int i = 0; i < models.size(); ++i)
+    {
+        for (int j = i+1; j < models.size(); ++j)
+        {
+            if (i == j)
+            {
+                continue;
+            }
+            collisions.push_back(Collision(&models[i], &models[j]));
+        }
+    }
 
-std::vector<Collision> detectCollisions(std::vector<Model>& models) {
-    // NOTE(savas): we assume convex models for now
-    
+    return collisions;
+
+
+
+
+
+
+
+
+
+
+
+ 
+    /*
+    // NOTE(savas): some place to keep the triangles for the time being
+    static std::vector<Model> triangles;
+    for (Model& triangle : triangles)
+    {
+        delete triangle.mesh;
+    }
+    triangles.clear();
+    triangles.reserve(10000);
+
     // broad phase
     // TODO(savas): spatial accel
     std::vector<std::pair<Model*, Model*>> potentialCollisions;
     for (int i = 0; i < models.size(); ++i)
     {
-        for (int j = i + 1; j < models.size(); ++j)
+        for (int j = i+1; j < models.size(); ++j)
         {
-            potentialCollisions.emplace_back(&models[i], &models[j]);
+            if (i == j)
+            {
+                continue;
+            }
+            // not a cube, add all triangles to deal with concaveness
+            // if (models[i].mesh->vertices.size() > 8)
+            // {
+            //     for (Model& triangle : models[i].copyTriangles())
+            //     {
+            //         triangles.push_back(triangle);
+            //         potentialCollisions.emplace_back(&models[j], &triangles.back());
+            //         // std::println("adding triangle");
+            //     }
+            // }
+            // else
+            {
+                potentialCollisions.emplace_back(&models[j], &models[i]);
+            }
         }
     }
 
@@ -313,14 +360,16 @@ std::vector<Collision> detectCollisions(std::vector<Model>& models) {
     std::vector<Collision> collisions;
     for (auto& potentialCollision : potentialCollisions) 
     {
-        auto gjkInfo = naiveGjk(potentialCollision.first, potentialCollision.second);
+        auto gjkInfo = naiveGjk(potentialCollision.first, potentialCollision.second, particles);
 
         if (gjkInfo.collides)
         {
-            collisions.push_back(epa(potentialCollision.first, potentialCollision.second, gjkInfo));
+            collisions.push_back(epa(potentialCollision.first, potentialCollision.second, gjkInfo, particles));
+            // collisions.push_back(Collision{potentialCollision.first, potentialCollision.second, glm::vec3(0.f)});
         }
     }
 
     return collisions;
+    */
 }
 

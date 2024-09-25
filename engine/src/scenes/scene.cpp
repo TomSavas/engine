@@ -120,23 +120,28 @@ void updateFreeCamera(float dt, GLFWwindow* window, Camera& camera)
     
 }
 
-void cpuSolveXpbd(float dt, int substeps, Scene& scene, std::vector<Model>& collisionModels)
+void cpuSolveXpbd(float dt, int substeps, Scene& scene, std::vector<Model>& collisionModels, float edgeCompliance, float dampingStiffness)
 {
-    integratePositions(dt, scene.physicsEntities);
-
     // NOTE(savas): according to the XPBD paper
-    auto collisions = detectCollisions(scene.models);
-    solveCollisionConstraints(dt, scene.physicsEntities, collisions, collisionModels);
-
     const float substepDt = dt / static_cast<float>(substeps);
     for (int i = 0; i < substeps; ++i)
     {
+        integratePositions(substepDt, scene.physicsEntities);
+        
         // Softbody
-        solveEdgeConstraints(substepDt, scene.physicsEntities, scene.edges);
+        solveEdgeConstraints(substepDt, scene.physicsEntities, scene.edges, edgeCompliance, dampingStiffness);
         solveVolumeConstraints(substepDt, scene.physicsEntities, scene.tetrahedra);
+        // solveNewCollisionConstraints(substepDt, scene.physicsEntities, collisions, collisionModels);
+
+        //adjustVelocities(substepDt, scene.physicsEntities);
+
+        auto collisions = detectCollisions(scene.models, scene.physicsEntities);
+        solveCollisionConstraints(substepDt, scene.physicsEntities, collisions, collisionModels);
+
+        adjustVelocities(substepDt, scene.physicsEntities);
     }
 
-    adjustVelocities(dt, scene.physicsEntities);
+    // adjustVelocities(dt, scene.physicsEntities);
 }
 
 /*static*/ Model Model::cube(glm::vec3 position, glm::vec3 color, float scale, bool dynamic)
@@ -198,16 +203,120 @@ void cpuSolveXpbd(float dt, int substeps, Scene& scene, std::vector<Model>& coll
     return cube;
 }
 
+/*static*/ Model Model::tesselatedPlane(glm::vec3 centerPosition, float width, float height, int widthSegments, int heightSegments)
+{
+    Model tesselatedPlane = Model(glm::vec4(1.f, 0.f, 0.f, 1.f), true);
+
+    float segmentWidth = width / widthSegments;
+    float segmentHeigth = height / heightSegments;
+
+    glm::vec3 topLeftPos = centerPosition - glm::vec3(width, height, 0.f) * 0.5f;
+    glm::vec3 widthOffset = glm::vec3(segmentWidth, 0.f, 0.f);
+    glm::vec3 heightOffset = glm::vec3(0.f, segmentHeigth, 0.f);
+    for (int y = 0; y <= heightSegments; y++)
+    {
+        for (int x = 0; x <= widthSegments; x++)
+        {
+            glm::vec4 vertexPos = glm::vec4(topLeftPos + widthOffset * static_cast<float>(x) + heightOffset * static_cast<float>(y), 0.f);
+            tesselatedPlane.mesh->vertices.push_back(vertexPos);
+
+            std::println("{}, {}, {}", vertexPos.x, vertexPos.y, vertexPos.z);
+        }
+    }
+
+    std::println();
+
+    const uint32_t verticesPerWidth = widthSegments + 1;
+    // NOTE(savas): we are connecting current row with the one bellow, so no need to process the last row
+    for (int y = 0; y < heightSegments; y++)
+    {
+        // NOTE(savas): we are processing current col with one on the right, so no need to process the last col
+        for (int x = 0; x < widthSegments; x++)
+        {
+            const uint32_t topLeftVertex = y * verticesPerWidth + x;
+            const uint32_t bottomLeftVertex = (y + 1) * verticesPerWidth + x;
+
+            tesselatedPlane.mesh->indices.insert(tesselatedPlane.mesh->indices.end(), 
+                {
+                    topLeftVertex, bottomLeftVertex + 1, topLeftVertex + 1,
+                    topLeftVertex, bottomLeftVertex, bottomLeftVertex + 1,
+                });
+            std::println("{}, {}, {}, {}, {}, {}", topLeftVertex, topLeftVertex + 1, bottomLeftVertex + 1,
+                    topLeftVertex, bottomLeftVertex + 1, bottomLeftVertex);
+            // tesselatedPlane.mesh->indices.insert(tesselatedPlane.mesh->indices.end(), {topLeftVertex, bottomLeftVertex + 1, bottomLeftVertex});
+        }
+    }
+
+    tesselatedPlane.staticVertices.insert(
+        {
+            0, static_cast<uint32_t>(widthSegments),
+            verticesPerWidth * heightSegments, verticesPerWidth * heightSegments + widthSegments
+        });
+    std::println("{}, {}, {}, {}", 0, static_cast<uint32_t>(widthSegments),
+            verticesPerWidth * heightSegments, verticesPerWidth * heightSegments + widthSegments);
+    
+    return tesselatedPlane;
+}
+
+std::vector<Model> Model::copyTriangles()
+{
+    std::vector<Model> triangles;
+    triangles.reserve(mesh->indices.size() / 3);
+
+    for (int i = 0; i < mesh->indices.size(); i += 3)
+    {
+        Model triangle = Model::cube(glm::vec3(0.f), glm::vec3(0.f));
+        //triangle.mesh = new Mesh();
+
+        triangle.mesh->indices.clear();
+        triangle.mesh->vertices.clear();
+        triangle.mesh->particleIndices.clear();
+
+        triangle.mesh->indices.insert(triangle.mesh->indices.end(),
+            {
+                mesh->indices[i + 0] % 3,
+                mesh->indices[i + 1] % 3,
+                mesh->indices[i + 2] % 3,
+            });
+        triangle.mesh->vertices.insert(triangle.mesh->vertices.end(),
+            {
+                mesh->vertices[mesh->indices[i + 0]],
+                mesh->vertices[mesh->indices[i + 1]],
+                mesh->vertices[mesh->indices[i + 2]],
+            });
+        triangle.mesh->particleIndices.insert(triangle.mesh->particleIndices.end(),
+            {
+                mesh->particleIndices[mesh->indices[i + 0]],
+                mesh->particleIndices[mesh->indices[i + 1]],
+                mesh->particleIndices[mesh->indices[i + 2]],
+            });
+        triangles.push_back(triangle);
+    }
+
+    return triangles;
+}
+
 // [(name, [(model, initial velocity)])]
 static std::vector<std::pair<std::string, std::vector<std::pair<Model, glm::vec3>>>> testModels = 
 {
-    // {
-    //     "2x1 fall BIG-small",
-    //     {
-    //         std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.f, 5.f, 0.f), glm::vec3(1.f, 0.f, 0.f), 10.f, false), glm::vec3(0.f)),
-    //         std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.f, 10.f + 1.f, 0.f), glm::vec3(1.f, 0.1f, 0.f)), glm::vec3(0.f)),
-    //     }
-    // },
+    {
+        "Empty",
+        {
+        }
+    },
+    {
+        "1x1 stationary BIG",
+        {
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(10.f, 75.f, 10.f), glm::vec3(1.f, 0.f, 0.f), 100.f), glm::vec3(0.f)),
+        }
+    },
+    {
+        "2x1 fall BIG-small",
+        {
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.f, 5.f, 0.f), glm::vec3(1.f, 0.f, 0.f), 10.f, false), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.f, 10.f + 1.f, 0.f), glm::vec3(1.f, 0.1f, 0.f)), glm::vec3(0.f)),
+        }
+    },
     {
         "1x1 stationary",
         {
@@ -218,6 +327,12 @@ static std::vector<std::pair<std::string, std::vector<std::pair<Model, glm::vec3
         "1x1 fall",
         {
             std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.f, 2.5f, 0.f), glm::vec3(1.f, 0.f, 0.f)), glm::vec3(0.f)),
+        }
+    },
+    {
+        "1x1 high fall",
+        {
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.f, 15.f, 0.f), glm::vec3(1.f, 0.f, 0.f)), glm::vec3(0.f)),
         }
     },
     {
@@ -371,59 +486,59 @@ static std::vector<std::pair<std::string, std::vector<std::pair<Model, glm::vec3
         "4x1 column",
         {
             std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.f, 0.5f, 0.f), glm::vec3(1.f, 0.f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.f, 1.5f, 0.f), glm::vec3(1.f, 0.1f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.f, 2.5f, 0.f), glm::vec3(1.f, 0.2f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.f, 3.5f, 0.f), glm::vec3(1.f, 0.3f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.f, 1.525f, 0.f), glm::vec3(1.f, 0.1f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.f, 2.550f, 0.f), glm::vec3(1.f, 0.2f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.f, 3.575f, 0.f), glm::vec3(1.f, 0.3f, 0.f)), glm::vec3(0.f)),
         }
     },
     {
         "4x3 wall + projectile",
         {
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-1.6f, 0.5f, 0.f), glm::vec3(1.f, 0.f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-1.6f, 1.5f, 0.f), glm::vec3(1.f, 0.1f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-1.6f, 2.5f, 0.f), glm::vec3(1.f, 0.2f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-1.6f, 0.525f, 0.f), glm::vec3(1.f, 0.f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-1.6f, 1.550f, 0.f), glm::vec3(1.f, 0.1f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-1.6f, 2.575f, 0.f), glm::vec3(1.f, 0.2f, 0.f)), glm::vec3(0.f)),
             // std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.f, 3.5f, 0.f), glm::vec3(1.f, 0.3f, 0.f)), glm::vec3(0.f)),
 
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-0.525f, 0.5f, 0.f), glm::vec3(1.f, 0.3f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-0.525f, 1.5f, 0.f), glm::vec3(1.f, 0.2f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-0.525f, 2.5f, 0.f), glm::vec3(1.f, 0.1f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-0.525f, 0.525f, 0.f), glm::vec3(1.f, 0.3f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-0.525f, 1.550f, 0.f), glm::vec3(1.f, 0.2f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-0.525f, 2.575f, 0.f), glm::vec3(1.f, 0.1f, 0.f)), glm::vec3(0.f)),
             // std::pair<Model, glm::vec3>(Model::cube(glm::vec3(1.f, 3.5f, 0.f), glm::vec3(1.f, 0.0f, 0.f)), glm::vec3(0.f)),
 
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.525f, 0.5f, 0.f), glm::vec3(1.f, 0.f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.525f, 1.5f, 0.f), glm::vec3(1.f, 0.1f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.525f, 2.5f, 0.f), glm::vec3(1.f, 0.2f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.525f, 0.525f, 0.f), glm::vec3(1.f, 0.f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.525f, 1.550f, 0.f), glm::vec3(1.f, 0.1f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.525f, 2.575f, 0.f), glm::vec3(1.f, 0.2f, 0.f)), glm::vec3(0.f)),
             // std::pair<Model, glm::vec3>(Model::cube(glm::vec3(2.f, 3.5f, 0.f), glm::vec3(1.f, 0.3f, 0.f)), glm::vec3(0.f)),
 
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(1.55f, 0.5f, 0.f), glm::vec3(1.f, 0.3f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(1.55f, 1.5f, 0.f), glm::vec3(1.f, 0.2f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(1.55f, 2.5f, 0.f), glm::vec3(1.f, 0.1f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(1.55f, 0.525f, 0.f), glm::vec3(1.f, 0.3f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(1.55f, 1.550f, 0.f), glm::vec3(1.f, 0.2f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(1.55f, 2.575f, 0.f), glm::vec3(1.f, 0.1f, 0.f)), glm::vec3(0.f)),
             // std::pair<Model, glm::vec3>(Model::cube(glm::vec3(3.f, 3.5f, 0.f), glm::vec3(1.f, 0.0f, 0.f)), glm::vec3(0.f)),
 
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.f, 2.f, 20.f), glm::vec3(1.f, 0.f, 0.f)), glm::vec3(0.f, 0.f, -30.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.f, 3.f, 20.f), glm::vec3(1.f, 0.f, 0.f)), glm::vec3(0.f, 0.f, -30.f)),
         }
     },
     {
         "4x4 wall",
         {
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-1.6f, 0.5f, 0.f), glm::vec3(1.f, 0.f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-1.6f, 1.5f, 0.f), glm::vec3(1.f, 0.1f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-1.6f, 2.5f, 0.f), glm::vec3(1.f, 0.2f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-1.6f, 3.5f, 0.f), glm::vec3(1.f, 0.3f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-1.6f, 0.525f, 0.f), glm::vec3(1.f, 0.f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-1.6f, 1.550f, 0.f), glm::vec3(1.f, 0.1f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-1.6f, 2.575f, 0.f), glm::vec3(1.f, 0.2f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-1.6f, 3.600f, 0.f), glm::vec3(1.f, 0.3f, 0.f)), glm::vec3(0.f)),
 
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-0.525f, 0.5f, 0.f), glm::vec3(1.f, 0.3f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-0.525f, 1.5f, 0.f), glm::vec3(1.f, 0.2f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-0.525f, 2.5f, 0.f), glm::vec3(1.f, 0.1f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-0.525f, 3.5f, 0.f), glm::vec3(1.f, 0.0f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-0.525f, 0.525f, 0.f), glm::vec3(1.f, 0.3f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-0.525f, 1.550f, 0.f), glm::vec3(1.f, 0.2f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-0.525f, 2.575f, 0.f), glm::vec3(1.f, 0.1f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(-0.525f, 3.600f, 0.f), glm::vec3(1.f, 0.0f, 0.f)), glm::vec3(0.f)),
 
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.525f, 0.5f, 0.f), glm::vec3(1.f, 0.f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.525f, 1.5f, 0.f), glm::vec3(1.f, 0.1f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.525f, 2.5f, 0.f), glm::vec3(1.f, 0.2f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.525f, 3.5f, 0.f), glm::vec3(1.f, 0.3f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.525f, 0.525f, 0.f), glm::vec3(1.f, 0.f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.525f, 1.550f, 0.f), glm::vec3(1.f, 0.1f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.525f, 2.575f, 0.f), glm::vec3(1.f, 0.2f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(0.525f, 3.600f, 0.f), glm::vec3(1.f, 0.3f, 0.f)), glm::vec3(0.f)),
 
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(1.55f, 0.5f, 0.f), glm::vec3(1.f, 0.3f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(1.55f, 1.5f, 0.f), glm::vec3(1.f, 0.2f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(1.55f, 2.5f, 0.f), glm::vec3(1.f, 0.1f, 0.f)), glm::vec3(0.f)),
-            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(1.55f, 3.5f, 0.f), glm::vec3(1.f, 0.0f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(1.55f, 0.525f, 0.f), glm::vec3(1.f, 0.3f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(1.55f, 1.550f, 0.f), glm::vec3(1.f, 0.2f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(1.55f, 2.575f, 0.f), glm::vec3(1.f, 0.1f, 0.f)), glm::vec3(0.f)),
+            std::pair<Model, glm::vec3>(Model::cube(glm::vec3(1.55f, 3.600f, 0.f), glm::vec3(1.f, 0.0f, 0.f)), glm::vec3(0.f)),
         }
     },
 };
@@ -438,15 +553,26 @@ void initTestModels(Scene& scene, std::vector<std::pair<Model, glm::vec3>>& mode
     scene.edges.clear();
     scene.tetrahedra.clear();
 
+#if 1
+    scene.models.push_back(Model::tesselatedPlane(glm::vec3(0.f, 0.f, 10.f), 5.f, 5.f, 50, 50));
+#else
+    scene.models.push_back(Model::tesselatedPlane(glm::vec3(0.f, 0.f, 10.f), 5.f, 5.f, 1, 1));
+#endif
+
+    // scene.models.push_back(Model::cube(glm::vec3(0.f, 10.5f, 0.f), glm::vec3(1.f, 0.1f, 0.f), 0.5f));
+    // scene.models.push_back(Model::cube(glm::vec3(2.f, 11.f, 0.f), glm::vec3(1.f, 0.2f, 0.f), 0.5f));
+    // scene.models.push_back(Model::cube(glm::vec3(-2.f, 11.5f, 2.f), glm::vec3(1.f, 0.3f, 0.f), 0.5f));
+    // scene.models.push_back(Model::cube(glm::vec3(0.f, 6.f, 0.f), glm::vec3(1.f, 0.1f, 0.f), 0.5f));
+
+    // Model ground = Model::cube(glm::vec3(0.f, -5.15f, 0.f), glm::vec3(0.1f), 10.f);
+    // ground.dynamic = false;
+    // scene.models.push_back(ground);
+
     for (auto& model : models)
     {
         Model copiedModel(model.first);
         scene.models.push_back(copiedModel);
     }
-
-    // Model ground = Model::cube(glm::vec3(0.f, -5.15f, 0.f), glm::vec3(0.1f), 10.f);
-    // ground.dynamic = false;
-    // scene.models.push_back(ground);
 
     int modelIndex = 0;
     for (auto& model : scene.models)
@@ -454,26 +580,34 @@ void initTestModels(Scene& scene, std::vector<std::pair<Model, glm::vec3>>& mode
         int modelVertexOffset = scene.physicsEntities.size();
 
         glm::mat4 rotation = glm::mat4(1.f);
-        // rotation = glm::rotate(rotation, (float)M_PI/2.f, glm::vec3(1.f, 1.f, 1.f));
+        if (modelIndex == 0)
+        {
+            rotation = glm::rotate(rotation, (float)M_PI/2.f, glm::vec3(1.f, 0.f, 0.f));
+        }
 
         for (int i = 0; i < model.mesh->vertices.size(); ++i)
         {
+            const bool dynamic = !model.staticVertices.contains(i) && model.dynamic;
+            // const bool dynamic = model.dynamic;
             Particle particle = 
             {
                 // .velocity = glm::vec3(0.f),
-                .velocity = models[modelIndex].second,
+                .velocity = modelIndex == 0 ? glm::vec3(0.f) : models[modelIndex - 1].second,
                 .position = model.mesh->vertices[i] * rotation,
                 .previousPosition = model.mesh->vertices[i] * rotation,
                 .mass = 1.f,
+                // .invMass = model.dynamic ? 1.f : 0.f,
                 .invMass = 1.f,
                 // .edgeCompliance = 0.0001f + (modelIndex) * 0.005f,
                 // .edgeCompliance = 0.0000000000001f + (modelIndex) * 0.005f,
-                // .edgeCompliance = 0.000f,
-                .edgeCompliance = 0.00008f,
+                .edgeCompliance = 0.0f,
+                // .edgeCompliance = (modelIndex == 0) ? 0.0f : 0.00008f,
                 // .edgeCompliance = 0.00008f + (modelIndex) * 0.005f,
                 .volumeCompliance = 0.f,
-                .dynamic = model.dynamic,
+                // .dynamic = model.dynamic,
+                .dynamic = dynamic ? 0 : 1,
             };
+            model.mesh->offsetInParticles = scene.physicsEntities.size();
             model.mesh->particleIndices.push_back(scene.physicsEntities.size());
 
             scene.physicsEntities.push_back(particle);
@@ -563,6 +697,8 @@ void Scene::update(float dt, float currentTimeMs, GLFWwindow* window)
     static int autoTestGraceFrames = defaultAutoTestGraceFrames;
     static std::vector<TestResult> testResults;
     bool skipCurrentTest = false;
+    static float edgeCompliance = 0.0005f;
+    static float dampingStiffness = 30.f;
 
     if (ImGui::Begin("Scene"))
     {
@@ -581,6 +717,11 @@ void Scene::update(float dt, float currentTimeMs, GLFWwindow* window)
 
         ImGui::Checkbox("Show collisions", &collisionModelsVisible);
         ImGui::Checkbox("Pause on collision", &pauseOnCollision);
+
+        ImGui::Separator();
+
+        ImGui::SliderFloat("Edge compliance", &edgeCompliance, 0.f, 0.002f, "%.9f");
+        ImGui::SliderFloat("Damping stiffness", &dampingStiffness, 0.f, 200.f, "%.9f");
 
         ImGui::Separator();
         
@@ -773,7 +914,7 @@ void Scene::update(float dt, float currentTimeMs, GLFWwindow* window)
         }
 
         collisionModels.clear();
-        cpuSolveXpbd(dt, 20, *this, collisionModels);
+        cpuSolveXpbd(dt, 20, *this, collisionModels, edgeCompliance, dampingStiffness);
 
         if (pauseOnCollision && collisionModels.size())
         {
