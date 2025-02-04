@@ -24,9 +24,9 @@ vec4 calcGridColour(vec3 point, float scale, float intensity)
 
     vec2 clampedDerivatives = min(derivatives, 1.0);
     if (-0.2 * clampedDerivatives.x < point.x && point.x < 0.2 * clampedDerivatives.x)
-        color.rgb = vec3(1.0, 0.0, 0.0);
-    if (-0.2 * clampedDerivatives.y < point.z && point.z < 0.2 * clampedDerivatives.y)
         color.rgb = vec3(0.0, 0.0, 1.0);
+    if (-0.2 * clampedDerivatives.y < point.z && point.z < 0.2 * clampedDerivatives.y)
+        color.rgb = vec3(1.0, 0.0, 0.0);
         
     return color;
 }
