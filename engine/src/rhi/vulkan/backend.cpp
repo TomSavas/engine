@@ -1,11 +1,7 @@
 #define VMA_IMPLEMENTATION
 #include "rhi/vulkan/backend.h"
 
-#include "glm/ext/matrix_clip_space.hpp"
-#include "glm/ext/matrix_transform.hpp"
-#include "imgui.h"
-#include "utils/images.h"
-#include "scenes/scene.h"
+#include "scene.h"
 
 #include "rhi/vulkan/pipeline_builder.h"
 #include "rhi/vulkan/utils/inits.h"
@@ -21,9 +17,12 @@
 
 #include "GLFW/glfw3.h"
 
-#include <cmath>
-#include <vulkan/vulkan_core.h>
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/matrix_transform.hpp>
 #include <glm/glm.hpp>
+#include <vulkan/vulkan_core.h>
+
+#include <cmath>
 
 // TEMP: test for tracy allocations
 void* operator new(std::size_t size) noexcept(false)
@@ -731,121 +730,121 @@ void VulkanBackend::draw(Scene& scene)
         }
 
         // for (auto& model : scene.models)
-        std::vector<Model> models;
-        models.insert(models.end(), scene.models.begin(), scene.models.end());
-        if (scene.collisionModelsVisible)
-        {
-            models.insert(models.end(), scene.collisionModels.begin(), scene.collisionModels.end());
-        }
+        // std::vector<Model> models;
+        // models.insert(models.end(), scene.models.begin(), scene.models.end());
+        // if (scene.collisionModelsVisible)
+        // {
+        //     models.insert(models.end(), scene.collisionModels.begin(), scene.collisionModels.end());
+        // }
 
         VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         VkRenderingAttachmentInfo depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(depthImage.view);
         VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, &depthAttachmentInfo);
 
-        vkCmdBeginRendering(cmd, &renderingInfo);
-        // NOTE(savas): I don't think I need to re-bind this. Because the descriptor set is the same as the one
-        // from the inf grid pipeline above it should remain bound
-        // vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, noDepthMeshPipeline);
-        // for (auto& model : models)
-        for (int i = 0; i < models.size(); ++i)
-        {
-            if (i == 0)
-            {
-                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipeline);
-            }
-            else if (i == scene.models.size())
-            {
-                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, noDepthMeshPipeline);
-            }
+        // vkCmdBeginRendering(cmd, &renderingInfo);
+        // // NOTE(savas): I don't think I need to re-bind this. Because the descriptor set is the same as the one
+        // // from the inf grid pipeline above it should remain bound
+        // // vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, noDepthMeshPipeline);
+        // // for (auto& model : models)
+        // for (int i = 0; i < models.size(); ++i)
+        // {
+        //     if (i == 0)
+        //     {
+        //         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipeline);
+        //     }
+        //     else if (i == scene.models.size())
+        //     {
+        //         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, noDepthMeshPipeline);
+        //     }
 
-            Model& model = models[i];
+        //     Model& model = models[i];
             
-            VkViewport viewport = {};
-            viewport.width = swapchainSize.width;
-            viewport.height = swapchainSize.height;
-            viewport.maxDepth = 1.f;
+        //     VkViewport viewport = {};
+        //     viewport.width = swapchainSize.width;
+        //     viewport.height = swapchainSize.height;
+        //     viewport.maxDepth = 1.f;
 
-            VkRect2D scissor = {};
-            scissor.extent = swapchainSize;
+        //     VkRect2D scissor = {};
+        //     scissor.extent = swapchainSize;
 
-            const uint32_t vertexBufferSize = model.mesh->vertices.size() * sizeof(decltype(model.mesh->vertices)::value_type);
-            const uint32_t indexBufferSize = model.mesh->indices.size() * sizeof(decltype(model.mesh->indices)::value_type);
+        //     const uint32_t vertexBufferSize = model.mesh->vertices.size() * sizeof(decltype(model.mesh->vertices)::value_type);
+        //     const uint32_t indexBufferSize = model.mesh->indices.size() * sizeof(decltype(model.mesh->indices)::value_type);
 
-            if (gpuMeshBuffers.find(model.mesh) == gpuMeshBuffers.end()) 
-            {
-                GpuMeshBuffers buffers;
-                auto info = vkutil::init::bufferCreateInfo(vertexBufferSize,
-                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-                // buffers.vertexBuffer = allocateBuffer(allocator, info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-                //     VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-                buffers.vertexBuffer = allocateBuffer(allocator, info, VMA_MEMORY_USAGE_GPU_ONLY,
-                    VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-                info = vkutil::init::bufferCreateInfo(indexBufferSize,
-                    VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-                buffers.indexBuffer = allocateBuffer(allocator, info, VMA_MEMORY_USAGE_GPU_ONLY,
-                    VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-                // buffers.indexBuffer = allocateBuffer(allocator, info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-                //     VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        //     if (gpuMeshBuffers.find(model.mesh) == gpuMeshBuffers.end()) 
+        //     {
+        //         GpuMeshBuffers buffers;
+        //         auto info = vkutil::init::bufferCreateInfo(vertexBufferSize,
+        //             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+        //         // buffers.vertexBuffer = allocateBuffer(allocator, info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        //         //     VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        //         buffers.vertexBuffer = allocateBuffer(allocator, info, VMA_MEMORY_USAGE_GPU_ONLY,
+        //             VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        //         info = vkutil::init::bufferCreateInfo(indexBufferSize,
+        //             VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+        //         buffers.indexBuffer = allocateBuffer(allocator, info, VMA_MEMORY_USAGE_GPU_ONLY,
+        //             VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        //         // buffers.indexBuffer = allocateBuffer(allocator, info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        //         //     VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-                VkBufferDeviceAddressInfo deviceAdressInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffers.vertexBuffer.buffer };
-            	buffers.vertexBufferAddress = vkGetBufferDeviceAddress(device, &deviceAdressInfo);
+        //         VkBufferDeviceAddressInfo deviceAdressInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffers.vertexBuffer.buffer };
+        //     	buffers.vertexBufferAddress = vkGetBufferDeviceAddress(device, &deviceAdressInfo);
 
-                gpuMeshBuffers[model.mesh] = buffers;
-            }
-            GpuMeshBuffers& gpuMeshBuffer = gpuMeshBuffers[model.mesh];
+        //         gpuMeshBuffers[model.mesh] = buffers;
+        //     }
+        //     GpuMeshBuffers& gpuMeshBuffer = gpuMeshBuffers[model.mesh];
 
-            PushConstants pushConstants 
-            {
-                .model = glm::mat4(1.f), //SRT 
-                .color = glm::vec4(model.color, 1.f),
-                // .vertexBufferAddr = mesh.vertexBufferAddress,
-                .vertexBufferAddr = gpuMeshBuffer.vertexBufferAddress,
-            };
+        //     PushConstants pushConstants 
+        //     {
+        //         .model = glm::mat4(1.f), //SRT 
+        //         .color = glm::vec4(model.color, 1.f),
+        //         // .vertexBufferAddr = mesh.vertexBufferAddress,
+        //         .vertexBufferAddr = gpuMeshBuffer.vertexBufferAddress,
+        //     };
 
-            {
-                auto bufInfo = vkutil::init::bufferCreateInfo(vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-                AllocatedBuffer staging = allocateBuffer(allocator, bufInfo, VMA_MEMORY_USAGE_CPU_ONLY,
-                    VMA_ALLOCATION_CREATE_MAPPED_BIT, 0);
+        //     {
+        //         auto bufInfo = vkutil::init::bufferCreateInfo(vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+        //         AllocatedBuffer staging = allocateBuffer(allocator, bufInfo, VMA_MEMORY_USAGE_CPU_ONLY,
+        //             VMA_ALLOCATION_CREATE_MAPPED_BIT, 0);
 
-                //AllocatedBuffer staging = createBuffer(vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
-                void* data = staging.allocation->GetMappedData();
+        //         //AllocatedBuffer staging = createBuffer(vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+        //         void* data = staging.allocation->GetMappedData();
 
-                memcpy(data, model.mesh->vertices.data(), vertexBufferSize);
-                memcpy(static_cast<char*>(data) + vertexBufferSize, model.mesh->indices.data(), indexBufferSize);
+        //         memcpy(data, model.mesh->vertices.data(), vertexBufferSize);
+        //         memcpy(static_cast<char*>(data) + vertexBufferSize, model.mesh->indices.data(), indexBufferSize);
 
-                immediateSubmit([&](VkCommandBuffer cmd) 
-                    {
-                        VkBufferCopy vertexCopy 
-                        {
-                            .srcOffset = 0,
-                            .dstOffset = 0,
-                            .size = vertexBufferSize,
-                        };
-                        vkCmdCopyBuffer(cmd, staging.buffer, gpuMeshBuffer.vertexBuffer.buffer, 1, &vertexCopy);
+        //         immediateSubmit([&](VkCommandBuffer cmd) 
+        //             {
+        //                 VkBufferCopy vertexCopy 
+        //                 {
+        //                     .srcOffset = 0,
+        //                     .dstOffset = 0,
+        //                     .size = vertexBufferSize,
+        //                 };
+        //                 vkCmdCopyBuffer(cmd, staging.buffer, gpuMeshBuffer.vertexBuffer.buffer, 1, &vertexCopy);
 
-                        VkBufferCopy indexCopy
-                        {
-                            .srcOffset = vertexBufferSize,
-                            .dstOffset = 0,
-                            .size = indexBufferSize,
-                        };
-                        vkCmdCopyBuffer(cmd, staging.buffer, gpuMeshBuffer.indexBuffer.buffer, 1, &indexCopy);
-                    });
+        //                 VkBufferCopy indexCopy
+        //                 {
+        //                     .srcOffset = vertexBufferSize,
+        //                     .dstOffset = 0,
+        //                     .size = indexBufferSize,
+        //                 };
+        //                 vkCmdCopyBuffer(cmd, staging.buffer, gpuMeshBuffer.indexBuffer.buffer, 1, &indexCopy);
+        //             });
 
-                //destroy_buffer(staging);
-            }
+        //         //destroy_buffer(staging);
+        //     }
 
-            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
-            vkCmdPushConstants(cmd, meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
-        	vkCmdBindIndexBuffer(cmd, gpuMeshBuffer.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+        //     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
+        //     vkCmdPushConstants(cmd, meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
+        // 	vkCmdBindIndexBuffer(cmd, gpuMeshBuffer.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
-            vkCmdSetViewport(cmd, 0, 1, &viewport);
-            vkCmdSetScissor(cmd, 0, 1, &scissor);
+        //     vkCmdSetViewport(cmd, 0, 1, &viewport);
+        //     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-            vkCmdDrawIndexed(cmd, model.mesh->indices.size(), 1, 0, 0, 0);
+        //     vkCmdDrawIndexed(cmd, model.mesh->indices.size(), 1, 0, 0, 0);
 
-        }
-        vkCmdEndRendering(cmd);
+        // }
+        // vkCmdEndRendering(cmd);
 
         VkExtent2D backbufferSize { backbufferImage.extent.width, backbufferImage.extent.height };
         {

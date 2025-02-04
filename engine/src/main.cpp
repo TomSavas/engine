@@ -1,7 +1,6 @@
 #include <chrono>
 #include <print>
 #include <thread>
-#include <vector>
 #include <math.h>
 
 #define GLFW_INCLUDE_VULKAN
@@ -11,7 +10,7 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
 
-#include "scenes/scene.h"
+#include "scene.h"
 #include "rhi/vulkan/backend.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
@@ -32,7 +31,7 @@ int main(void) {
     VulkanBackend backend(window);
     backend.registerCallbacks();
 
-    Scene scene = Scene::empty();
+    Scene scene = Scene("empty");
 
     auto start = std::chrono::high_resolution_clock::now();
     auto end = std::chrono::high_resolution_clock::now();
