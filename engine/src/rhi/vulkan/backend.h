@@ -5,9 +5,7 @@
 #include "rhi/vulkan/utils/images.h"
 #include "rhi/vulkan/descriptors.h"
 #include "rhi/vulkan/shader.h"
-
-//#define GLFW_INCLUDE_VULKAN
-//#include "GLFW/glfw3.h"
+#include "rhi/vulkan/renderpass.h"
 
 #include "VkBootstrap.h"
 #include "vk_mem_alloc.h"
@@ -24,6 +22,14 @@ do                                       \
 {                                        \
     ZoneScopedN(name " CPU");            \
     TracyVkZone(ctx, cmd, name " GPU")   \
+} while (0)
+
+#define ZoneScopedCpuGpuAutoStr(name) ZoneScopedCpuGpuStr(tracyCtx, tracyCmdBuffer, name)
+#define ZoneScopedCpuGpuStr(ctx, cmd, name) \
+do                                         \
+{                                          \
+    ZoneScopedN((name + " CPU").c_str());            \
+    TracyVkZone(ctx, cmd, (name + " GPU").c_str())   \
 } while (0)
 
 #include <iostream>
@@ -157,6 +163,15 @@ struct VulkanBackend
 
     std::unordered_map<Mesh*, GpuMeshBuffers> gpuMeshBuffers;
 
+    //
+    RenderGraph graph;
+
+    VkDescriptorSetLayout sceneDescriptorSetLayout;
+
+    void immediateSubmit(std::function<void (VkCommandBuffer)>&& f);
+    void copyBuffer(VkBuffer src, VkBuffer dst, VkBufferCopy copyRegion);
+    void copyBufferWithStaging(void* data, size_t size, VkBuffer dst, VkBufferCopy copyRegion);
+
 private:
     void initVulkan();
     void initSwapchain();
@@ -168,6 +183,4 @@ private:
     void initPipelines();
     void initImgui();
     void initProfiler();
-
-    void immediateSubmit(std::function<void (VkCommandBuffer)>&& f);
 };

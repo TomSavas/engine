@@ -14,6 +14,7 @@ layout (location = 0) out vec4 outColor;
 
 void main()
 {
+    // outColor = vec4(1.0, 0.0, 0.0, 1.0);
     const vec3 lightDir = normalize(vec3(1.f, -1.f, 1.f));
 
     float lDotN = dot(-lightDir, normal);
@@ -22,6 +23,6 @@ void main()
 
     // const vec3 color = vec3(1.0, 0.0, 0.0);
     outColor = vec4(color.xyz * lightLevel, color.w);
-    // outColor = vec4(normal * 0.5 + 0.5, 1.0);
-    // outColor = vec4(vec3(normal.y / 20.f), 1.0);
+     // outColor = vec4(normal * 0.5 + 0.5, 1.0);
+     // outColor = vec4(vec3(normal.y / 20.f), 1.0);
 }

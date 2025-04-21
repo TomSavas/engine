@@ -46,6 +46,7 @@ add_subdirectory(lib/glm)
 target_link_libraries(${PROJECT} glm::glm)
 add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
 
+option ( TRACY_ON_DEMAND " " ON )
 add_subdirectory(lib/tracy)
 target_link_libraries(${PROJECT} Tracy::TracyClient)
 

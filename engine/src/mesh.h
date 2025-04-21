@@ -3,13 +3,32 @@
 #include <glm/glm.hpp>
 
 #include <vector>
+#include <string>
 
-struct Mesh
+struct Vertex 
 {
-    // .w = collision flag
-    std::vector<glm::vec4> vertices;
-    std::vector<uint32_t> indices;
+    union 
+    {
+        struct
+        {
+            float pos[4];
+            float uv[4];
+            float normal[4];
+            float tangent[4];
+        };
+        float raw[4 * 4];
+    };
+};
 
-    static Mesh cube(glm::vec3 position, glm::vec3 color, glm::vec3 scale = glm::vec3(1.f, 1.f, 1.f));
-    static Mesh tesselatedPlane(glm::vec3 centerPosition, float width, float height, int widthSegments, int heightSegments);
+struct Mesh 
+{
+    std::string debugName;
+
+    int vertexOffset;
+    int vertexCount;
+
+    int indexOffset;
+    int indexCount;
+
+    int materialIndex;
 };

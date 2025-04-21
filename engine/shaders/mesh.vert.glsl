@@ -10,6 +10,9 @@ layout(set = 0, binding = 0) uniform SceneUniforms
 struct Vertex 
 {
 	vec4 position;
+	vec4 uv;
+	vec4 normal;
+	vec4 tangent;
 }; 
 
 layout(buffer_reference, std430) readonly buffer VertexBuffer
@@ -24,24 +27,22 @@ layout(push_constant) uniform Constants
 	VertexBuffer vertexBuffer;
 } constants;
 
-layout (location = 1) out vec4 color;
+layout (location = 1) out vec4 geomColor;
+layout (location = 2) out vec3 normal;
+layout (location = 3) out vec4 color;
 
 void main() 
 {	
 	Vertex vert = constants.vertexBuffer.vertices[gl_VertexIndex];
 
-	// gl_Position = scene.proj * scene.view * constants.model * vec4(vert.position.xyz, 1.f);
-	gl_Position = constants.model * vec4(vert.position.xyz, 1.f);
+	gl_Position = scene.proj * scene.view * constants.model * vec4(vert.position.xyz, 1.f);
+	// gl_Position = constants.model * vec4(vert.position.xyz, 1.f);
 
-    if (vert.position.w > 10.f)
-    {
-        color = vec4(0.f, 1.f, 0.f, 1.f);
-    }
-    else 
-    {
-        color = constants.color;
-    }
+    geomColor = constants.color;
+    color = constants.color;
+
+    normal = vert.normal.xyz;
 
 	// color = vec4(1.0, 0.0, 0.0, 1.0);
-	// gl_Position = vec4(vert.position, 1.f);
+	// gl_Position = vec4(1.0, 2.0, 3.0, 1.0);
 }

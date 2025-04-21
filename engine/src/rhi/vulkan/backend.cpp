@@ -1,12 +1,16 @@
-#define VMA_IMPLEMENTATION
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+
 #include "rhi/vulkan/backend.h"
 
+#include "backend.h"
 #include "scene.h"
 
 #include "rhi/vulkan/pipeline_builder.h"
 #include "rhi/vulkan/utils/inits.h"
 #include "rhi/vulkan/utils/images.h"
 #include "rhi/vulkan/utils/buffer.h"
+
+#include "rhi/vulkan/renderpass.h"
 
 #include "tracy/Tracy.hpp"
 #include "tracy/TracyVulkan.hpp"
@@ -24,20 +28,6 @@
 
 #include <cmath>
 
-// TEMP: test for tracy allocations
-void* operator new(std::size_t size) noexcept(false)
-{
-    void* ptr = std::malloc(size);
-    TracyAlloc(ptr, size);
-
-    return ptr;
-}
-void operator delete(void* ptr)
-{
-    TracyFree(ptr);
-    std::free(ptr);
-}
-
 VulkanBackend::VulkanBackend(GLFWwindow* window) : 
     window(window)
 {
@@ -50,7 +40,7 @@ VulkanBackend::VulkanBackend(GLFWwindow* window) :
     viewport.width = static_cast<float>(width);
     viewport.height = static_cast<float>(height);
     viewport.minDepth = 0.f;
-    viewport.maxDepth = 0.f;
+    viewport.maxDepth = 1.f;
 
     scissor.offset = { 0, 0 };
     scissor.extent =
@@ -117,6 +107,8 @@ void VulkanBackend::initVulkan()
 
     VkPhysicalDeviceFeatures features = {};
     features.geometryShader = true;
+    features.multiDrawIndirect = true;
+    features.drawIndirectFirstInstance = true;
 
     vkb::PhysicalDeviceSelector selector { vkbInstance };
     vkb::PhysicalDevice physicalDevice = selector
@@ -332,7 +324,6 @@ struct SceneUniforms
 static SceneUniforms sceneUniforms;
 static AllocatedBuffer sceneUniformBuffer;
 static VkDescriptorSet sceneDescriptorSet;
-static VkDescriptorSetLayout sceneDescriptorSetLayout;
 
 AllocatedBuffer allocateBuffer(VmaAllocator allocator, VkBufferCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags, VkMemoryPropertyFlags requiredFlags)
 {
@@ -374,7 +365,7 @@ void VulkanBackend::initDescriptors()
         auto bufInfo = vkutil::init::bufferCreateInfo(sizeof(SceneUniforms), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
         sceneUniformBuffer = allocateBuffer(allocator, bufInfo, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
             VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-        
+
         // auto bufInfo = vkutil::init::bufferCreateInfo(sizeof(SceneUniforms), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
 
         // VmaAllocationCreateInfo allocInfo = {};
@@ -436,7 +427,8 @@ void VulkanBackend::initPipelines()
         .disableBlending()
         .disableDepthTest()
         .colorAttachmentFormat(backbufferImage.format)
-        .depthFormat(VK_FORMAT_UNDEFINED)
+        .enableDepthTest(false, VK_COMPARE_OP_NEVER)
+        .depthFormat(depthImage.format)
         .build(device, trianglePipelineLayout);
 
     // TEMP(savas): inf grid pipeline
@@ -460,7 +452,8 @@ void VulkanBackend::initPipelines()
         .enableAlphaBlending()
         .disableDepthTest()
         .colorAttachmentFormat(backbufferImage.format)
-        .depthFormat(VK_FORMAT_UNDEFINED)
+        .enableDepthTest(false, VK_COMPARE_OP_NEVER)
+        .depthFormat(depthImage.format)
         .build(device, infGridPipelineLayout);
 
     VkPushConstantRange meshPushConstantRange = vkutil::init::pushConstantRange(VK_SHADER_STAGE_VERTEX_BIT, sizeof(PushConstants));
@@ -681,53 +674,105 @@ void VulkanBackend::draw(Scene& scene)
         //     vkCmdEndRendering(cmd);
         // }
 
+        // Update scene descriptor set
         {
-            ZoneScopedCpuGpuAuto("Render inf plane");
+            ZoneScopedCpuGpuAuto("Memcpy SceneUniforms to GPU");
 
+            // sceneUniforms.view = glm::mat4(1.0);
+            // sceneUniforms.projection = glm::mat4(1.0);
+            sceneUniforms.view = glm::inverse(glm::translate(glm::mat4(1.f), scene.activeCamera.position) * scene.activeCamera.rotation);
+            sceneUniforms.projection = glm::perspectiveFov<float>(scene.activeCamera.verticalFov, backbufferImage.extent.width, backbufferImage.extent.height, scene.activeCamera.nearClippingPlaneDist, scene.activeCamera.farClippingPlaneDist);
+            // std::println("near: {}, far: {}", scene.activeCamera.nearClippingPlaneDist, scene.activeCamera.farClippingPlaneDist);
+            // sceneUniforms.projection = glm::perspectiveFov<float>(glm::radians(70.f), backbufferImage.extent.width, backbufferImage.extent.height, 0.1f, 10000.f);
+            // Fix Vulkan's weird "+y is down"
+            sceneUniforms.projection[1][1] *= -1.f;
+
+            uint8_t* dataOnGpu;
+            vmaMapMemory(allocator, sceneUniformBuffer.allocation, (void**)&dataOnGpu);
+            memcpy(dataOnGpu, &sceneUniforms, sizeof(sceneUniforms));
+            vmaUnmapMemory(allocator, sceneUniformBuffer.allocation);
+        }
+
+        // TODO: this should be multithreaded
+        for (RenderPass& pass : graph.renderpasses)
+        {
+            // ZoneScopedCpuGpuAutoStr(pass.debugName);
+            ZoneScoped;
+            ZoneName(pass.debugName.c_str(), pass.debugName.size());
+
+            // TODO: transition resources here
+            // pass.transitionResources();
+
+            // Get the attachments from rendergraph
             VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-            VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, nullptr);
+            VkRenderingAttachmentInfo depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(depthImage.view);
+            VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, &depthAttachmentInfo);
 
-            VkViewport viewport = {};
-            viewport.width = swapchainSize.width;
-            viewport.height = swapchainSize.height;
-            viewport.maxDepth = 1.f;
-
-            VkRect2D scissor = {};
-            scissor.extent = swapchainSize;
-
-            sceneUniforms.view = glm::mat4(1.0);
-            //sceneUniforms.projection = glm::perspectiveFov<float>(M_PI / 4.f, backbufferImage.extent.width, backbufferImage.extent.height, 0.1f, 100000.f);
-            sceneUniforms.projection = glm::mat4(1.0);
-            {
-                ZoneScopedCpuGpuAuto("Memcpy SceneUniforms to GPU");
-
-                // TODO(savas): fix recalculating this constantly
-                // sceneUniforms.view = glm::lookAt(scene.activeCamera.position,
-                //     scene.activeCamera.position + glm::vec3(toMat4(scene.activeCamera.rotation) * glm::vec4(0.f, 0.f, -1.f, 0.f)),
-                //     glm::vec3(toMat4(scene.activeCamera.rotation) * glm::vec4(0.f, 1.f, 0.f, 0.f)));
-                sceneUniforms.view = glm::inverse(glm::translate(glm::mat4(1.f), scene.activeCamera.position) * scene.activeCamera.rotation);
-                // TODO(savas): fix fov
-                sceneUniforms.projection = glm::perspectiveFov<float>(scene.activeCamera.verticalFov, backbufferImage.extent.width, backbufferImage.extent.height, scene.activeCamera.nearClippingPlaneDist, scene.activeCamera.farClippingPlaneDist);
-                // Fix Vulkan's weird "+y is down"
-                sceneUniforms.projection[1][1] *= -1.f;
-
-                uint8_t* dataOnGpu;
-                vmaMapMemory(allocator, sceneUniformBuffer.allocation, (void**)&dataOnGpu);
-                memcpy(dataOnGpu, &sceneUniforms, sizeof(sceneUniforms));
-                vmaUnmapMemory(allocator, sceneUniformBuffer.allocation);
-            }
-
+            // vkCmdBeginRendering(cmd, pass.renderingInfo());
             vkCmdBeginRendering(cmd, &renderingInfo);
 
-            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, infGridPipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
-            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, infGridPipeline);
-            // vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
+            vkCmdBindPipeline(cmd, pass.pipelineBindPoint, pass.pipeline);
+
+            // TODO: support dynamic offsets
+            // const VkDescriptorSet* descriptorSets = pass.descriptorSets.data();
+            // vkCmdBindDescriptorSets(cmd, pass.pipelineBindPoint, pass.pipelineLayout, 0, pass.descriptorSets.size(), descriptorSets, 0, nullptr);
+            vkCmdBindDescriptorSets(cmd, pass.pipelineBindPoint, pass.pipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
+
             vkCmdSetViewport(cmd, 0, 1, &viewport);
             vkCmdSetScissor(cmd, 0, 1, &scissor);
-            vkCmdDraw(cmd, 6, 1, 0, 0);
+
+            pass.draw(cmd, pass);
 
             vkCmdEndRendering(cmd);
         }
+
+        // {
+        //     ZoneScopedCpuGpuAuto("Render inf plane");
+
+        //     VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        //     VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, nullptr);
+
+        //     VkViewport viewport = {};
+        //     viewport.width = swapchainSize.width;
+        //     viewport.height = swapchainSize.height;
+        //     viewport.maxDepth = 1.f;
+
+        //     VkRect2D scissor = {};
+        //     scissor.extent = swapchainSize;
+
+        //     // sceneUniforms.view = glm::mat4(1.0);
+        //     // //sceneUniforms.projection = glm::perspectiveFov<float>(M_PI / 4.f, backbufferImage.extent.width, backbufferImage.extent.height, 0.1f, 100000.f);
+        //     // sceneUniforms.projection = glm::mat4(1.0);
+        //     // {
+        //     //     ZoneScopedCpuGpuAuto("Memcpy SceneUniforms to GPU");
+
+        //     //     // TODO(savas): fix recalculating this constantly
+        //     //     // sceneUniforms.view = glm::lookAt(scene.activeCamera.position,
+        //     //     //     scene.activeCamera.position + glm::vec3(toMat4(scene.activeCamera.rotation) * glm::vec4(0.f, 0.f, -1.f, 0.f)),
+        //     //     //     glm::vec3(toMat4(scene.activeCamera.rotation) * glm::vec4(0.f, 1.f, 0.f, 0.f)));
+        //     //     sceneUniforms.view = glm::inverse(glm::translate(glm::mat4(1.f), scene.activeCamera.position) * scene.activeCamera.rotation);
+        //     //     // TODO(savas): fix fov
+        //     //     sceneUniforms.projection = glm::perspectiveFov<float>(scene.activeCamera.verticalFov, backbufferImage.extent.width, backbufferImage.extent.height, scene.activeCamera.nearClippingPlaneDist, scene.activeCamera.farClippingPlaneDist);
+        //     //     // Fix Vulkan's weird "+y is down"
+        //     //     sceneUniforms.projection[1][1] *= -1.f;
+
+        //     //     uint8_t* dataOnGpu;
+        //     //     vmaMapMemory(allocator, sceneUniformBuffer.allocation, (void**)&dataOnGpu);
+        //     //     memcpy(dataOnGpu, &sceneUniforms, sizeof(sceneUniforms));
+        //     //     vmaUnmapMemory(allocator, sceneUniformBuffer.allocation);
+        //     // }
+
+        //     vkCmdBeginRendering(cmd, &renderingInfo);
+
+        //     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, infGridPipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
+        //     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, infGridPipeline);
+        //     // vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
+        //     vkCmdSetViewport(cmd, 0, 1, &viewport);
+        //     vkCmdSetScissor(cmd, 0, 1, &scissor);
+        //     vkCmdDraw(cmd, 6, 1, 0, 0);
+
+        //     vkCmdEndRendering(cmd);
+        // }
 
         // for (auto& model : scene.models)
         // std::vector<Model> models;
@@ -737,9 +782,9 @@ void VulkanBackend::draw(Scene& scene)
         //     models.insert(models.end(), scene.collisionModels.begin(), scene.collisionModels.end());
         // }
 
-        VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        VkRenderingAttachmentInfo depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(depthImage.view);
-        VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, &depthAttachmentInfo);
+        // VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        // VkRenderingAttachmentInfo depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(depthImage.view);
+        // VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, &depthAttachmentInfo);
 
         // vkCmdBeginRendering(cmd, &renderingInfo);
         // // NOTE(savas): I don't think I need to re-bind this. Because the descriptor set is the same as the one
@@ -930,4 +975,31 @@ void VulkanBackend::immediateSubmit(std::function<void (VkCommandBuffer)>&& f)
         // NOTE: I think this is better moved to the start, so that we don't immedeately block
         VK_CHECK(vkWaitForFences(device, 1, &immediateFence, true, 9999999999));
     }
+}
+
+void VulkanBackend::copyBuffer(VkBuffer src, VkBuffer dst, VkBufferCopy copyRegion) 
+{
+    immediateSubmit([&](VkCommandBuffer cmd) 
+        {
+            vkCmdCopyBuffer(cmd, src, dst, 1, &copyRegion);
+        }
+    );
+}
+
+void VulkanBackend::copyBufferWithStaging(void* data, size_t size, VkBuffer dst, VkBufferCopy copyRegion) 
+{
+    auto bufInfo = vkutil::init::bufferCreateInfo(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+    AllocatedBuffer staging = allocateBuffer(allocator, bufInfo, VMA_MEMORY_USAGE_CPU_ONLY,
+        VMA_ALLOCATION_CREATE_MAPPED_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    VmaAllocationInfo stagingInfo;
+    vmaGetAllocationInfo(allocator, staging.allocation, &stagingInfo);
+
+    void* stagingData = stagingInfo.pMappedData;
+    memcpy(stagingData, data, size);
+
+    copyRegion.size = size;
+    copyBuffer(staging.buffer, dst, copyRegion);
+
+    // TODO: release staging data
 }

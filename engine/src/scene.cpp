@@ -116,3 +116,71 @@ void Scene::update(float dt, float currentTimeMs, GLFWwindow* window)
 {
     updateFreeCamera(dt, window, activeCamera);
 }
+
+void Scene::addMeshes(tinygltf::Model& model)
+{
+    // Matches Vertex definition
+    const std::pair<std::string, int> attributes[] = {
+        {"POSITION", 4},
+        {"TEXCOORD_0", 4},
+        {"NORMAL", 4},
+        {"TANGENT", 4},
+    };
+
+    for (tinygltf::Mesh& mesh : model.meshes) 
+    {
+        int primitiveCount = 0;
+        for (tinygltf::Primitive& primitive : mesh.primitives)
+        {
+            Mesh m = {};
+            m.debugName = std::format("{}_{}", mesh.name, primitiveCount++);
+            std::println("{}", m.debugName);
+            m.indexOffset = indices.size();
+            m.vertexOffset = vertexData.size();
+            m.materialIndex = primitive.material;
+
+            int vertexAttributeOffset = 0;
+            for (const auto& [attribute, attributeCount] : attributes) {
+                if (primitive.attributes.find(attribute) == primitive.attributes.end()) 
+                {
+                    continue;
+                }
+
+                tinygltf::Accessor accessor = model.accessors[primitive.attributes[attribute]];
+                tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
+                tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
+                float* data = reinterpret_cast<float*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
+
+                for (int i = 0; i < accessor.count; i++)
+                {
+                    int vertexIndex = m.vertexOffset + i;
+                    if (vertexData.size() <= vertexIndex) 
+                    {
+                        vertexData.emplace_back();
+                    }
+                    Vertex& vertex = vertexData[vertexIndex];
+
+                    const int componentCount = tinygltf::GetNumComponentsInType(accessor.type);
+                    for (int j = 0; j < componentCount; j++)
+                    {
+                        vertex.raw[vertexAttributeOffset + j] = data[i * componentCount + j];
+                    }
+                }
+                std::println("{} {} {}", vertexData.back().pos[0], vertexData.back().pos[1], vertexData.back().pos[2]);
+                vertexAttributeOffset += attributeCount;
+            }
+
+            tinygltf::Accessor indexAccessor = model.accessors[primitive.indices];
+            tinygltf::BufferView indexBufferView = model.bufferViews[indexAccessor.bufferView];
+            tinygltf::Buffer indexBuffer = model.buffers[indexBufferView.buffer];
+            const unsigned short* indexData = reinterpret_cast<unsigned short*>(&indexBuffer.data[indexBufferView.byteOffset + indexAccessor.byteOffset]);
+            for (size_t i = 0; i < indexAccessor.count; i++)
+            {
+                indices.push_back(indexData[i] + m.vertexOffset);
+            }
+
+            m.vertexCount = vertexData.size() - m.vertexOffset;
+            m.indexCount = indices.size() - m.indexOffset;
+        }
+    }
+}

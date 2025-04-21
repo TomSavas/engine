@@ -1,8 +1,3 @@
-#include <chrono>
-#include <print>
-#include <thread>
-#include <math.h>
-
 #define GLFW_INCLUDE_VULKAN
 #include "GLFW/glfw3.h"
 
@@ -11,12 +6,40 @@
 #include "imgui_impl_vulkan.h"
 
 #include "scene.h"
+#include "passes/passes.h"
 #include "rhi/vulkan/backend.h"
 
-#define TINYOBJLOADER_IMPLEMENTATION
-#include "tiny_obj_loader.h"
+// #define TINYOBJLOADER_IMPLEMENTATION
+// #include "tiny_obj_loader.h"
 
-using namespace std::chrono_literals;
+#include "tracy/Tracy.hpp"
+
+#define TINYGLTF_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+// #define TINYGLTF_NOEXCEPTION // optional. disable exception handling.
+#include "tiny_gltf.h"
+
+#include <chrono>
+#include <print>
+#include <math.h>
+#include <optional>
+
+// TEMP: test for tracy allocations
+void* operator new(std::size_t size) noexcept(false)
+{
+    void* ptr = std::malloc(size);
+    TracyAlloc(ptr, size);
+
+    return ptr;
+}
+
+void operator delete(void* ptr)
+{
+    TracyFree(ptr);
+    std::free(ptr);
+}
+
 
 int main(void) {
     if (!glfwInit()) {
@@ -33,6 +56,32 @@ int main(void) {
 
     Scene scene = Scene("empty");
 
+    tinygltf::Model model;
+    tinygltf::TinyGLTF loader;
+    std::string err;
+    std::string warn;
+
+    // const char* modelPath = "../assets/Box/Box.gltf"; 
+    const char* modelPath = "../assets/Sponza/Sponza.gltf"; 
+    // const char* modelPath = "../assets/Suzanne/Suzanne.gltf"; 
+    bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, modelPath);
+    if (!ret) {
+        std::println("{}", err);
+        std::println("{}", warn);
+    } else {
+        std::println("Successfully loaded {}", modelPath);
+    }
+
+    scene.addMeshes(model);
+
+
+    {
+        // backend.graph.renderpasses.push_back(infGrid(backend).value_or(emptyPass(backend)));
+        backend.graph.renderpasses.push_back(basePass(backend, scene).value_or(emptyPass(backend)));
+        // backend.graph.renderpasses.push_back(*infGrid(backend));
+        // backend.graph.renderpasses.push_back(emptyPass(backend));
+    }
+
     auto start = std::chrono::high_resolution_clock::now();
     auto end = std::chrono::high_resolution_clock::now();
     float totalTimeElapsed = 0.f;
@@ -40,16 +89,6 @@ int main(void) {
     {
         end = std::chrono::high_resolution_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-        {
-            const auto target = 16.666ms;
-            auto toWait = target - elapsed;
-            // std::println("really elapsed: {}, waiting: {}, total: {}", elapsed, toWait, toWait + elapsed);
-            std::this_thread::sleep_for(toWait);
-        }
-
-        end = std::chrono::high_resolution_clock::now();
-        elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-        
         double dt = (double)elapsed.count() / 1000000000.0;
         totalTimeElapsed += dt;
         start = std::chrono::high_resolution_clock::now();
@@ -133,8 +172,6 @@ int main(void) {
         }
         ImGui::Render();
         backend.draw(scene);
-
-        // std::this_thread::sleep_for(8ms);
     }
 
     backend.deinit();

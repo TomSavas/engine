@@ -33,15 +33,29 @@ void main()
 
 	color = vertColor[0];
 	gl_Position = viewProj * gl_in[0].gl_Position;
+	// gl_Position = gl_in[0].gl_Position;
 	EmitVertex();
 	color = vertColor[1];
 	gl_Position = viewProj * gl_in[1].gl_Position;
+	// gl_Position = gl_in[1].gl_Position;
 	EmitVertex();
 	color = vertColor[2];
-	gl_Position = viewProj * gl_in[2].gl_Position;
+ 	gl_Position = viewProj * gl_in[2].gl_Position;
+ 	// gl_Position = gl_in[2].gl_Position;
 	EmitVertex();
 	EndPrimitive();
 
-	//normal = normalize(cross(a.xyz, b.xyz)).xyz;
+	normal = normalize(cross(a.xyz, b.xyz)).xyz;
 	// normal = a;
+
+	// color = vec4(1.0, 0.0, 0.0, 1.0);
+	// gl_Position = gl_in[0].gl_Position;
+	// EmitVertex();
+	// color = vec4(1.0, 0.0, 0.0, 1.0);
+	// gl_Position = gl_in[1].gl_Position;
+	// EmitVertex();
+	// color = vec4(1.0, 0.0, 0.0, 1.0);
+	// gl_Position = gl_in[2].gl_Position;
+	// EmitVertex();
+	// EndPrimitive();
  }

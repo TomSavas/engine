@@ -6,7 +6,7 @@
 
 struct AllocatedBuffer
 {
-    // TODO(savas): store size, strice, etc.
+    // TODO(savas): store size, stride, etc.
     VkBuffer buffer;
     VmaAllocation allocation;
 };
