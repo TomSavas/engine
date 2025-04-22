@@ -12,6 +12,7 @@
 
 struct BasePassData
 {
+    AllocatedBuffer perModelDataBuffer;
     AllocatedBuffer vertexDataBuffer;
     AllocatedBuffer indexBuffer;    
     AllocatedBuffer indirectCommands;
@@ -94,36 +95,8 @@ std::optional<RenderPass> basePass(VulkanBackend& backend, Scene& scene) {
             basePassData->indexBuffer = allocBuf(backend.allocator, info, VMA_MEMORY_USAGE_GPU_ONLY,
                VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-            // Copy buffers over to GPU
-            auto bufInfo = vkutil::init::bufferCreateInfo(vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-            AllocatedBuffer staging = allocBuf(backend.allocator, bufInfo, VMA_MEMORY_USAGE_CPU_ONLY, VMA_ALLOCATION_CREATE_MAPPED_BIT,
-                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-            VmaAllocationInfo stagingInfo;
-            vmaGetAllocationInfo(backend.allocator, staging.allocation, &stagingInfo);
-            void* stagingData = stagingInfo.pMappedData;
-
-            memcpy(stagingData, scene.vertexData.data(), vertexBufferSize);
-            memcpy(static_cast<int8_t*>(stagingData) + vertexBufferSize, scene.indices.data(), indexBufferSize);
-
-            backend.immediateSubmit([&](VkCommandBuffer cmd) 
-                {
-                    VkBufferCopy vertexCopy 
-                    {
-                        .srcOffset = 0,
-                        .dstOffset = 0,
-                        .size = vertexBufferSize,
-                    };
-                    vkCmdCopyBuffer(cmd, staging.buffer, basePassData->vertexDataBuffer.buffer, 1, &vertexCopy);
-
-                    VkBufferCopy indexCopy
-                    {
-                        .srcOffset = vertexBufferSize,
-                        .dstOffset = 0,
-                        .size = indexBufferSize,
-                    };
-                    vkCmdCopyBuffer(cmd, staging.buffer, basePassData->indexBuffer.buffer, 1, &indexCopy);
-                }
-            );
+            backend.copyBufferWithStaging((void*)scene.vertexData.data(), vertexBufferSize, basePassData->vertexDataBuffer.buffer);
+            backend.copyBufferWithStaging((void*)scene.indices.data(), indexBufferSize, basePassData->indexBuffer.buffer);
         }
 
         // Add object data on the fly
@@ -136,7 +109,7 @@ std::optional<RenderPass> basePass(VulkanBackend& backend, Scene& scene) {
     	indirectCmd.firstIndex = 0;
     	indirectCmd.indexCount = scene.indices.size();
 
-        backend.copyBufferWithStaging((void*)&indirectCmd, sizeof(VkDrawIndexedIndirectCommand), basePassData->indirectCommands.buffer, VkBufferCopy());
+        backend.copyBufferWithStaging((void*)&indirectCmd, sizeof(VkDrawIndexedIndirectCommand), basePassData->indirectCommands.buffer);
 
         VkBufferDeviceAddressInfo deviceAddressInfo{ 
             .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, 
