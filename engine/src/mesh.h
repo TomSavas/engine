@@ -20,6 +20,7 @@ struct Vertex
     };
 };
 
+struct Texture;
 struct Mesh 
 {
     std::string debugName;
@@ -30,5 +31,8 @@ struct Mesh
     int indexOffset;
     int indexCount;
 
-    int materialIndex;
+    // Move out this to a standalone material
+    // int materialIndex;
+    int albedoTexture;
+    int normalTexture;
 };

@@ -2,7 +2,8 @@
 
 #include "engine.h"
 #include "rhi/vulkan/utils/buffer.h"
-#include "rhi/vulkan/utils/images.h"
+#include "rhi/vulkan/utils/image.h"
+#include "rhi/vulkan/vulkan.h"
 #include "rhi/vulkan/descriptors.h"
 #include "rhi/vulkan/shader.h"
 #include "rhi/vulkan/renderpass.h"
@@ -15,34 +16,6 @@
 
 #include <glm/glm.hpp>
 #include <functional>
-
-#define ZoneScopedCpuGpuAuto(name) ZoneScopedCpuGpu(tracyCtx, tracyCmdBuffer, name)
-#define ZoneScopedCpuGpu(ctx, cmd, name) \
-do                                       \
-{                                        \
-    ZoneScopedN(name " CPU");            \
-    TracyVkZone(ctx, cmd, name " GPU")   \
-} while (0)
-
-#define ZoneScopedCpuGpuAutoStr(name) ZoneScopedCpuGpuStr(tracyCtx, tracyCmdBuffer, name)
-#define ZoneScopedCpuGpuStr(ctx, cmd, name) \
-do                                         \
-{                                          \
-    ZoneScopedN((name + " CPU").c_str());            \
-    TracyVkZone(ctx, cmd, (name + " GPU").c_str())   \
-} while (0)
-
-#include <iostream>
-#define VK_CHECK(x)                            \
-    do                                         \
-{                                              \
-    VkResult err = x;                          \
-    if (err)                                   \
-    {                                          \
-        std::cout << "Vulkan error: " << err << std::endl; \
-        BREAKPOINT;                            \
-    }                                          \
-} while (0)
 
 struct Stats
 {
@@ -64,6 +37,7 @@ struct PushConstants
     glm::mat4 model;
     glm::vec4 color;
     VkDeviceAddress vertexBufferAddr;  
+    VkDeviceAddress perModelDataBufferAddr;
 };
 
 // TEMP(savas): temporary solution for quick drawing of meshes
@@ -145,9 +119,13 @@ struct VulkanBackend
     VmaAllocator allocator;
 
     DescriptorAllocator descriptorAllocator;
+    DescriptorAllocator bindlessDescPoolAllocator;
     // TEMP: probably a better place for this?
     VkDescriptorSet drawDescriptorSet;
     VkDescriptorSetLayout drawDescriptorSetLayout;
+
+    VkDescriptorSet bindlessTexDesc;
+    VkDescriptorSetLayout  bindlessTexDescLayout;
 
     // Caches
     ShaderModuleCache shaderModuleCache;

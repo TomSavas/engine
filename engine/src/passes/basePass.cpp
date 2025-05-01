@@ -10,9 +10,19 @@
 #include <vulkan/vulkan_core.h>
 #include <glm/gtx/transform.hpp>
 
+struct ModelData 
+{
+    // int albedoTex;
+    // int normalTex;
+    glm::vec4 textures;
+    glm::mat4 model;
+};
+
 struct BasePassData
 {
+    AllocatedBuffer bindlessTextureBuffer;
     AllocatedBuffer perModelDataBuffer;
+
     AllocatedBuffer vertexDataBuffer;
     AllocatedBuffer indexBuffer;    
     AllocatedBuffer indirectCommands;
@@ -46,8 +56,10 @@ std::optional<RenderPass> basePass(VulkanBackend& backend, Scene& scene) {
         return std::optional<RenderPass>();
     }
 
-    VkPushConstantRange meshPushConstantRange = vkutil::init::pushConstantRange(VK_SHADER_STAGE_VERTEX_BIT, sizeof(PushConstants));
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkutil::init::layoutCreateInfo(&backend.sceneDescriptorSetLayout, 1, &meshPushConstantRange, 1);
+    // VkPushConstantRange meshPushConstantRange = vkutil::init::pushConstantRange(VK_SHADER_STAGE_VERTEX_BIT, sizeof(PushConstants));
+    VkPushConstantRange meshPushConstantRange = vkutil::init::pushConstantRange(VK_SHADER_STAGE_ALL, sizeof(PushConstants));
+    VkDescriptorSetLayout descriptors[] = {backend.sceneDescriptorSetLayout, backend.bindlessTexDescLayout};
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkutil::init::layoutCreateInfo(descriptors, 2, &meshPushConstantRange, 1);
     VK_CHECK(vkCreatePipelineLayout(backend.device, &pipelineLayoutInfo, nullptr, &pass.pipelineLayout));
 
     pass.pipeline = PipelineBuilder()
@@ -71,12 +83,18 @@ std::optional<RenderPass> basePass(VulkanBackend& backend, Scene& scene) {
             basePassData->initialized = true;
 
             // Indirect commands buffer
-            auto info = vkutil::init::bufferCreateInfo(sizeof(VkDrawIndexedIndirectCommand),
+            auto info = vkutil::init::bufferCreateInfo(sizeof(VkDrawIndexedIndirectCommand) * scene.meshes.size(),
                 VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
             basePassData->indirectCommands = allocBuf(backend.allocator, info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
                 VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-            // Allocate buffers
+            // Per model data buffer
+            // info = vkutil::init::bufferCreateInfo(sizeof(VkDrawIndexedIndirectCommand),
+            //     VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+            // basePassData->indirectCommands = allocBuf(backend.allocator, info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+            //     VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+            // Vertex + index buffers
             const uint32_t vertexBufferSize = scene.vertexData.size() * sizeof(decltype(scene.vertexData)::value_type); 
             const uint32_t indexBufferSize = scene.indices.size() * sizeof(decltype(scene.indices)::value_type);
 
@@ -97,37 +115,201 @@ std::optional<RenderPass> basePass(VulkanBackend& backend, Scene& scene) {
 
             backend.copyBufferWithStaging((void*)scene.vertexData.data(), vertexBufferSize, basePassData->vertexDataBuffer.buffer);
             backend.copyBufferWithStaging((void*)scene.indices.data(), indexBufferSize, basePassData->indexBuffer.buffer);
-        }
 
-        // Add object data on the fly
+            // Per model data
+            std::vector<ModelData> modelData;
+            modelData.reserve(scene.meshes.size());
+            for (auto& mesh : scene.meshes)
+            {
+                ModelData data;
+                // data.albedoTex = mesh.albedoTexture;
+                // data.normalTex = mesh.normalTexture;
+                data.textures = glm::vec4(mesh.albedoTexture, mesh.normalTexture, 0.f, 0.f);
+                data.model = glm::mat4(1.f);
+                modelData.push_back(data);
+            }
+            
+            info = vkutil::init::bufferCreateInfo(indexBufferSize,
+                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+            basePassData->perModelDataBuffer = allocBuf(backend.allocator, info, VMA_MEMORY_USAGE_GPU_ONLY,
+               VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+            backend.copyBufferWithStaging((void*)modelData.data(), modelData.size() * sizeof(ModelData), basePassData->perModelDataBuffer.buffer);
+
+            // Indirect cmds
+        	std::vector<VkDrawIndexedIndirectCommand> indirectCmds;
+        	indirectCmds.reserve(scene.meshes.size());
+        	for (int i = 0; i < scene.meshes.size(); ++i)
+        	{
+        	    auto& mesh = scene.meshes[i];
+                VkDrawIndexedIndirectCommand c{};
+            	c.instanceCount = 1;
+            	c.firstInstance = i;
+            	c.firstIndex = mesh.indexOffset;
+            	c.indexCount = mesh.indexCount;
+                indirectCmds.push_back(c);
+        	}
+
+            backend.copyBufferWithStaging((void*)indirectCmds.data(), sizeof(VkDrawIndexedIndirectCommand) * indirectCmds.size(), basePassData->indirectCommands.buffer);
+
+            // Write bindless textures
+            for (int i = 0; i < scene.images.size(); ++i)
+            {
+                auto& image = scene.images[i];
+                int mipCount = floor(log2((double)std::min(image.width, image.height))) + 1;
+
+                // TODO: different image formats depending on how many channels
+                // VkDeviceSize imageSize = image.width * image.height * 4 * 1; // 1 byte per channel
+                VkDeviceSize imageSize = image.image.size();
+                VkFormat imageFormat = VK_FORMAT_R8G8B8A8_SRGB;
+
+                auto info = vkutil::init::bufferCreateInfo(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+                // TODO: likely incorrect VMA_ALLOCATION and VK_MEMORY_PROPERTY flags
+                AllocatedBuffer cpuImageBuffer = allocBuf(backend.allocator, info, VMA_MEMORY_USAGE_CPU_ONLY,
+                    VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+                // Copy data to GPU
+                {
+                    uint8_t* dataOnGpu;
+                    vmaMapMemory(backend.allocator, cpuImageBuffer.allocation, (void**)&dataOnGpu);
+                    memcpy(dataOnGpu, (void*)image.image.data(), imageSize);
+                    vmaUnmapMemory(backend.allocator, cpuImageBuffer.allocation);
+                }
+
+                Texture texture;
+                texture.mipCount = mipCount;
+
+                texture.image.extent.width = image.width;
+                texture.image.extent.height = image.height;
+                texture.image.extent.depth = 1;
+
+                VkImageCreateInfo imgCreateInfo = vkutil::init::imageCreateInfo(imageFormat,
+                    VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                    texture.image.extent, mipCount);
+
+                VmaAllocationCreateInfo imgAllocInfo = {};
+                imgAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+                vmaCreateImage(backend.allocator, &imgCreateInfo, &imgAllocInfo, &texture.image.image,
+                    &texture.image.allocation, nullptr);
+
+                backend.immediateSubmit([&](VkCommandBuffer cmd) {
+                    VkImageMemoryBarrier imageMemoryBarrierForTransfer = vkutil::init::imageMemoryBarrier(VK_IMAGE_LAYOUT_UNDEFINED,
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, texture.image.image, 0, VK_ACCESS_TRANSFER_WRITE_BIT, mipCount);
+
+                    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr,
+                        0, nullptr, 1, &imageMemoryBarrierForTransfer);
+
+                    VkBufferImageCopy copyRegion = {};
+                    copyRegion.bufferOffset = 0;
+                    copyRegion.bufferRowLength = 0;
+                    copyRegion.bufferImageHeight = 0;
+
+                    copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                    copyRegion.imageSubresource.mipLevel = 0;
+                    copyRegion.imageSubresource.baseArrayLayer = 0;
+                    copyRegion.imageSubresource.layerCount = 1;
+                    copyRegion.imageExtent = texture.image.extent;
+
+                    vkCmdCopyBufferToImage(cmd, cpuImageBuffer.buffer, texture.image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+
+                    // Mip generation
+                    VkImageMemoryBarrier finalFormatTransitionBarrier = vkutil::init::imageMemoryBarrier(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, texture.image.image, VK_ACCESS_TRANSFER_WRITE_BIT,
+                        VK_ACCESS_SHADER_READ_BIT, 1);
+                    VkImageMemoryBarrier mipIntermediateTransitionBarrier = vkutil::init::imageMemoryBarrier(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, texture.image.image, VK_ACCESS_TRANSFER_WRITE_BIT,
+                        VK_ACCESS_TRANSFER_READ_BIT, 1);
+                    int32_t mipWidth = image.width;
+                    int32_t mipHeight = image.height;
+                    for (int i = 1; i < mipCount; ++i) 
+                    {
+                        int32_t lastMipWidth = mipWidth;
+                        int32_t lastMipHeight = mipHeight;
+                        mipWidth /= 2;
+                        mipHeight /= 2;
+
+                        // Transition the last mip to SRC_OPTIMAL
+                        mipIntermediateTransitionBarrier.subresourceRange.baseMipLevel = i - 1;
+                        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &mipIntermediateTransitionBarrier);
+
+                        // Blit last mip to downsized current one
+                        VkImageBlit blit = vkutil::init::imageBlit(i - 1, { lastMipWidth, lastMipHeight, 1 }, i, { mipWidth, mipHeight, 1 });
+                        vkCmdBlitImage(cmd, texture.image.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                texture.image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                1, &blit, VK_FILTER_LINEAR);
+            
+                        // Finally transition last mip to SHADER_READ_ONLY_OPTIMAL
+                        finalFormatTransitionBarrier.subresourceRange.baseMipLevel = i - 1;
+                        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &finalFormatTransitionBarrier);
+                    }
+
+                    // Transition the highest mip directly to SHADER_READ_ONLY_OPTIMAL
+                    finalFormatTransitionBarrier.subresourceRange.baseMipLevel = mipCount - 1;
+                    finalFormatTransitionBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                    finalFormatTransitionBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &finalFormatTransitionBarrier);
+                });
+
+                // backend.deinitQueue.enqueue([=]() {
+                //     //LOG_CALL(vmaDestroyImage(backend.allocator, texture.image.image, texture.image.allocation));
+                //     vmaDestroyImage(backend.allocator, texture.image.image, texture.image.allocation);
+                // });
+                vmaDestroyBuffer(backend.allocator, cpuImageBuffer.buffer, cpuImageBuffer.allocation);
+
+                VkImageViewCreateInfo imageViewInfo = vkutil::init::imageViewCreateInfo(VK_FORMAT_R8G8B8A8_SRGB, texture.image.image, VK_IMAGE_ASPECT_COLOR_BIT, mipCount);
+                vkCreateImageView(backend.device, &imageViewInfo, nullptr, &texture.view);
+
+                // TODO: Updating the bindless texture data should be moved
+                VkSampler sampler;
+                VkSamplerCreateInfo samplerInfo = vkutil::init::samplerCreateInfo(
+                    VK_FILTER_LINEAR,
+                    VK_SAMPLER_ADDRESS_MODE_REPEAT,
+                    mipCount
+                );
+                vkCreateSampler(backend.device, &samplerInfo, nullptr, &sampler);
+
+                VkDescriptorImageInfo descriptorImageInfo = vkutil::init::descriptorImageInfo(
+                    sampler,
+                    texture.view,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL  
+                );
+                VkWriteDescriptorSet descriptorWrite = vkutil::init::writeDescriptorImage(
+                    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    backend.bindlessTexDesc,
+                    &descriptorImageInfo,
+                    0
+                );
+                descriptorWrite.dstArrayElement = i;
+
+                vkUpdateDescriptorSets(backend.device, 1, &descriptorWrite, 0, nullptr);
+            }
+        }
 
         // Generate draw indirect commands on the fly
         // TODO: CPU culling, later add option for GPU culling
-        VkDrawIndexedIndirectCommand indirectCmd{};
-    	indirectCmd.instanceCount = 1;
-    	indirectCmd.firstInstance = 0;
-    	indirectCmd.firstIndex = 0;
-    	indirectCmd.indexCount = scene.indices.size();
 
-        backend.copyBufferWithStaging((void*)&indirectCmd, sizeof(VkDrawIndexedIndirectCommand), basePassData->indirectCommands.buffer);
-
-        VkBufferDeviceAddressInfo deviceAddressInfo{ 
+        VkBufferDeviceAddressInfo vertexAddressInfo{ 
             .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, 
             .buffer = basePassData->vertexDataBuffer.buffer 
         };
+        VkBufferDeviceAddressInfo perModelDataAddressInfo{ 
+            .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, 
+            .buffer = basePassData->perModelDataBuffer.buffer 
+        };
         PushConstants pushConstants 
         {
-            // .model = glm::mat4(1.f), //SRT 
-            .model = glm::translate(glm::vec3(3.f, 3.f, 3.f)), //SRT 
+            .model = glm::mat4(1.f), //SRT 
             .color = glm::vec4(1.f, 0.f, 0.f, 1.f),
-            .vertexBufferAddr = vkGetBufferDeviceAddress(backend.device, &deviceAddressInfo)
+            .vertexBufferAddr = vkGetBufferDeviceAddress(backend.device, &vertexAddressInfo),
+            .perModelDataBufferAddr = vkGetBufferDeviceAddress(backend.device, &perModelDataAddressInfo)
         };
-        vkCmdPushConstants(cmd, p.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
+        // vkCmdPushConstants(cmd, p.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
+        vkCmdPushConstants(cmd, p.pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(PushConstants), &pushConstants);
     	vkCmdBindIndexBuffer(cmd, basePassData->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
         for (int i = 0; i < 1; i++)
         {
-            vkCmdDrawIndexedIndirect(cmd, basePassData->indirectCommands.buffer, i * sizeof(VkDrawIndexedIndirectCommand), 1, sizeof(VkDrawIndexedIndirectCommand));
+            vkCmdDrawIndexedIndirect(cmd, basePassData->indirectCommands.buffer, i * sizeof(VkDrawIndexedIndirectCommand), scene.meshes.size(), sizeof(VkDrawIndexedIndirectCommand));
         }
     };
 

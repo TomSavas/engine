@@ -1,4 +1,4 @@
-#include "rhi/vulkan/utils/images.h"
+#include "rhi/vulkan/utils/image.h"
 
 #include "rhi/vulkan/utils/inits.h"
 

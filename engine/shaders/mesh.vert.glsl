@@ -1,11 +1,14 @@
-#version 450
+#version 460
 #extension GL_EXT_buffer_reference : require
+#extension GL_ARB_shader_draw_parameters : require
 
 layout(set = 0, binding = 0) uniform SceneUniforms 
 {
     mat4 view;
     mat4 proj;
 } scene;
+
+layout(set = 1, binding = 0) uniform sampler2D textures[]; 
 
 struct Vertex 
 {
@@ -20,21 +23,34 @@ layout(buffer_reference, std430) readonly buffer VertexBuffer
 	Vertex vertices[];
 };
 
+struct ModelData 
+{
+	vec4 textures;
+	mat4 model;
+}; 
+
+layout(buffer_reference, std430) readonly buffer ModelDataBuffer
+{ 
+	ModelData data[];
+};
+
 layout(push_constant) uniform Constants
 {	
     mat4 model;
     vec4 color;
 	VertexBuffer vertexBuffer;
+	ModelDataBuffer modelData;
 } constants;
 
 layout (location = 1) out vec4 geomColor;
 layout (location = 2) out vec3 normal;
 layout (location = 3) out vec4 color;
+layout (location = 4) out vec2 uv;
+layout (location = 5) out flat int index;
 
 void main() 
 {	
 	Vertex vert = constants.vertexBuffer.vertices[gl_VertexIndex];
-
 	gl_Position = scene.proj * scene.view * constants.model * vec4(vert.position.xyz, 1.f);
 	// gl_Position = constants.model * vec4(vert.position.xyz, 1.f);
 
@@ -42,6 +58,12 @@ void main()
     color = constants.color;
 
     normal = vert.normal.xyz;
+
+    index = gl_BaseInstance;
+    index = gl_DrawID;
+
+    // uv = constants.modelData.data[gl_DrawID];
+    uv = vert.uv.xy;
 
 	// color = vec4(1.0, 0.0, 0.0, 1.0);
 	// gl_Position = vec4(1.0, 2.0, 3.0, 1.0);

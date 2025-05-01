@@ -8,21 +8,17 @@
 struct DescriptorSetLayoutBuilder 
 {
     std::vector<VkDescriptorSetLayoutBinding> bindings;
+    std::vector<VkDescriptorBindingFlags> bindingFlags;
  
-    void addBinding(uint32_t bindingIndex, VkDescriptorType type);
-    VkDescriptorSetLayout build(VkDevice device, VkShaderStageFlags shaderStages, void* pNext = nullptr, VkDescriptorSetLayoutCreateFlags flags = {});
+    void addBinding(uint32_t bindingIndex, VkDescriptorType type, VkDescriptorBindingFlags flags = {}, uint32_t size = 1);
+
+    VkDescriptorSetLayout build(VkDevice device, VkShaderStageFlags shaderStages, VkDescriptorSetLayoutCreateFlags flags = {});
 };
 
 struct DescriptorAllocator
 {
     VkDescriptorPool pool;
 
-    struct PoolSizeRatio 
-    {
-        VkDescriptorType type;
-        float ratio;
-    };
-
-    void init(VkDevice device, uint32_t maxSets, std::span<VkDescriptorPoolSize> poolSizes);
-    VkDescriptorSet allocate(VkDevice device, VkDescriptorSetLayout layout);
+    void init(VkDevice device, uint32_t maxSets, std::span<VkDescriptorPoolSize> poolSizes, VkDescriptorPoolCreateFlags flags = 0);
+    VkDescriptorSet allocate(VkDevice device, VkDescriptorSetLayout layout, void* pNext = nullptr);
 };

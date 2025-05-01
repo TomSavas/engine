@@ -7,7 +7,7 @@
 
 #include "rhi/vulkan/pipeline_builder.h"
 #include "rhi/vulkan/utils/inits.h"
-#include "rhi/vulkan/utils/images.h"
+#include "rhi/vulkan/utils/image.h"
 #include "rhi/vulkan/utils/buffer.h"
 
 #include "rhi/vulkan/renderpass.h"
@@ -98,6 +98,11 @@ void VulkanBackend::initVulkan()
     features12.pNext = nullptr;
     features12.bufferDeviceAddress = true;
     features12.descriptorIndexing = true;
+    features12.descriptorBindingPartiallyBound = true;
+    features12.runtimeDescriptorArray = true;
+    features12.descriptorBindingStorageBufferUpdateAfterBind = true;
+    features12.descriptorBindingSampledImageUpdateAfterBind = true;
+    features12.descriptorBindingVariableDescriptorCount = true;
 
     VkPhysicalDeviceVulkan13Features features13 = {};
     features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
@@ -347,7 +352,7 @@ void VulkanBackend::initDescriptors()
         VkDescriptorPoolSize { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 10 },
         VkDescriptorPoolSize { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10 },
     };
-    descriptorAllocator.init(device, 10, poolSizes);
+    descriptorAllocator.init(device, 20, poolSizes);
 
     // Allocating for the "draw" descriptor set
     {
@@ -387,6 +392,45 @@ void VulkanBackend::initDescriptors()
 
         vkUpdateDescriptorSets(device, 1, &descriptorImageWrite, 0, nullptr);
     }
+
+    // Bindless descriptor set pool
+    const uint32_t maxBindlessResourceCount = 10000;
+    {
+        VkDescriptorPoolSize poolSizes[] = 
+        {
+            VkDescriptorPoolSize{.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = maxBindlessResourceCount },
+        };
+        bindlessDescPoolAllocator.init(device, maxBindlessResourceCount, poolSizes,
+                                        VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT);
+    }
+
+    // Bindless descriptor set
+    {
+        const VkDescriptorBindingFlags bindlessFlags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | 
+                                                 VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT | 
+                                                 VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+
+        VkDescriptorSetVariableDescriptorCountAllocateInfo variableDescriptorCountAllocInfo = 
+        {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+            .pNext = nullptr,
+            .descriptorSetCount = 1,
+            // TODO: This should be an actual array that actually depends on how many descriptors we have
+            // For now it's only textures tho.
+            .pDescriptorCounts = &maxBindlessResourceCount
+        };
+        
+        DescriptorSetLayoutBuilder builder;
+        builder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, bindlessFlags, maxBindlessResourceCount);
+        // Add more bindings for buffers, etc.
+        bindlessTexDescLayout = builder.build(device, VK_SHADER_STAGE_ALL, VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT);
+        bindlessTexDesc = bindlessDescPoolAllocator.allocate(device, bindlessTexDescLayout, &variableDescriptorCountAllocInfo);
+
+        // VkDescriptorImageInfo descriptorImage = vkutil::init::descriptorImageInfo(VK_NULL_HANDLE, backbufferImage.view, VK_IMAGE_LAYOUT_GENERAL);
+        // VkWriteDescriptorSet descriptorImageWrite = vkutil::init::writeDescriptorImage(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, drawDescriptorSet, &descriptorImage, 0);
+        // vkUpdateDescriptorSets(device, 1, &descriptorImageWrite, 0, nullptr);
+    }
+
 }
 
 void VulkanBackend::initPipelines()
@@ -469,37 +513,37 @@ void VulkanBackend::initPipelines()
         return;
     }
 
-    meshPipeline = PipelineBuilder()
-        .shaders((*vertexShader)->module, (*geometryShader)->module, (*fragmentShader)->module)
-        // .shaders((*vertexShader)->module, (*fragmentShader)->module)
-        .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-        // .polyMode(VK_POLYGON_MODE_LINE)
-        .polyMode(VK_POLYGON_MODE_FILL)
-        // TODO(savas): uncomment once we get this working without culling
-        // .cullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE)
-        .cullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
-        .disableMultisampling()
-        .enableAlphaBlending()
-        .colorAttachmentFormat(backbufferImage.format)
-        .depthFormat(depthImage.format)
-        .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
-        .build(device, meshPipelineLayout);
+    // meshPipeline = PipelineBuilder()
+    //     .shaders((*vertexShader)->module, (*geometryShader)->module, (*fragmentShader)->module)
+    //     // .shaders((*vertexShader)->module, (*fragmentShader)->module)
+    //     .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+    //     // .polyMode(VK_POLYGON_MODE_LINE)
+    //     .polyMode(VK_POLYGON_MODE_FILL)
+    //     // TODO(savas): uncomment once we get this working without culling
+    //     // .cullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE)
+    //     .cullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
+    //     .disableMultisampling()
+    //     .enableAlphaBlending()
+    //     .colorAttachmentFormat(backbufferImage.format)
+    //     .depthFormat(depthImage.format)
+    //     .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
+    //     .build(device, meshPipelineLayout);
 
-    noDepthMeshPipeline = PipelineBuilder()
-        .shaders((*vertexShader)->module, (*geometryShader)->module, (*fragmentShader)->module)
-        // .shaders((*vertexShader)->module, (*fragmentShader)->module)
-        .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-        // .polyMode(VK_POLYGON_MODE_LINE)
-        .polyMode(VK_POLYGON_MODE_FILL)
-        // TODO(savas): uncomment once we get this working without culling
-        .cullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE)
-        // .cullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
-        .disableMultisampling()
-        .enableAlphaBlending()
-        .colorAttachmentFormat(backbufferImage.format)
-        .depthFormat(depthImage.format)
-        .enableDepthTest(false, VK_COMPARE_OP_ALWAYS)
-        .build(device, meshPipelineLayout);
+    // noDepthMeshPipeline = PipelineBuilder()
+    //     .shaders((*vertexShader)->module, (*geometryShader)->module, (*fragmentShader)->module)
+    //     // .shaders((*vertexShader)->module, (*fragmentShader)->module)
+    //     .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+    //     // .polyMode(VK_POLYGON_MODE_LINE)
+    //     .polyMode(VK_POLYGON_MODE_FILL)
+    //     // TODO(savas): uncomment once we get this working without culling
+    //     .cullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE)
+    //     // .cullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
+    //     .disableMultisampling()
+    //     .enableAlphaBlending()
+    //     .colorAttachmentFormat(backbufferImage.format)
+    //     .depthFormat(depthImage.format)
+    //     .enableDepthTest(false, VK_COMPARE_OP_ALWAYS)
+    //     .build(device, meshPipelineLayout);
 }
 
 void VulkanBackend::initImgui()
@@ -717,6 +761,7 @@ void VulkanBackend::draw(Scene& scene)
             // const VkDescriptorSet* descriptorSets = pass.descriptorSets.data();
             // vkCmdBindDescriptorSets(cmd, pass.pipelineBindPoint, pass.pipelineLayout, 0, pass.descriptorSets.size(), descriptorSets, 0, nullptr);
             vkCmdBindDescriptorSets(cmd, pass.pipelineBindPoint, pass.pipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
+            vkCmdBindDescriptorSets(cmd, pass.pipelineBindPoint, pass.pipelineLayout, 1, 1, &bindlessTexDesc, 0, nullptr);
 
             vkCmdSetViewport(cmd, 0, 1, &viewport);
             vkCmdSetScissor(cmd, 0, 1, &scissor);

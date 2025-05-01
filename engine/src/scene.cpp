@@ -132,12 +132,12 @@ void Scene::addMeshes(tinygltf::Model& model)
         int primitiveCount = 0;
         for (tinygltf::Primitive& primitive : mesh.primitives)
         {
-            Mesh m = {};
+            Mesh& m = meshes.emplace_back();
             m.debugName = std::format("{}_{}", mesh.name, primitiveCount++);
-            std::println("{}", m.debugName);
+            // std::println("{}", m.debugName);
             m.indexOffset = indices.size();
             m.vertexOffset = vertexData.size();
-            m.materialIndex = primitive.material;
+            // m.materialIndex = primitive.material;
 
             int vertexAttributeOffset = 0;
             for (const auto& [attribute, attributeCount] : attributes) {
@@ -166,13 +166,13 @@ void Scene::addMeshes(tinygltf::Model& model)
                         vertex.raw[vertexAttributeOffset + j] = data[i * componentCount + j];
                     }
                 }
-                std::println("{} {} {}", vertexData.back().pos[0], vertexData.back().pos[1], vertexData.back().pos[2]);
+                // std::println("{} {} {}", vertexData.back().pos[0], vertexData.back().pos[1], vertexData.back().pos[2]);
                 vertexAttributeOffset += attributeCount;
             }
 
             tinygltf::Accessor indexAccessor = model.accessors[primitive.indices];
-            tinygltf::BufferView indexBufferView = model.bufferViews[indexAccessor.bufferView];
-            tinygltf::Buffer indexBuffer = model.buffers[indexBufferView.buffer];
+            tinygltf::BufferView& indexBufferView = model.bufferViews[indexAccessor.bufferView];
+            tinygltf::Buffer& indexBuffer = model.buffers[indexBufferView.buffer];
             const unsigned short* indexData = reinterpret_cast<unsigned short*>(&indexBuffer.data[indexBufferView.byteOffset + indexAccessor.byteOffset]);
             for (size_t i = 0; i < indexAccessor.count; i++)
             {
@@ -181,6 +181,38 @@ void Scene::addMeshes(tinygltf::Model& model)
 
             m.vertexCount = vertexData.size() - m.vertexOffset;
             m.indexCount = indices.size() - m.indexOffset;
+
+            // Material
+            if (primitive.material == -1) 
+            {
+                continue;     
+            }
+            tinygltf::Material& material = model.materials[primitive.material];
+
+            // TODO: Base color factor
+            tinygltf::PbrMetallicRoughness& pbr = material.pbrMetallicRoughness;
+            tinygltf::TextureInfo& albedoTextureInfo = pbr.baseColorTexture;
+            if (albedoTextureInfo.index != -1)
+            {
+                // TODO: metallicRoughnessTexture
+                tinygltf::Texture& albedo = model.textures[albedoTextureInfo.index];
+                // TODO: don't ignore sampler
+                // TODO: don't ignore texCoord index
+                tinygltf::Image& albedoImg = model.images[albedo.source];
+                m.albedoTexture = images.size();
+                images.push_back(albedoImg);
+            }
+
+            tinygltf::NormalTextureInfo& normalTextureInfo = material.normalTexture;
+            if (normalTextureInfo.index != -1)
+            {
+                tinygltf::Texture& normal = model.textures[normalTextureInfo.index];
+                // TODO: don't ignore texCoord index
+                // TODO: don't ignore sampler
+                tinygltf::Image& normalImg = model.images[normal.source];
+                m.normalTexture = images.size();
+                images.push_back(normalImg);
+            }
         }
     }
 }
