@@ -149,6 +149,7 @@ struct VulkanBackend
     void immediateSubmit(std::function<void (VkCommandBuffer)>&& f);
     void copyBuffer(VkBuffer src, VkBuffer dst, VkBufferCopy copyRegion);
     void copyBufferWithStaging(void* data, size_t size, VkBuffer dst, VkBufferCopy copyRegion = VkBufferCopy());
+    AllocatedBuffer allocateBuffer(VkBufferCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags, VkMemoryPropertyFlags requiredFlags);
 
 private:
     void initVulkan();

@@ -330,21 +330,6 @@ static SceneUniforms sceneUniforms;
 static AllocatedBuffer sceneUniformBuffer;
 static VkDescriptorSet sceneDescriptorSet;
 
-AllocatedBuffer allocateBuffer(VmaAllocator allocator, VkBufferCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags, VkMemoryPropertyFlags requiredFlags)
-{
-    AllocatedBuffer buffer;
-    
-    VmaAllocationCreateInfo allocInfo
-    {
-        .flags = flags,
-        .usage = usage,
-        .requiredFlags = requiredFlags,    
-    };
-    VK_CHECK(vmaCreateBuffer(allocator, &info, &allocInfo, &buffer.buffer, &buffer.allocation, nullptr));
-
-    return buffer;
-}
-
 void VulkanBackend::initDescriptors()
 {
     VkDescriptorPoolSize poolSizes[] =
@@ -368,7 +353,7 @@ void VulkanBackend::initDescriptors()
 
     {
         auto bufInfo = vkutil::init::bufferCreateInfo(sizeof(SceneUniforms), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-        sceneUniformBuffer = allocateBuffer(allocator, bufInfo, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        sceneUniformBuffer = allocateBuffer(bufInfo, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
             VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
         // auto bufInfo = vkutil::init::bufferCreateInfo(sizeof(SceneUniforms), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
@@ -724,8 +709,8 @@ void VulkanBackend::draw(Scene& scene)
 
             // sceneUniforms.view = glm::mat4(1.0);
             // sceneUniforms.projection = glm::mat4(1.0);
-            sceneUniforms.view = glm::inverse(glm::translate(glm::mat4(1.f), scene.activeCamera.position) * scene.activeCamera.rotation);
-            sceneUniforms.projection = glm::perspectiveFov<float>(scene.activeCamera.verticalFov, backbufferImage.extent.width, backbufferImage.extent.height, scene.activeCamera.nearClippingPlaneDist, scene.activeCamera.farClippingPlaneDist);
+            sceneUniforms.view = glm::inverse(glm::translate(glm::mat4(1.f), scene.activeCamera->position) * scene.activeCamera->rotation);
+            sceneUniforms.projection = glm::perspectiveFov<float>(scene.activeCamera->verticalFov, backbufferImage.extent.width, backbufferImage.extent.height, scene.activeCamera->nearClippingPlaneDist, scene.activeCamera->farClippingPlaneDist);
             // std::println("near: {}, far: {}", scene.activeCamera.nearClippingPlaneDist, scene.activeCamera.farClippingPlaneDist);
             // sceneUniforms.projection = glm::perspectiveFov<float>(glm::radians(70.f), backbufferImage.extent.width, backbufferImage.extent.height, 0.1f, 10000.f);
             // Fix Vulkan's weird "+y is down"
@@ -748,27 +733,34 @@ void VulkanBackend::draw(Scene& scene)
             // pass.transitionResources();
 
             // Get the attachments from rendergraph
-            VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-            VkRenderingAttachmentInfo depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(depthImage.view);
-            VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, &depthAttachmentInfo);
+            if (pass.pipeline) 
+            {
+                VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+                VkRenderingAttachmentInfo depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(depthImage.view);
+                VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, &depthAttachmentInfo);
 
-            // vkCmdBeginRendering(cmd, pass.renderingInfo());
-            vkCmdBeginRendering(cmd, &renderingInfo);
+                // vkCmdBeginRendering(cmd, pass.renderingInfo());
+                vkCmdBeginRendering(cmd, &renderingInfo);
 
-            vkCmdBindPipeline(cmd, pass.pipelineBindPoint, pass.pipeline);
+                vkCmdBindPipeline(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipeline);
 
-            // TODO: support dynamic offsets
-            // const VkDescriptorSet* descriptorSets = pass.descriptorSets.data();
-            // vkCmdBindDescriptorSets(cmd, pass.pipelineBindPoint, pass.pipelineLayout, 0, pass.descriptorSets.size(), descriptorSets, 0, nullptr);
-            vkCmdBindDescriptorSets(cmd, pass.pipelineBindPoint, pass.pipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
-            vkCmdBindDescriptorSets(cmd, pass.pipelineBindPoint, pass.pipelineLayout, 1, 1, &bindlessTexDesc, 0, nullptr);
+                // TODO: support dynamic offsets
+                // const VkDescriptorSet* descriptorSets = pass.descriptorSets.data();
+                // vkCmdBindDescriptorSets(cmd, pass.pipelineBindPoint, pass.pipelineLayout, 0, pass.descriptorSets.size(), descriptorSets, 0, nullptr);
+                vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
+                vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1, &bindlessTexDesc, 0, nullptr);
 
-            vkCmdSetViewport(cmd, 0, 1, &viewport);
-            vkCmdSetScissor(cmd, 0, 1, &scissor);
+                vkCmdSetViewport(cmd, 0, 1, &viewport);
+                vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-            pass.draw(cmd, pass);
+                pass.draw(cmd, pass);
 
-            vkCmdEndRendering(cmd);
+                vkCmdEndRendering(cmd);
+            }
+            else 
+            {
+                pass.draw(cmd, pass);
+            }
         }
 
         // {
@@ -1034,7 +1026,7 @@ void VulkanBackend::copyBuffer(VkBuffer src, VkBuffer dst, VkBufferCopy copyRegi
 void VulkanBackend::copyBufferWithStaging(void* data, size_t size, VkBuffer dst, VkBufferCopy copyRegion) 
 {
     auto bufInfo = vkutil::init::bufferCreateInfo(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-    AllocatedBuffer staging = allocateBuffer(allocator, bufInfo, VMA_MEMORY_USAGE_CPU_ONLY,
+    AllocatedBuffer staging = allocateBuffer(bufInfo, VMA_MEMORY_USAGE_CPU_ONLY,
         VMA_ALLOCATION_CREATE_MAPPED_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     VmaAllocationInfo stagingInfo;
@@ -1048,3 +1040,19 @@ void VulkanBackend::copyBufferWithStaging(void* data, size_t size, VkBuffer dst,
 
     // TODO: release staging data
 }
+
+AllocatedBuffer VulkanBackend::allocateBuffer(VkBufferCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags, VkMemoryPropertyFlags requiredFlags)
+{
+    AllocatedBuffer buffer;
+    
+    VmaAllocationCreateInfo allocInfo
+    {
+        .flags = flags,
+        .usage = usage,
+        .requiredFlags = requiredFlags,    
+    };
+    VK_CHECK(vmaCreateBuffer(allocator, &info, &allocInfo, &buffer.buffer, &buffer.allocation, nullptr));
+
+    return buffer;
+}
+

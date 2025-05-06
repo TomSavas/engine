@@ -10,7 +10,8 @@
 std::optional<RenderPass> infGrid(VulkanBackend& backend) {
     RenderPass pass;
     pass.debugName = "infinite grid";
-    pass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    pass.pipeline = std::optional<RenderPass::Pipeline>(RenderPass::Pipeline{});
+    pass.pipeline->pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
     std::optional<ShaderModule*> vertexShader = backend.shaderModuleCache.loadModule(backend.device, SHADER_PATH("inf_grid.vert.glsl"));
     std::optional<ShaderModule*> fragmentShader = backend.shaderModuleCache.loadModule(backend.device, SHADER_PATH("inf_grid.frag.glsl"));
@@ -20,9 +21,9 @@ std::optional<RenderPass> infGrid(VulkanBackend& backend) {
     }
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkutil::init::layoutCreateInfo(&backend.sceneDescriptorSetLayout, 1);
-    VK_CHECK(vkCreatePipelineLayout(backend.device, &pipelineLayoutInfo, nullptr, &pass.pipelineLayout));
+    VK_CHECK(vkCreatePipelineLayout(backend.device, &pipelineLayoutInfo, nullptr, &pass.pipeline->pipelineLayout));
 
-    pass.pipeline = PipelineBuilder()
+    pass.pipeline->pipeline = PipelineBuilder()
         .shaders((*vertexShader)->module, (*fragmentShader)->module)
         .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .polyMode(VK_POLYGON_MODE_FILL)
@@ -32,7 +33,7 @@ std::optional<RenderPass> infGrid(VulkanBackend& backend) {
         .disableDepthTest()
         .colorAttachmentFormat(backend.backbufferImage.format)
         .depthFormat(backend.depthImage.format)
-        .build(backend.device, pass.pipelineLayout);
+        .build(backend.device, pass.pipeline->pipelineLayout);
 
     // Here we should set up the resources in the rendergraph
 

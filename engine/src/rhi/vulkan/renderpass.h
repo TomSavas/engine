@@ -5,13 +5,18 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <optional>
+#include <utility>
 
 struct RenderPass {
     std::string debugName;
 
-    VkPipelineBindPoint pipelineBindPoint;
-    VkPipelineLayout pipelineLayout;
-    VkPipeline pipeline;
+    struct Pipeline {
+        VkPipelineBindPoint pipelineBindPoint;
+        VkPipelineLayout pipelineLayout;
+        VkPipeline pipeline;
+    };
+    std::optional<Pipeline> pipeline;
 
     std::function<void(VkCommandBuffer cmd, RenderPass&)> draw;
 };

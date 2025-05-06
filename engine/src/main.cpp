@@ -63,6 +63,7 @@ int main(void) {
 
     // const char* modelPath = "../assets/Box/Box.gltf"; 
     const char* modelPath = "../assets/Sponza/Sponza.gltf"; 
+    // const char* modelPath = "../assets/VC/VC.gltf"; 
     // const char* modelPath = "../assets/Suzanne/Suzanne.gltf"; 
     bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, modelPath);
     if (!ret) {
@@ -74,10 +75,19 @@ int main(void) {
 
     scene.addMeshes(model);
 
-
     {
+        const RenderPass empty = emptyPass(backend);
+
+        auto culledDraws = cullingPass(backend, backend.graph, scene);
+        // auto depthStencil = zPrePass(backend, backend.graph, scene);
+        // basePass(backend, backend.graph, scene, culledDraws, depthStencil);
+        basePass(backend, backend.graph, scene, culledDraws);
+
+        // backend.graph.renderpasses.push_back(cullingPass(backend, scene, backend.graph.blackboard).value_or(empty));
+        // backend.graph.renderpasses.push_back(zPrePass(backend, scene).value_or(empty));
+        // backend.graph.renderpasses.push_back(shadowPass(backend, scene).value_or(empty));
         // backend.graph.renderpasses.push_back(infGrid(backend).value_or(emptyPass(backend)));
-        backend.graph.renderpasses.push_back(basePass(backend, scene).value_or(emptyPass(backend)));
+        // backend.graph.renderpasses.push_back(basePass(backend, scene).value_or(empty));
         // backend.graph.renderpasses.push_back(*infGrid(backend));
         // backend.graph.renderpasses.push_back(emptyPass(backend));
     }
@@ -156,17 +166,17 @@ int main(void) {
                 ImGui::Text("     %.9f Hz", 1.0 / avgFrameTime);
 
                 ImGui::Separator();
-                ImGui::Text("Pos: %.2f, %.2f, %.2f", scene.activeCamera.position.x, scene.activeCamera.position.y, scene.activeCamera.position.z);
+                ImGui::Text("Pos: %.2f, %.2f, %.2f", scene.activeCamera->position.x, scene.activeCamera->position.y, scene.activeCamera->position.z);
 
-                glm::vec3 fw = scene.activeCamera.rotation * glm::vec4(0.f, 0.f, -1.f, 0.f);
-                glm::vec3 r = scene.activeCamera.rotation * glm::vec4(1.f, 0.f, 0.f, 0.f);
-                glm::vec3 u = scene.activeCamera.rotation * glm::vec4(0.f, 1.f, 0.f, 0.f);
+                glm::vec3 fw = scene.activeCamera->rotation * glm::vec4(0.f, 0.f, -1.f, 0.f);
+                glm::vec3 r = scene.activeCamera->rotation * glm::vec4(1.f, 0.f, 0.f, 0.f);
+                glm::vec3 u = scene.activeCamera->rotation * glm::vec4(0.f, 1.f, 0.f, 0.f);
                 ImGui::Text("Forward: %.2f, %.2f, %.2f", fw.x, fw.y, fw.z);
                 ImGui::Text("Right: %.2f, %.2f, %.2f", r.x, r.y, r.z);
                 ImGui::Text("Up: %.2f, %.2f, %.2f", u.x, u.y, u.z);
 
-                ImGui::Text("");
-                ImGui::Text("Movement speed: %.2f", scene.activeCamera.moveSpeed);
+                ImGui::Text("Active camera: %s", (scene.activeCamera == &scene.mainCamera) ? "main" : "debug");
+                ImGui::Text("Movement speed: %.2f", scene.activeCamera->moveSpeed);
             }
             ImGui::End();
         }

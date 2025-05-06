@@ -114,14 +114,33 @@ void updateFreeCamera(float dt, GLFWwindow* window, Camera& camera)
 
 void Scene::update(float dt, float currentTimeMs, GLFWwindow* window)
 {
-    updateFreeCamera(dt, window, activeCamera);
+    static bool released = true;
+
+    if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS && released)
+    {
+        released = false;
+        activeCamera = (activeCamera == &mainCamera) ? &debugCamera : &mainCamera;
+
+        bool isMain = (bool)(activeCamera == &mainCamera);
+        bool isDebug = (bool)(activeCamera == &debugCamera);
+        std::println("active: {:x}, main: {:x}({}), debug: {:x}({})", (uint64_t)activeCamera, (uint64_t)&mainCamera,
+                      isMain, (uint64_t)&debugCamera, isDebug);
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_C) == GLFW_RELEASE)
+    {
+        released = true;
+    }
+    
+    updateFreeCamera(dt, window, *activeCamera);
 }
 
 void Scene::addMeshes(tinygltf::Model& model)
 {
     // Matches Vertex definition
-    const std::pair<std::string, int> attributes[] = {
-        {"POSITION", 4},
+    const char* position = "POSITION";
+    const std::pair<const char*, int> attributes[] = {
+        {position, 4},
         {"TEXCOORD_0", 4},
         {"NORMAL", 4},
         {"TANGENT", 4},
@@ -139,6 +158,9 @@ void Scene::addMeshes(tinygltf::Model& model)
             m.vertexOffset = vertexData.size();
             // m.materialIndex = primitive.material;
 
+            m.aabbMin = glm::vec3(0.f);
+            m.aabbMax = glm::vec3(0.f);
+
             int vertexAttributeOffset = 0;
             for (const auto& [attribute, attributeCount] : attributes) {
                 if (primitive.attributes.find(attribute) == primitive.attributes.end()) 
@@ -146,7 +168,7 @@ void Scene::addMeshes(tinygltf::Model& model)
                     continue;
                 }
 
-                tinygltf::Accessor accessor = model.accessors[primitive.attributes[attribute]];
+                tinygltf::Accessor accessor = model.accessors[primitive.attributes[std::string(attribute)]];
                 tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
                 tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
                 float* data = reinterpret_cast<float*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
@@ -164,6 +186,17 @@ void Scene::addMeshes(tinygltf::Model& model)
                     for (int j = 0; j < componentCount; j++)
                     {
                         vertex.raw[vertexAttributeOffset + j] = data[i * componentCount + j];
+                    }
+
+                    if (attribute == position) 
+                    {
+                        m.aabbMin.x = std::min(m.aabbMin.x, vertex.pos[0]);
+                        m.aabbMin.y = std::min(m.aabbMin.y, vertex.pos[1]);
+                        m.aabbMin.z = std::min(m.aabbMin.z, vertex.pos[2]);
+
+                        m.aabbMax.x = std::max(m.aabbMax.x, vertex.pos[0]);
+                        m.aabbMax.y = std::max(m.aabbMax.y, vertex.pos[1]);
+                        m.aabbMax.z = std::max(m.aabbMax.z, vertex.pos[2]);
                     }
                 }
                 // std::println("{} {} {}", vertexData.back().pos[0], vertexData.back().pos[1], vertexData.back().pos[2]);

@@ -31,6 +31,9 @@ struct Mesh
     int indexOffset;
     int indexCount;
 
+    glm::vec3 aabbMin;
+    glm::vec3 aabbMax;
+
     // Move out this to a standalone material
     // int materialIndex;
     int albedoTexture;

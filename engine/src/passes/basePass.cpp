@@ -25,7 +25,6 @@ struct BasePassData
 
     AllocatedBuffer vertexDataBuffer;
     AllocatedBuffer indexBuffer;    
-    AllocatedBuffer indirectCommands;
     bool initialized = false;
 };
 
@@ -44,25 +43,26 @@ AllocatedBuffer allocBuf(VmaAllocator allocator, VkBufferCreateInfo info, VmaMem
     return buffer;
 }
 
-std::optional<RenderPass> basePass(VulkanBackend& backend, Scene& scene) {
+void basePass(VulkanBackend& backend, RenderGraph& graph, Scene& scene, AllocatedBuffer culledDraws) {
     RenderPass pass;
     pass.debugName = "base pass";
-    pass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    pass.pipeline = std::optional<RenderPass::Pipeline>(RenderPass::Pipeline{});
+    pass.pipeline->pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
     std::optional<ShaderModule*> vertexShader = backend.shaderModuleCache.loadModule(backend.device, SHADER_PATH("mesh.vert.glsl"));
     std::optional<ShaderModule*> fragmentShader = backend.shaderModuleCache.loadModule(backend.device, SHADER_PATH("mesh.frag.glsl"));
     if (!vertexShader || !fragmentShader)
     {
-        return std::optional<RenderPass>();
+        // return std::optional<RenderPass>();
+        return;
     }
 
-    // VkPushConstantRange meshPushConstantRange = vkutil::init::pushConstantRange(VK_SHADER_STAGE_VERTEX_BIT, sizeof(PushConstants));
     VkPushConstantRange meshPushConstantRange = vkutil::init::pushConstantRange(VK_SHADER_STAGE_ALL, sizeof(PushConstants));
     VkDescriptorSetLayout descriptors[] = {backend.sceneDescriptorSetLayout, backend.bindlessTexDescLayout};
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkutil::init::layoutCreateInfo(descriptors, 2, &meshPushConstantRange, 1);
-    VK_CHECK(vkCreatePipelineLayout(backend.device, &pipelineLayoutInfo, nullptr, &pass.pipelineLayout));
+    VK_CHECK(vkCreatePipelineLayout(backend.device, &pipelineLayoutInfo, nullptr, &pass.pipeline->pipelineLayout));
 
-    pass.pipeline = PipelineBuilder()
+    pass.pipeline->pipeline = PipelineBuilder()
         .shaders((*vertexShader)->module, (*fragmentShader)->module)
         .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .polyMode(VK_POLYGON_MODE_FILL)
@@ -72,27 +72,15 @@ std::optional<RenderPass> basePass(VulkanBackend& backend, Scene& scene) {
         .colorAttachmentFormat(backend.backbufferImage.format)
         .depthFormat(backend.depthImage.format)
         .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
-        .build(backend.device, pass.pipelineLayout);
+        .build(backend.device, pass.pipeline->pipelineLayout);
 
     // Here we should set up the resources in the rendergraph
 
     BasePassData* basePassData = new BasePassData();
-    pass.draw = [&, basePassData](VkCommandBuffer cmd, RenderPass& p) {
+    pass.draw = [&, basePassData, culledDraws](VkCommandBuffer cmd, RenderPass& p) {
         if (!basePassData->initialized) 
         {
             basePassData->initialized = true;
-
-            // Indirect commands buffer
-            auto info = vkutil::init::bufferCreateInfo(sizeof(VkDrawIndexedIndirectCommand) * scene.meshes.size(),
-                VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-            basePassData->indirectCommands = allocBuf(backend.allocator, info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-                VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-            // Per model data buffer
-            // info = vkutil::init::bufferCreateInfo(sizeof(VkDrawIndexedIndirectCommand),
-            //     VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-            // basePassData->indirectCommands = allocBuf(backend.allocator, info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-            //     VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
             // Vertex + index buffers
             const uint32_t vertexBufferSize = scene.vertexData.size() * sizeof(decltype(scene.vertexData)::value_type); 
@@ -101,7 +89,7 @@ std::optional<RenderPass> basePass(VulkanBackend& backend, Scene& scene) {
             std::println("Vert count: {}, element size: {}, total size: {}", scene.vertexData.size(), sizeof(decltype(scene.vertexData)::value_type), vertexBufferSize);
             std::println("Index count: {}, element size: {}, total size: {}", scene.indices.size(), sizeof(decltype(scene.indices)::value_type), indexBufferSize);
 
-            info = vkutil::init::bufferCreateInfo(vertexBufferSize,
+            auto info = vkutil::init::bufferCreateInfo(vertexBufferSize,
                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
                 VK_BUFFER_USAGE_TRANSFER_DST_BIT | 
                 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
@@ -135,22 +123,6 @@ std::optional<RenderPass> basePass(VulkanBackend& backend, Scene& scene) {
                VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
             backend.copyBufferWithStaging((void*)modelData.data(), modelData.size() * sizeof(ModelData), basePassData->perModelDataBuffer.buffer);
-
-            // Indirect cmds
-        	std::vector<VkDrawIndexedIndirectCommand> indirectCmds;
-        	indirectCmds.reserve(scene.meshes.size());
-        	for (int i = 0; i < scene.meshes.size(); ++i)
-        	{
-        	    auto& mesh = scene.meshes[i];
-                VkDrawIndexedIndirectCommand c{};
-            	c.instanceCount = 1;
-            	c.firstInstance = i;
-            	c.firstIndex = mesh.indexOffset;
-            	c.indexCount = mesh.indexCount;
-                indirectCmds.push_back(c);
-        	}
-
-            backend.copyBufferWithStaging((void*)indirectCmds.data(), sizeof(VkDrawIndexedIndirectCommand) * indirectCmds.size(), basePassData->indirectCommands.buffer);
 
             // Write bindless textures
             for (int i = 0; i < scene.images.size(); ++i)
@@ -285,9 +257,6 @@ std::optional<RenderPass> basePass(VulkanBackend& backend, Scene& scene) {
             }
         }
 
-        // Generate draw indirect commands on the fly
-        // TODO: CPU culling, later add option for GPU culling
-
         VkBufferDeviceAddressInfo vertexAddressInfo{ 
             .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, 
             .buffer = basePassData->vertexDataBuffer.buffer 
@@ -304,14 +273,14 @@ std::optional<RenderPass> basePass(VulkanBackend& backend, Scene& scene) {
             .perModelDataBufferAddr = vkGetBufferDeviceAddress(backend.device, &perModelDataAddressInfo)
         };
         // vkCmdPushConstants(cmd, p.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
-        vkCmdPushConstants(cmd, p.pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(PushConstants), &pushConstants);
+        vkCmdPushConstants(cmd, p.pipeline->pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(PushConstants), &pushConstants);
     	vkCmdBindIndexBuffer(cmd, basePassData->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
         for (int i = 0; i < 1; i++)
         {
-            vkCmdDrawIndexedIndirect(cmd, basePassData->indirectCommands.buffer, i * sizeof(VkDrawIndexedIndirectCommand), scene.meshes.size(), sizeof(VkDrawIndexedIndirectCommand));
+            vkCmdDrawIndexedIndirect(cmd, culledDraws.buffer, i * sizeof(VkDrawIndexedIndirectCommand), scene.meshes.size(), sizeof(VkDrawIndexedIndirectCommand));
         }
     };
 
-    return pass;
+    graph.renderpasses.push_back(pass);
 }

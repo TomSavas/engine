@@ -19,7 +19,7 @@ struct Scene
 {
     std::string name;
 
-    Camera& activeCamera;
+    Camera* activeCamera;
     Camera mainCamera;
     Camera debugCamera;
 
@@ -32,7 +32,7 @@ struct Scene
 
     bool worldPaused = true;
 
-    Scene(std::string name) : name(name), activeCamera(mainCamera) {}
+    Scene(std::string name) : name(name), activeCamera(&mainCamera) {}
 
     void update(float dt, float currentTimeMs, GLFWwindow* window);
     void addMeshes(tinygltf::Model& model);
