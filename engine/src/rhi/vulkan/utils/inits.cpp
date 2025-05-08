@@ -547,7 +547,7 @@ VkRenderingAttachmentInfo renderingDepthAttachmentInfo(VkImageView view, VkImage
     return info;       
 }
 
-VkRenderingInfo renderingInfo(VkExtent2D extent, VkRenderingAttachmentInfo* colorAttachments, VkRenderingAttachmentInfo* depthAttachments)
+VkRenderingInfo renderingInfo(VkExtent2D extent, VkRenderingAttachmentInfo* colorAttachments, int colorAttachmentCount, VkRenderingAttachmentInfo* depthAttachments)
 {
     
     VkRenderingInfo info = {};
@@ -556,7 +556,7 @@ VkRenderingInfo renderingInfo(VkExtent2D extent, VkRenderingAttachmentInfo* colo
 
     info.renderArea = VkRect2D { VkOffset2D { 0, 0 }, extent };
     info.layerCount = 1;
-    info.colorAttachmentCount = 1;
+    info.colorAttachmentCount = colorAttachmentCount;
     info.pColorAttachments = colorAttachments;
     info.pDepthAttachment = depthAttachments;
     info.pStencilAttachment = nullptr;

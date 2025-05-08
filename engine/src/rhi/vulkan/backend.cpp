@@ -707,14 +707,8 @@ void VulkanBackend::draw(Scene& scene)
         {
             ZoneScopedCpuGpuAuto("Memcpy SceneUniforms to GPU");
 
-            // sceneUniforms.view = glm::mat4(1.0);
-            // sceneUniforms.projection = glm::mat4(1.0);
-            sceneUniforms.view = glm::inverse(glm::translate(glm::mat4(1.f), scene.activeCamera->position) * scene.activeCamera->rotation);
-            sceneUniforms.projection = glm::perspectiveFov<float>(scene.activeCamera->verticalFov, backbufferImage.extent.width, backbufferImage.extent.height, scene.activeCamera->nearClippingPlaneDist, scene.activeCamera->farClippingPlaneDist);
-            // std::println("near: {}, far: {}", scene.activeCamera.nearClippingPlaneDist, scene.activeCamera.farClippingPlaneDist);
-            // sceneUniforms.projection = glm::perspectiveFov<float>(glm::radians(70.f), backbufferImage.extent.width, backbufferImage.extent.height, 0.1f, 10000.f);
-            // Fix Vulkan's weird "+y is down"
-            sceneUniforms.projection[1][1] *= -1.f;
+            sceneUniforms.view = scene.activeCamera->view();
+            sceneUniforms.projection = scene.activeCamera->proj();
 
             uint8_t* dataOnGpu;
             vmaMapMemory(allocator, sceneUniformBuffer.allocation, (void**)&dataOnGpu);
@@ -735,20 +729,23 @@ void VulkanBackend::draw(Scene& scene)
             // Get the attachments from rendergraph
             if (pass.pipeline) 
             {
-                VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-                VkRenderingAttachmentInfo depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(depthImage.view);
-                VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, &depthAttachmentInfo);
+                // VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+                // VkRenderingAttachmentInfo depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(depthImage.view);
+                // VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, &depthAttachmentInfo);
 
                 // vkCmdBeginRendering(cmd, pass.renderingInfo());
-                vkCmdBeginRendering(cmd, &renderingInfo);
+                vkCmdBeginRendering(cmd, &pass.renderingInfo);
 
                 vkCmdBindPipeline(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipeline);
 
                 // TODO: support dynamic offsets
                 // const VkDescriptorSet* descriptorSets = pass.descriptorSets.data();
                 // vkCmdBindDescriptorSets(cmd, pass.pipelineBindPoint, pass.pipelineLayout, 0, pass.descriptorSets.size(), descriptorSets, 0, nullptr);
-                vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
-                vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1, &bindlessTexDesc, 0, nullptr);
+                if (pass.debugName == "base pass")
+                {
+                    vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
+                    vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1, &bindlessTexDesc, 0, nullptr);
+                }
 
                 vkCmdSetViewport(cmd, 0, 1, &viewport);
                 vkCmdSetScissor(cmd, 0, 1, &scissor);
@@ -944,7 +941,7 @@ void VulkanBackend::draw(Scene& scene)
             vkutil::image::transitionImage(cmd, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
             VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(swapchainImageViews[swapchainImageIndex], nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-            VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, nullptr);
+            VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, 1, nullptr);
 
             vkCmdBeginRendering(cmd, &renderingInfo);
             ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
@@ -1054,5 +1051,25 @@ AllocatedBuffer VulkanBackend::allocateBuffer(VkBufferCreateInfo info, VmaMemory
     VK_CHECK(vmaCreateBuffer(allocator, &info, &allocInfo, &buffer.buffer, &buffer.allocation, nullptr));
 
     return buffer;
+}
+
+AllocatedImage VulkanBackend::allocateImage(VkImageCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags, VkMemoryPropertyFlags requiredFlags, VkImageAspectFlags aspectFlags)
+{
+    AllocatedImage image;
+    image.format = info.format;
+    image.extent = info.extent;
+    
+    VmaAllocationCreateInfo allocInfo
+    {
+        .flags = flags,
+        .usage = usage,
+        .requiredFlags = requiredFlags,    
+    };
+    VK_CHECK(vmaCreateImage(allocator, &info, &allocInfo, &image.image, &image.allocation, nullptr));
+
+    auto imgViewInfo = vkutil::init::imageViewCreateInfo(image.format, image.image, aspectFlags);
+    VK_CHECK(vkCreateImageView(device, &imgViewInfo, nullptr, &image.view));
+
+    return image;
 }
 

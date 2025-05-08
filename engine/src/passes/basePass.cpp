@@ -43,7 +43,7 @@ AllocatedBuffer allocBuf(VmaAllocator allocator, VkBufferCreateInfo info, VmaMem
     return buffer;
 }
 
-void basePass(VulkanBackend& backend, RenderGraph& graph, Scene& scene, AllocatedBuffer culledDraws) {
+void basePass(VulkanBackend& backend, RenderGraph& graph, Scene& scene, AllocatedBuffer culledDraws, AllocatedImage shadowMap) {
     RenderPass pass;
     pass.debugName = "base pass";
     pass.pipeline = std::optional<RenderPass::Pipeline>(RenderPass::Pipeline{});
@@ -75,6 +75,12 @@ void basePass(VulkanBackend& backend, RenderGraph& graph, Scene& scene, Allocate
         .build(backend.device, pass.pipeline->pipelineLayout);
 
     // Here we should set up the resources in the rendergraph
+    VkExtent2D swapchainSize { static_cast<uint32_t>(backend.viewport.width), static_cast<uint32_t>(backend.viewport.height) };
+    VkRenderingAttachmentInfo* colorAttachmentInfo = new VkRenderingAttachmentInfo();
+    *colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backend.backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    VkRenderingAttachmentInfo* depthAttachmentInfo = new VkRenderingAttachmentInfo();
+    *depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(backend.depthImage.view);
+    pass.renderingInfo = vkutil::init::renderingInfo(swapchainSize, colorAttachmentInfo, 1, depthAttachmentInfo);
 
     BasePassData* basePassData = new BasePassData();
     pass.draw = [&, basePassData, culledDraws](VkCommandBuffer cmd, RenderPass& p) {

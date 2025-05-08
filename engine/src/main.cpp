@@ -63,6 +63,7 @@ int main(void) {
 
     // const char* modelPath = "../assets/Box/Box.gltf"; 
     const char* modelPath = "../assets/Sponza/Sponza.gltf"; 
+    // const char* modelPath = "../assets/intelsponza/sponza.gltf"; 
     // const char* modelPath = "../assets/VC/VC.gltf"; 
     // const char* modelPath = "../assets/Suzanne/Suzanne.gltf"; 
     bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, modelPath);
@@ -81,7 +82,9 @@ int main(void) {
         auto culledDraws = cullingPass(backend, backend.graph, scene);
         // auto depthStencil = zPrePass(backend, backend.graph, scene);
         // basePass(backend, backend.graph, scene, culledDraws, depthStencil);
-        basePass(backend, backend.graph, scene, culledDraws);
+        auto shadowMap = shadowPass(backend, backend.graph, scene);
+        basePass(backend, backend.graph, scene, culledDraws, shadowMap);
+        // basePass(backend, backend.graph, scene, culledDraws, AllocatedImage());
 
         // backend.graph.renderpasses.push_back(cullingPass(backend, scene, backend.graph.blackboard).value_or(empty));
         // backend.graph.renderpasses.push_back(zPrePass(backend, scene).value_or(empty));

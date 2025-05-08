@@ -17,6 +17,7 @@ struct RenderPass {
         VkPipeline pipeline;
     };
     std::optional<Pipeline> pipeline;
+    VkRenderingInfo renderingInfo;
 
     std::function<void(VkCommandBuffer cmd, RenderPass&)> draw;
 };

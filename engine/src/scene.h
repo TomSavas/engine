@@ -29,6 +29,7 @@ struct Scene
 
     // TEMP: move to a texture pool
     std::vector<tinygltf::Image> images;
+    glm::vec3 lightDir = glm::vec3(0.3, -1.0, 0.3);
 
     bool worldPaused = true;
 
