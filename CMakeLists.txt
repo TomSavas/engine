@@ -56,8 +56,9 @@ target_link_libraries(${PROJECT} GPUOpen::VulkanMemoryAllocator)
 add_definitions(-DGLFW_INCLUDE_NONE)
 
 find_program(GLSLC glslc HINTS /usr/bin /usr/local/bin $ENV{VULKAN_SDK}/Bin/ $ENV{VULKAN_SDK}/Bin32/)
+set(SHADER_SRC_DIRECTORY "${PROJECT_SOURCE_DIR}/engine/shaders")
 file(GLOB_RECURSE GLSL_SOURCE_FILES
-    "${PROJECT_SOURCE_DIR}/engine/shaders/*.glsl"
+    "${SHADER_SRC_DIRECTORY}/*.glsl"
 )
 
 set(SPV_MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/shaders")
@@ -73,7 +74,7 @@ foreach(GLSL ${GLSL_SOURCE_FILES})
 
     add_custom_command(
         OUTPUT ${SPIRV}
-        COMMAND ${GLSLC} -fshader-stage=${SHADER_STAGE} ${GLSL} -o ${SPIRV}
+        COMMAND ${GLSLC} -g -I${SHADER_SRC_DIRECTORY} -fshader-stage=${SHADER_STAGE} ${GLSL} -o ${SPIRV}
         DEPENDS ${GLSL}
         COMMENT "Compiling ${GLSL} for stage: ${SHADER_STAGE}"
     )
