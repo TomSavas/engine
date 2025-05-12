@@ -82,8 +82,8 @@ int main(void) {
         auto culledDraws = cullingPass(backend, backend.graph, scene);
         // auto depthStencil = zPrePass(backend, backend.graph, scene);
         // basePass(backend, backend.graph, scene, culledDraws, depthStencil);
-        auto shadowMap = shadowPass(backend, backend.graph, scene);
-        basePass(backend, backend.graph, scene, culledDraws, shadowMap);
+        auto shadowData = shadowPass(backend, backend.graph, scene);
+        basePass(backend, backend.graph, scene, culledDraws, shadowData);
         // basePass(backend, backend.graph, scene, culledDraws, AllocatedImage());
 
         // backend.graph.renderpasses.push_back(cullingPass(backend, scene, backend.graph.blackboard).value_or(empty));

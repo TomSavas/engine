@@ -39,6 +39,8 @@ layout(push_constant) uniform Constants
     vec4 color;
 	VertexBuffer vertexBuffer;
 	ModelDataBuffer modelData;
+	ModelDataBuffer shadowViewProjMatrices; // wrong type
+	int shadowMapIndex;
 } constants;
 
 

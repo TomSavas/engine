@@ -32,6 +32,7 @@ struct PipelineBuilder
     PipelineBuilder& depthFormat(VkFormat format);
     PipelineBuilder& enableDepthTest(bool depthWriteEnable, VkCompareOp compareOp);
     PipelineBuilder& disableDepthTest();
+    PipelineBuilder& setDepthClamp(bool enable);
         
     VkPipeline build(VkDevice device, VkPipelineLayout layout);
 };

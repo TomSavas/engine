@@ -10,6 +10,8 @@
 #include <vulkan/vulkan_core.h>
 #include <glm/gtx/transform.hpp>
 
+#include "GLFW/glfw3.h"
+
 struct ModelData 
 {
     // int albedoTex;
@@ -28,22 +30,8 @@ struct BasePassData
     bool initialized = false;
 };
 
-AllocatedBuffer allocBuf(VmaAllocator allocator, VkBufferCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags, VkMemoryPropertyFlags requiredFlags)
+void basePass(VulkanBackend& backend, RenderGraph& graph, Scene& scene, AllocatedBuffer culledDraws, GPUShadowPassData* shadowPassData) 
 {
-    AllocatedBuffer buffer;
-    
-    VmaAllocationCreateInfo allocInfo
-    {
-        .flags = flags,
-        .usage = usage,
-        .requiredFlags = requiredFlags,    
-    };
-    VK_CHECK(vmaCreateBuffer(allocator, &info, &allocInfo, &buffer.buffer, &buffer.allocation, nullptr));
-
-    return buffer;
-}
-
-void basePass(VulkanBackend& backend, RenderGraph& graph, Scene& scene, AllocatedBuffer culledDraws, AllocatedImage shadowMap) {
     RenderPass pass;
     pass.debugName = "base pass";
     pass.pipeline = std::optional<RenderPass::Pipeline>(RenderPass::Pipeline{});
@@ -83,7 +71,7 @@ void basePass(VulkanBackend& backend, RenderGraph& graph, Scene& scene, Allocate
     pass.renderingInfo = vkutil::init::renderingInfo(swapchainSize, colorAttachmentInfo, 1, depthAttachmentInfo);
 
     BasePassData* basePassData = new BasePassData();
-    pass.draw = [&, basePassData, culledDraws](VkCommandBuffer cmd, RenderPass& p) {
+    pass.draw = [&, basePassData, culledDraws, shadowPassData](VkCommandBuffer cmd, RenderPass& p) {
         if (!basePassData->initialized) 
         {
             basePassData->initialized = true;
@@ -99,12 +87,12 @@ void basePass(VulkanBackend& backend, RenderGraph& graph, Scene& scene, Allocate
                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
                 VK_BUFFER_USAGE_TRANSFER_DST_BIT | 
                 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-            basePassData->vertexDataBuffer = allocBuf(backend.allocator, info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+            basePassData->vertexDataBuffer = backend.allocateBuffer(info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
                 VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
             info = vkutil::init::bufferCreateInfo(indexBufferSize,
                 VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-            basePassData->indexBuffer = allocBuf(backend.allocator, info, VMA_MEMORY_USAGE_GPU_ONLY,
+            basePassData->indexBuffer = backend.allocateBuffer(info, VMA_MEMORY_USAGE_GPU_ONLY,
                VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
             backend.copyBufferWithStaging((void*)scene.vertexData.data(), vertexBufferSize, basePassData->vertexDataBuffer.buffer);
@@ -125,7 +113,7 @@ void basePass(VulkanBackend& backend, RenderGraph& graph, Scene& scene, Allocate
             
             info = vkutil::init::bufferCreateInfo(indexBufferSize,
                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-            basePassData->perModelDataBuffer = allocBuf(backend.allocator, info, VMA_MEMORY_USAGE_GPU_ONLY,
+            basePassData->perModelDataBuffer = backend.allocateBuffer(info, VMA_MEMORY_USAGE_GPU_ONLY,
                VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
             backend.copyBufferWithStaging((void*)modelData.data(), modelData.size() * sizeof(ModelData), basePassData->perModelDataBuffer.buffer);
@@ -143,7 +131,7 @@ void basePass(VulkanBackend& backend, RenderGraph& graph, Scene& scene, Allocate
 
                 auto info = vkutil::init::bufferCreateInfo(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
                 // TODO: likely incorrect VMA_ALLOCATION and VK_MEMORY_PROPERTY flags
-                AllocatedBuffer cpuImageBuffer = allocBuf(backend.allocator, info, VMA_MEMORY_USAGE_CPU_ONLY,
+                AllocatedBuffer cpuImageBuffer = backend.allocateBuffer(info, VMA_MEMORY_USAGE_CPU_ONLY,
                     VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
                 // Copy data to GPU
                 {
@@ -263,6 +251,34 @@ void basePass(VulkanBackend& backend, RenderGraph& graph, Scene& scene, Allocate
             }
         }
 
+        // Shadowmap upload
+        // NOTE: this should be done by rendergraph
+        {
+            VkSampler sampler;
+            VkSamplerCreateInfo samplerInfo = vkutil::init::samplerCreateInfo(
+                VK_FILTER_LINEAR,
+                VK_SAMPLER_ADDRESS_MODE_REPEAT,
+                0
+            );
+            vkCreateSampler(backend.device, &samplerInfo, nullptr, &sampler);
+
+            VkDescriptorImageInfo descriptorImageInfo = vkutil::init::descriptorImageInfo(
+                sampler,
+                shadowPassData->shadowMap.view,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL  
+            );
+            VkWriteDescriptorSet descriptorWrite = vkutil::init::writeDescriptorImage(
+                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                backend.bindlessTexDesc,
+                &descriptorImageInfo,
+                0
+            );
+            descriptorWrite.dstArrayElement = scene.images.size();
+
+            vkUpdateDescriptorSets(backend.device, 1, &descriptorWrite, 0, nullptr);
+        }
+
+
         VkBufferDeviceAddressInfo vertexAddressInfo{ 
             .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, 
             .buffer = basePassData->vertexDataBuffer.buffer 
@@ -271,12 +287,31 @@ void basePass(VulkanBackend& backend, RenderGraph& graph, Scene& scene, Allocate
             .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, 
             .buffer = basePassData->perModelDataBuffer.buffer 
         };
+        VkBufferDeviceAddressInfo shadowDataAddressInfo{ 
+            .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, 
+            .buffer = shadowPassData->shadowMapData.buffer
+        };
+
+        static bool renderCascades = false;
+        static bool released = true;
+        if (glfwGetKey(backend.window, GLFW_KEY_Q) == GLFW_PRESS && released)
+        {
+            released = false;
+            renderCascades = !renderCascades;
+        }
+        if (glfwGetKey(backend.window, GLFW_KEY_Q) == GLFW_RELEASE)
+        {
+            released = true;
+        }
+        
         PushConstants pushConstants 
         {
             .model = glm::mat4(1.f), //SRT 
-            .color = glm::vec4(1.f, 0.f, 0.f, 1.f),
+            .color = glm::vec4(renderCascades ? 1.f : 0.f, 0.f, 0.f, 1.f),
             .vertexBufferAddr = vkGetBufferDeviceAddress(backend.device, &vertexAddressInfo),
-            .perModelDataBufferAddr = vkGetBufferDeviceAddress(backend.device, &perModelDataAddressInfo)
+            .perModelDataBufferAddr = vkGetBufferDeviceAddress(backend.device, &perModelDataAddressInfo),
+            .shadowData = vkGetBufferDeviceAddress(backend.device, &shadowDataAddressInfo),
+            .shadowMapIndex = scene.images.size()
         };
         // vkCmdPushConstants(cmd, p.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
         vkCmdPushConstants(cmd, p.pipeline->pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(PushConstants), &pushConstants);

@@ -37,12 +37,22 @@ layout(buffer_reference, std430) readonly buffer ModelDataBuffer
 	ModelData data[];
 };
 
+layout(buffer_reference, std430) readonly buffer ShadowPassData
+{ 
+	mat4 lightViewProj[4];
+	mat4 invLightViewProj[4];
+	float cascadeDistances[4];
+	int cascadeCount;
+};
+
 layout(push_constant) uniform Constants
 {	
     mat4 model;
     vec4 color;
 	VertexBuffer vertexBuffer;
 	ModelDataBuffer modelData;
+	ShadowPassData shadowData;
+	int shadowMapIndex;
 } constants;
 
 
@@ -50,11 +60,47 @@ layout (location = 2) in vec3 normal;
 layout (location = 3) in vec4 color;
 layout (location = 4) in vec2 uv;
 layout (location = 5) in flat int index;
+layout (location = 6) in vec3 viewPos;
+layout (location = 7) in vec3 pos;
 
 layout (location = 0) out vec4 outColor;
 
+const mat4 biasMat = mat4( 
+	0.5, 0.0, 0.0, 0.0,
+	0.0, 0.5, 0.0, 0.0,
+	0.0, 0.0, 1.0, 0.0,
+	0.5, 0.5, 0.0, 1.0 
+);
+
+float textureProj(vec4 shadowCoord, vec2 offset, uint cascadeIndex)
+{
+	float shadow = 1.f;
+	float bias = 0.005;
+
+	if ( shadowCoord.z > -1.0 && shadowCoord.z < 1.0 ) {
+		vec2 uv = shadowCoord.st * vec2(0.25, 1.f) + vec2(0.25 * cascadeIndex, 0.0f);
+		float dist = texture(textures[constants.shadowMapIndex], uv).r;
+		if (shadowCoord.w > 0 && dist < shadowCoord.z - bias) {
+			shadow = .15f;
+		}
+	}
+	return shadow;
+}
+
 void main()
 {
+	uint cascadeIndex = 0;
+	for(uint i = 0; i < 3; ++i) {
+		if(viewPos.z < constants.shadowData.cascadeDistances[i]) {	
+			cascadeIndex = i + 1;
+		}
+	}
+	// uint cascadeIndex = 0;
+
+	vec4 shadowCoord = (biasMat * constants.shadowData.lightViewProj[cascadeIndex]) * vec4(pos, 1.0);	
+	// float shadow = textureProj(shadowCoord / shadowCoord.w, vec2(0.0), cascadeIndex);
+	float shadow = textureProj(shadowCoord / shadowCoord.w, vec2(0.0), cascadeIndex);
+		
     // outColor = vec4(1.0, 0.0, 0.0, 1.0);
     const vec3 lightDir = normalize(vec3(1.f, -1.f, 1.f));
 
@@ -70,7 +116,27 @@ void main()
     // int index = constants.modelData.data[index].albedo;
     // int albedoIndex = int(constants.modelData.data[index].textures.x);
     c = texture(textures[index], uv).rgb;
-    outColor = vec4(c * lightLevel, color.w);
+    outColor = vec4(c * lightLevel * shadow, color.w);
+    // outColor = vec4(c * lightLevel, color.w);
+
+    if (constants.color.r > 0.0)
+    {
+	    switch(cascadeIndex) 
+		{
+			case 0 : 
+				outColor.rgb *= vec3(1.0f, 0.25f, 0.25f);
+				break;
+			case 1 : 
+				outColor.rgb *= vec3(0.25f, 1.0f, 0.25f);
+				break;
+			case 2 : 
+				outColor.rgb *= vec3(0.25f, 0.25f, 1.0f);
+				break;
+			case 3 : 
+				outColor.rgb *= vec3(1.0f, 1.0f, 0.25f);
+				break;
+		}
+	}
      // outColor = vec4(normal * 0.5 + 0.5, 1.0);
      // outColor = vec4(vec3(normal.y / 20.f), 1.0);
 }

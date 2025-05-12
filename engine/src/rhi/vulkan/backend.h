@@ -38,6 +38,8 @@ struct PushConstants
     glm::vec4 color;
     VkDeviceAddress vertexBufferAddr;  
     VkDeviceAddress perModelDataBufferAddr;
+    VkDeviceAddress shadowData;
+    int shadowMapIndex;
 };
 
 // TEMP(savas): temporary solution for quick drawing of meshes

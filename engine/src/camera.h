@@ -8,11 +8,11 @@ struct Camera
 {
     float verticalFov = M_PI / 4;
 
-    float moveSpeed = 1.f;
+    float moveSpeed = 200.f;
     float rotationSpeed = 0.002f;
 
     float nearClippingPlaneDist = 0.1f;
-    float farClippingPlaneDist = 100000.f;
+    float farClippingPlaneDist = 10000.f;
 
     float aspectRatio = 16.f / 9.f;
 

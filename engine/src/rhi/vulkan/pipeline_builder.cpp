@@ -155,6 +155,13 @@ PipelineBuilder& PipelineBuilder::disableDepthTest()
     return *this;
 }
 
+PipelineBuilder& PipelineBuilder::setDepthClamp(bool enable)
+{
+    rasterizer.depthClampEnable = enable;
+
+    return *this;
+}
+
 VkPipeline PipelineBuilder::build(VkDevice device, VkPipelineLayout layout)
 {
     VkPipelineViewportStateCreateInfo viewportState = {};

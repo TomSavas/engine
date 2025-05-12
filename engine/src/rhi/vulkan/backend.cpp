@@ -114,6 +114,7 @@ void VulkanBackend::initVulkan()
     features.geometryShader = true;
     features.multiDrawIndirect = true;
     features.drawIndirectFirstInstance = true;
+    features.depthClamp = true;
 
     vkb::PhysicalDeviceSelector selector { vkbInstance };
     vkb::PhysicalDevice physicalDevice = selector
