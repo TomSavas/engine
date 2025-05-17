@@ -36,5 +36,6 @@ struct Scene
     Scene(std::string name) : name(name), activeCamera(&mainCamera) {}
 
     void update(float dt, float currentTimeMs, GLFWwindow* window);
-    void addMeshes(tinygltf::Model& model);
+    void load(const char* path);
+    void addMeshes(tinygltf::Model& model, glm::vec3 offset = glm::vec3(0.f));
 };

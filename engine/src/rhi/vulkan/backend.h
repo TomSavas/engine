@@ -28,6 +28,11 @@ struct FrameData
     VkSemaphore renderSem;
     VkFence renderFence;
 
+    VkFence tracyRenderFence;
+    VkCommandPool tracyCmdPool;
+    VkCommandBuffer tracyCmdBuffer;
+    TracyVkCtx tracyCtx;
+
     VkCommandPool cmdPool;
     VkCommandBuffer cmdBuffer;
 };
@@ -54,8 +59,19 @@ class GLFWwindow;
 class Scene;
 class Mesh;
 
+class VulkanBackend;
+std::optional<VulkanBackend> initVulkanBackend();
+
+struct Frame 
+{
+    uint64_t startedAt;
+    uint64_t frameIndex;
+};
+
 struct VulkanBackend 
 {
+    VulkanBackend() {}
+    
     VulkanBackend(GLFWwindow* window);
     // TODO: init?
     void deinit();
@@ -64,6 +80,10 @@ struct VulkanBackend
     void draw(Scene& scene);
 
     FrameData& currentFrame();
+
+    Frame newFrame() { return Frame{}; }
+    void endFrame(Frame) {}
+    bool shutdownRequested = false;
 
     GLFWwindow* window;
 
@@ -98,20 +118,6 @@ struct VulkanBackend
     AllocatedImage backbufferImage;
     AllocatedImage depthImage;
 
-    // TEMP: concrete compute pipeline we for test render
-    VkPipelineLayout pipelineLayout;
-    VkPipeline pipeline;
-
-    VkPipelineLayout trianglePipelineLayout;
-    VkPipeline trianglePipeline;
-
-    VkPipelineLayout infGridPipelineLayout;
-    VkPipeline infGridPipeline;
-
-    VkPipelineLayout meshPipelineLayout;
-    VkPipeline meshPipeline;
-    VkPipeline noDepthMeshPipeline;
-
     // Frames
     static constexpr int MaxFramesInFlight = 2;
     FrameData frames[MaxFramesInFlight];
@@ -134,9 +140,6 @@ struct VulkanBackend
 
     // Profiler
     TracyVkCtx tracyCtx;
-    VkCommandPool tracyCmdPool;
-    VkCommandBuffer tracyCmdBuffer;
-    VkFence tracyRenderFence;
 
     // Debug
     Stats       stats;

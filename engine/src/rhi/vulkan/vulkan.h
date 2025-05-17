@@ -2,7 +2,7 @@
 
 #include "engine.h"
 
-#define ZoneScopedCpuGpuAuto(name) ZoneScopedCpuGpu(tracyCtx, tracyCmdBuffer, name)
+#define ZoneScopedCpuGpuAuto(name) ZoneScopedCpuGpu(currentFrame().tracyCtx, currentFrame().tracyCmdBuffer, name)
 #define ZoneScopedCpuGpu(ctx, cmd, name) \
 do                                       \
 {                                        \
@@ -10,7 +10,7 @@ do                                       \
     TracyVkZone(ctx, cmd, name " GPU")   \
 } while (0)
 
-#define ZoneScopedCpuGpuAutoStr(name) ZoneScopedCpuGpuStr(tracyCtx, tracyCmdBuffer, name)
+#define ZoneScopedCpuGpuAutoStr(name) ZoneScopedCpuGpuStr(currentFrame().tracyCtx, currentFrame().tracyCmdBuffer, name)
 #define ZoneScopedCpuGpuStr(ctx, cmd, name) \
 do                                         \
 {                                          \

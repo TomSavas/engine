@@ -28,6 +28,23 @@
 
 #include <cmath>
 
+std::optional<VulkanBackend> initVulkanBackend()
+{
+    if (!glfwInit()) {
+        std::println("Failed initing GLFW");
+        return {};
+    }
+
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+    GLFWwindow* window = glfwCreateWindow(1920, 1080, "Engine", NULL, NULL);
+
+    VulkanBackend backend(window);
+    backend.registerCallbacks();
+
+    return backend;
+}
+
 VulkanBackend::VulkanBackend(GLFWwindow* window) : 
     window(window)
 {
@@ -53,8 +70,6 @@ VulkanBackend::VulkanBackend(GLFWwindow* window) :
     initVulkan();
     initSwapchain();
     initCommandBuffers();
-    //initDefaultRenderpass();
-    //initFramebuffers();
     initSyncStructs();
     initDescriptors();
     initPipelines();
@@ -268,26 +283,6 @@ void VulkanBackend::initCommandBuffers()
     //});
 }
 
-//void VulkanBackend::initFramebuffers()
-//{
-//    VkFramebufferCreateInfo fbInfo = {};
-//    fbInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-//    fbInfo.pNext = nullptr;
-//    fbInfo.renderPass = defaultRenderpass;
-//    fbInfo.attachmentCount = 1;
-//    fbInfo.width = viewport.width;
-//    fbInfo.height = viewport.height;
-//    fbInfo.layers = 1;
-//
-//    const uint32_t swapchainImageCount = swapchainImages.size();
-//    framebuffers = std::vector<VkFramebuffer(swapchainImageCount);
-//
-//    for (uint32_t i = 0; i < swapchainImageCount; ++i) 
-//    {
-//        VkImageView attachments[] = { swapchainImageViews[i], depthImageView };
-//    }
-//}
-
 void VulkanBackend::initSyncStructs()
 {
     // We want to create the fence with the Create Signaled flag, so we can wait on it before using it on a GPU command (for the first frame)
@@ -356,15 +351,6 @@ void VulkanBackend::initDescriptors()
         auto bufInfo = vkutil::init::bufferCreateInfo(sizeof(SceneUniforms), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
         sceneUniformBuffer = allocateBuffer(bufInfo, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
             VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-        // auto bufInfo = vkutil::init::bufferCreateInfo(sizeof(SceneUniforms), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-
-        // VmaAllocationCreateInfo allocInfo = {};
-        // // TODO: probably want this in tracy and on various debug tools in imgui
-        // allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-        // allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
-        // allocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-        // VK_CHECK(vmaCreateBuffer(allocator, &bufInfo, &allocInfo, &sceneUniformBuffer.buffer, &sceneUniformBuffer.allocation, nullptr));
     }
     {
         DescriptorSetLayoutBuilder builder;
@@ -422,114 +408,6 @@ void VulkanBackend::initDescriptors()
 void VulkanBackend::initPipelines()
 {
     ZoneScopedN("Build pipelines");
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkutil::init::layoutCreateInfo(&drawDescriptorSetLayout, 1);
-    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
-
-    std::optional<ShaderModule*> shaderModule = shaderModuleCache.loadModule(device, SHADER_PATH("gradient.comp.glsl"));
-    if (!shaderModule)
-    {
-        std::println("Error initialising pipeline!");
-        return;
-    }
-
-    VkPipelineShaderStageCreateInfo pipelineShaderStageInfo = vkutil::init::shaderStageCreateInfo(VK_SHADER_STAGE_COMPUTE_BIT, (*shaderModule)->module);
-    VkComputePipelineCreateInfo pipelineCreateInfo = vkutil::init::computePipelineCreateInfo(pipelineLayout, pipelineShaderStageInfo);
-    VK_CHECK(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &pipeline));
-
-    // TEMP(savas): triangle pipeline
-    pipelineLayoutInfo = vkutil::init::layoutCreateInfo(&sceneDescriptorSetLayout, 1);
-    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &trianglePipelineLayout));
-
-    std::optional<ShaderModule*> vertexShader = shaderModuleCache.loadModule(device, SHADER_PATH("colored_triangle.vert.glsl"));
-    std::optional<ShaderModule*> fragmentShader = shaderModuleCache.loadModule(device, SHADER_PATH("colored_triangle.frag.glsl"));
-    if (!vertexShader || !fragmentShader)
-    {
-        std::println("Error loading shaders");
-        return;
-    }
-
-    trianglePipeline = PipelineBuilder()
-        .shaders((*vertexShader)->module, (*fragmentShader)->module)
-        .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-        .polyMode(VK_POLYGON_MODE_FILL)
-        .cullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
-        .disableMultisampling()
-        .disableBlending()
-        .disableDepthTest()
-        .colorAttachmentFormat(backbufferImage.format)
-        .enableDepthTest(false, VK_COMPARE_OP_NEVER)
-        .depthFormat(depthImage.format)
-        .build(device, trianglePipelineLayout);
-
-    // TEMP(savas): inf grid pipeline
-    pipelineLayoutInfo = vkutil::init::layoutCreateInfo(&sceneDescriptorSetLayout, 1);
-    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &infGridPipelineLayout));
-
-    vertexShader = shaderModuleCache.loadModule(device, SHADER_PATH("inf_grid.vert.glsl"));
-    fragmentShader = shaderModuleCache.loadModule(device, SHADER_PATH("inf_grid.frag.glsl"));
-    if (!vertexShader || !fragmentShader)
-    {
-        std::println("Error loading infinite grid shaders");
-        return;
-    }
-
-    infGridPipeline = PipelineBuilder()
-        .shaders((*vertexShader)->module, (*fragmentShader)->module)
-        .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-        .polyMode(VK_POLYGON_MODE_FILL)
-        .cullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
-        .disableMultisampling()
-        .enableAlphaBlending()
-        .disableDepthTest()
-        .colorAttachmentFormat(backbufferImage.format)
-        .enableDepthTest(false, VK_COMPARE_OP_NEVER)
-        .depthFormat(depthImage.format)
-        .build(device, infGridPipelineLayout);
-
-    VkPushConstantRange meshPushConstantRange = vkutil::init::pushConstantRange(VK_SHADER_STAGE_VERTEX_BIT, sizeof(PushConstants));
-    pipelineLayoutInfo = vkutil::init::layoutCreateInfo(&sceneDescriptorSetLayout, 1, &meshPushConstantRange, 1);
-    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &meshPipelineLayout));
-
-    vertexShader = shaderModuleCache.loadModule(device, SHADER_PATH("mesh.vert.glsl"));
-    fragmentShader = shaderModuleCache.loadModule(device, SHADER_PATH("mesh.frag.glsl"));
-    std::optional<ShaderModule*> geometryShader = shaderModuleCache.loadModule(device, SHADER_PATH("mesh.geom.glsl"));
-    if (!vertexShader || !fragmentShader || !geometryShader)
-    {
-        std::println("Error loading infinite grid shaders");
-        return;
-    }
-
-    // meshPipeline = PipelineBuilder()
-    //     .shaders((*vertexShader)->module, (*geometryShader)->module, (*fragmentShader)->module)
-    //     // .shaders((*vertexShader)->module, (*fragmentShader)->module)
-    //     .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-    //     // .polyMode(VK_POLYGON_MODE_LINE)
-    //     .polyMode(VK_POLYGON_MODE_FILL)
-    //     // TODO(savas): uncomment once we get this working without culling
-    //     // .cullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE)
-    //     .cullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
-    //     .disableMultisampling()
-    //     .enableAlphaBlending()
-    //     .colorAttachmentFormat(backbufferImage.format)
-    //     .depthFormat(depthImage.format)
-    //     .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
-    //     .build(device, meshPipelineLayout);
-
-    // noDepthMeshPipeline = PipelineBuilder()
-    //     .shaders((*vertexShader)->module, (*geometryShader)->module, (*fragmentShader)->module)
-    //     // .shaders((*vertexShader)->module, (*fragmentShader)->module)
-    //     .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-    //     // .polyMode(VK_POLYGON_MODE_LINE)
-    //     .polyMode(VK_POLYGON_MODE_FILL)
-    //     // TODO(savas): uncomment once we get this working without culling
-    //     .cullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE)
-    //     // .cullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
-    //     .disableMultisampling()
-    //     .enableAlphaBlending()
-    //     .colorAttachmentFormat(backbufferImage.format)
-    //     .depthFormat(depthImage.format)
-    //     .enableDepthTest(false, VK_COMPARE_OP_ALWAYS)
-    //     .build(device, meshPipelineLayout);
 }
 
 void VulkanBackend::initImgui()
@@ -593,15 +471,19 @@ void VulkanBackend::initImgui()
 void VulkanBackend::initProfiler()
 {
     auto commandPoolInfo = vkutil::init::commandPoolCreateInfo(graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-    VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &tracyCmdPool));
-    auto cmdAllocInfo = vkutil::init::commandBufferAllocateInfo(1, VK_COMMAND_BUFFER_LEVEL_PRIMARY, tracyCmdPool);
-    VK_CHECK(vkAllocateCommandBuffers(device, &cmdAllocInfo, &tracyCmdBuffer));
+    auto fenceCreateInfo = vkutil::init::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
+    for (int i = 0; i < MaxFramesInFlight; i++) {
+        VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &frames[i].tracyCmdPool));
 
-    auto fenceInfo = vkutil::init::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
-    VK_CHECK(vkCreateFence(device, &fenceInfo, nullptr, &tracyRenderFence));
+        auto cmdAllocInfo = vkutil::init::commandBufferAllocateInfo(1, VK_COMMAND_BUFFER_LEVEL_PRIMARY, frames[i].tracyCmdPool);
+        VK_CHECK(vkAllocateCommandBuffers(device, &cmdAllocInfo, &frames[i].tracyCmdBuffer));
 
-    // TODO(savas): change to calibrated context
-    tracyCtx = TracyVkContext(gpu, device, graphicsQueue, tracyCmdBuffer);
+        VK_CHECK(vkCreateFence(device, &fenceCreateInfo, nullptr, &frames[i].tracyRenderFence));
+
+        // TODO(savas): change to calibrated context
+        // frames[i].tracyCtx = TracyVkContext(gpu, device, graphicsQueue, frames[i].tracyCmdBuffer);
+        frames[i].tracyCtx = TracyVkContextCalibrated(instance, gpu, device, graphicsQueue, frames[i].tracyCmdBuffer, vkbInstance.fp_vkGetInstanceProcAddr, vkbInstance.fp_vkGetDeviceProcAddr);
+    }
 }
 
 FrameData& VulkanBackend::currentFrame()
@@ -634,12 +516,12 @@ void VulkanBackend::draw(Scene& scene)
     {
         ZoneScopedN("Sync Tracy");
 
-        VK_CHECK(vkWaitForFences(device, 1, &tracyRenderFence, true, timeoutNs));
-        VK_CHECK(vkResetFences(device, 1, &tracyRenderFence));
+        VK_CHECK(vkWaitForFences(device, 1, &frame.tracyRenderFence, true, timeoutNs));
+        VK_CHECK(vkResetFences(device, 1, &frame.tracyRenderFence));
         {
-            VK_CHECK(vkResetCommandBuffer(tracyCmdBuffer, 0));
+            VK_CHECK(vkResetCommandBuffer(frame.tracyCmdBuffer, 0));
             auto cmdBeginInfo = vkutil::init::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-            VK_CHECK(vkBeginCommandBuffer(tracyCmdBuffer, &cmdBeginInfo));
+            VK_CHECK(vkBeginCommandBuffer(frame.tracyCmdBuffer, &cmdBeginInfo));
         }
     }
 
@@ -655,54 +537,10 @@ void VulkanBackend::draw(Scene& scene)
             
             vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
             vkutil::image::transitionImage(cmd, depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+            vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         }
 
-        {
-            ZoneScopedCpuGpuAuto("Clear");
-
-            VkClearColorValue clearColor = { { 0.f, 0.f, 0.f, 0.f } };
-            VkImageSubresourceRange range = vkutil::init::imageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT);
-            vkCmdClearColorImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_GENERAL, &clearColor, 1, &range);
-        }        
-
-        {
-            ZoneScopedCpuGpuAuto("Compute gradient");
-
-            // vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-
-            // vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &drawDescriptorSet, 0, nullptr);
-            // vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
-            // vkCmdDispatch(cmd, std::ceil(viewport.width / 16.f), std::ceil(viewport.height / 16.f), 1);
-        }        
-
-        vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
         VkExtent2D swapchainSize { static_cast<uint32_t>(viewport.width), static_cast<uint32_t>(viewport.height) };
-        // {
-        //     ZoneScopedCpuGpuAuto("Render triangle");
-
-
-        //     VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        //     VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, nullptr);
-
-        //     VkViewport viewport = {};
-        //     viewport.width = swapchainSize.width;
-        //     viewport.height = swapchainSize.height;
-        //     viewport.maxDepth = 1.f;
-
-        //     VkRect2D scissor = {};
-        //     scissor.extent = swapchainSize;
-
-        //     vkCmdBeginRendering(cmd, &renderingInfo);
-
-        //     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, trianglePipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
-        //     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, trianglePipeline);
-        //     vkCmdSetViewport(cmd, 0, 1, &viewport);
-        //     vkCmdSetScissor(cmd, 0, 1, &scissor);
-        //     vkCmdDraw(cmd, 3, 1, 0, 0);
-
-        //     vkCmdEndRendering(cmd);
-        // }
 
         // Update scene descriptor set
         {
@@ -730,18 +568,10 @@ void VulkanBackend::draw(Scene& scene)
             // Get the attachments from rendergraph
             if (pass.pipeline) 
             {
-                // VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-                // VkRenderingAttachmentInfo depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(depthImage.view);
-                // VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, &depthAttachmentInfo);
-
-                // vkCmdBeginRendering(cmd, pass.renderingInfo());
                 vkCmdBeginRendering(cmd, &pass.renderingInfo);
 
                 vkCmdBindPipeline(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipeline);
 
-                // TODO: support dynamic offsets
-                // const VkDescriptorSet* descriptorSets = pass.descriptorSets.data();
-                // vkCmdBindDescriptorSets(cmd, pass.pipelineBindPoint, pass.pipelineLayout, 0, pass.descriptorSets.size(), descriptorSets, 0, nullptr);
                 if (pass.debugName == "base pass")
                 {
                     vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
@@ -761,176 +591,10 @@ void VulkanBackend::draw(Scene& scene)
             }
         }
 
-        // {
-        //     ZoneScopedCpuGpuAuto("Render inf plane");
-
-        //     VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        //     VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, nullptr);
-
-        //     VkViewport viewport = {};
-        //     viewport.width = swapchainSize.width;
-        //     viewport.height = swapchainSize.height;
-        //     viewport.maxDepth = 1.f;
-
-        //     VkRect2D scissor = {};
-        //     scissor.extent = swapchainSize;
-
-        //     // sceneUniforms.view = glm::mat4(1.0);
-        //     // //sceneUniforms.projection = glm::perspectiveFov<float>(M_PI / 4.f, backbufferImage.extent.width, backbufferImage.extent.height, 0.1f, 100000.f);
-        //     // sceneUniforms.projection = glm::mat4(1.0);
-        //     // {
-        //     //     ZoneScopedCpuGpuAuto("Memcpy SceneUniforms to GPU");
-
-        //     //     // TODO(savas): fix recalculating this constantly
-        //     //     // sceneUniforms.view = glm::lookAt(scene.activeCamera.position,
-        //     //     //     scene.activeCamera.position + glm::vec3(toMat4(scene.activeCamera.rotation) * glm::vec4(0.f, 0.f, -1.f, 0.f)),
-        //     //     //     glm::vec3(toMat4(scene.activeCamera.rotation) * glm::vec4(0.f, 1.f, 0.f, 0.f)));
-        //     //     sceneUniforms.view = glm::inverse(glm::translate(glm::mat4(1.f), scene.activeCamera.position) * scene.activeCamera.rotation);
-        //     //     // TODO(savas): fix fov
-        //     //     sceneUniforms.projection = glm::perspectiveFov<float>(scene.activeCamera.verticalFov, backbufferImage.extent.width, backbufferImage.extent.height, scene.activeCamera.nearClippingPlaneDist, scene.activeCamera.farClippingPlaneDist);
-        //     //     // Fix Vulkan's weird "+y is down"
-        //     //     sceneUniforms.projection[1][1] *= -1.f;
-
-        //     //     uint8_t* dataOnGpu;
-        //     //     vmaMapMemory(allocator, sceneUniformBuffer.allocation, (void**)&dataOnGpu);
-        //     //     memcpy(dataOnGpu, &sceneUniforms, sizeof(sceneUniforms));
-        //     //     vmaUnmapMemory(allocator, sceneUniformBuffer.allocation);
-        //     // }
-
-        //     vkCmdBeginRendering(cmd, &renderingInfo);
-
-        //     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, infGridPipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
-        //     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, infGridPipeline);
-        //     // vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
-        //     vkCmdSetViewport(cmd, 0, 1, &viewport);
-        //     vkCmdSetScissor(cmd, 0, 1, &scissor);
-        //     vkCmdDraw(cmd, 6, 1, 0, 0);
-
-        //     vkCmdEndRendering(cmd);
-        // }
-
-        // for (auto& model : scene.models)
-        // std::vector<Model> models;
-        // models.insert(models.end(), scene.models.begin(), scene.models.end());
-        // if (scene.collisionModelsVisible)
-        // {
-        //     models.insert(models.end(), scene.collisionModels.begin(), scene.collisionModels.end());
-        // }
-
-        // VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        // VkRenderingAttachmentInfo depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(depthImage.view);
-        // VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, &depthAttachmentInfo);
-
-        // vkCmdBeginRendering(cmd, &renderingInfo);
-        // // NOTE(savas): I don't think I need to re-bind this. Because the descriptor set is the same as the one
-        // // from the inf grid pipeline above it should remain bound
-        // // vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, noDepthMeshPipeline);
-        // // for (auto& model : models)
-        // for (int i = 0; i < models.size(); ++i)
-        // {
-        //     if (i == 0)
-        //     {
-        //         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipeline);
-        //     }
-        //     else if (i == scene.models.size())
-        //     {
-        //         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, noDepthMeshPipeline);
-        //     }
-
-        //     Model& model = models[i];
-            
-        //     VkViewport viewport = {};
-        //     viewport.width = swapchainSize.width;
-        //     viewport.height = swapchainSize.height;
-        //     viewport.maxDepth = 1.f;
-
-        //     VkRect2D scissor = {};
-        //     scissor.extent = swapchainSize;
-
-        //     const uint32_t vertexBufferSize = model.mesh->vertices.size() * sizeof(decltype(model.mesh->vertices)::value_type);
-        //     const uint32_t indexBufferSize = model.mesh->indices.size() * sizeof(decltype(model.mesh->indices)::value_type);
-
-        //     if (gpuMeshBuffers.find(model.mesh) == gpuMeshBuffers.end()) 
-        //     {
-        //         GpuMeshBuffers buffers;
-        //         auto info = vkutil::init::bufferCreateInfo(vertexBufferSize,
-        //             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-        //         // buffers.vertexBuffer = allocateBuffer(allocator, info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-        //         //     VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-        //         buffers.vertexBuffer = allocateBuffer(allocator, info, VMA_MEMORY_USAGE_GPU_ONLY,
-        //             VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-        //         info = vkutil::init::bufferCreateInfo(indexBufferSize,
-        //             VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-        //         buffers.indexBuffer = allocateBuffer(allocator, info, VMA_MEMORY_USAGE_GPU_ONLY,
-        //             VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-        //         // buffers.indexBuffer = allocateBuffer(allocator, info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-        //         //     VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-        //         VkBufferDeviceAddressInfo deviceAdressInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffers.vertexBuffer.buffer };
-        //     	buffers.vertexBufferAddress = vkGetBufferDeviceAddress(device, &deviceAdressInfo);
-
-        //         gpuMeshBuffers[model.mesh] = buffers;
-        //     }
-        //     GpuMeshBuffers& gpuMeshBuffer = gpuMeshBuffers[model.mesh];
-
-        //     PushConstants pushConstants 
-        //     {
-        //         .model = glm::mat4(1.f), //SRT 
-        //         .color = glm::vec4(model.color, 1.f),
-        //         // .vertexBufferAddr = mesh.vertexBufferAddress,
-        //         .vertexBufferAddr = gpuMeshBuffer.vertexBufferAddress,
-        //     };
-
-        //     {
-        //         auto bufInfo = vkutil::init::bufferCreateInfo(vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-        //         AllocatedBuffer staging = allocateBuffer(allocator, bufInfo, VMA_MEMORY_USAGE_CPU_ONLY,
-        //             VMA_ALLOCATION_CREATE_MAPPED_BIT, 0);
-
-        //         //AllocatedBuffer staging = createBuffer(vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
-        //         void* data = staging.allocation->GetMappedData();
-
-        //         memcpy(data, model.mesh->vertices.data(), vertexBufferSize);
-        //         memcpy(static_cast<char*>(data) + vertexBufferSize, model.mesh->indices.data(), indexBufferSize);
-
-        //         immediateSubmit([&](VkCommandBuffer cmd) 
-        //             {
-        //                 VkBufferCopy vertexCopy 
-        //                 {
-        //                     .srcOffset = 0,
-        //                     .dstOffset = 0,
-        //                     .size = vertexBufferSize,
-        //                 };
-        //                 vkCmdCopyBuffer(cmd, staging.buffer, gpuMeshBuffer.vertexBuffer.buffer, 1, &vertexCopy);
-
-        //                 VkBufferCopy indexCopy
-        //                 {
-        //                     .srcOffset = vertexBufferSize,
-        //                     .dstOffset = 0,
-        //                     .size = indexBufferSize,
-        //                 };
-        //                 vkCmdCopyBuffer(cmd, staging.buffer, gpuMeshBuffer.indexBuffer.buffer, 1, &indexCopy);
-        //             });
-
-        //         //destroy_buffer(staging);
-        //     }
-
-        //     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, meshPipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
-        //     vkCmdPushConstants(cmd, meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
-        // 	vkCmdBindIndexBuffer(cmd, gpuMeshBuffer.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-
-        //     vkCmdSetViewport(cmd, 0, 1, &viewport);
-        //     vkCmdSetScissor(cmd, 0, 1, &scissor);
-
-        //     vkCmdDrawIndexed(cmd, model.mesh->indices.size(), 1, 0, 0, 0);
-
-        // }
-        // vkCmdEndRendering(cmd);
-
         VkExtent2D backbufferSize { backbufferImage.extent.width, backbufferImage.extent.height };
         {
             ZoneScopedCpuGpuAuto("Blit to swapchain");
             
-            //vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
             vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
             vkutil::image::transitionImage(cmd, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
             vkutil::image::blitImageToImage(cmd, backbufferImage.image, backbufferSize, swapchainImages[swapchainImageIndex], swapchainSize);
@@ -972,12 +636,12 @@ void VulkanBackend::draw(Scene& scene)
         VK_CHECK(vkQueuePresentKHR(graphicsQueue, &presentInfo));
     }
 
-    TracyVkCollect(tracyCtx, tracyCmdBuffer);
+    TracyVkCollect(frame.tracyCtx, frame.tracyCmdBuffer);
 
-    VK_CHECK(vkEndCommandBuffer(tracyCmdBuffer));
-    auto cmdInfo = vkutil::init::commandBufferSubmitInfo(tracyCmdBuffer);
+    VK_CHECK(vkEndCommandBuffer(frame.tracyCmdBuffer));
+    auto cmdInfo = vkutil::init::commandBufferSubmitInfo(frame.tracyCmdBuffer);
     auto submit = vkutil::init::submitInfo2(&cmdInfo, nullptr, nullptr);
-    VK_CHECK(vkQueueSubmit2(graphicsQueue, 1, &submit, tracyRenderFence));
+    VK_CHECK(vkQueueSubmit2(graphicsQueue, 1, &submit, frame.tracyRenderFence));
 
     FrameMark;
 

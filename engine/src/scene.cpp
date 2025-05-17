@@ -135,7 +135,25 @@ void Scene::update(float dt, float currentTimeMs, GLFWwindow* window)
     updateFreeCamera(dt, window, *activeCamera);
 }
 
-void Scene::addMeshes(tinygltf::Model& model)
+void Scene::load(const char* path)
+{
+    tinygltf::Model model;
+    tinygltf::TinyGLTF loader;
+    std::string err;
+    std::string warn;
+
+    const char* modelPath = "../assets/Sponza/Sponza.gltf"; 
+    bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, modelPath);
+    if (!ret) {
+        std::println("{}", err);
+        std::println("{}", warn);
+    } else {
+        std::println("Successfully loaded {}", modelPath);
+    }
+    addMeshes(model);
+}
+
+void Scene::addMeshes(tinygltf::Model& model, glm::vec3 offset)
 {
     // Matches Vertex definition
     const char* position = "POSITION";
@@ -190,6 +208,10 @@ void Scene::addMeshes(tinygltf::Model& model)
 
                     if (attribute == position) 
                     {
+                        vertex.pos[0] += offset.x;
+                        vertex.pos[1] += offset.y;
+                        vertex.pos[2] += offset.z;
+
                         m.aabbMin.x = std::min(m.aabbMin.x, vertex.pos[0]);
                         m.aabbMin.y = std::min(m.aabbMin.y, vertex.pos[1]);
                         m.aabbMin.z = std::min(m.aabbMin.z, vertex.pos[2]);

@@ -65,13 +65,20 @@ void basePass(VulkanBackend& backend, RenderGraph& graph, Scene& scene, Allocate
     // Here we should set up the resources in the rendergraph
     VkExtent2D swapchainSize { static_cast<uint32_t>(backend.viewport.width), static_cast<uint32_t>(backend.viewport.height) };
     VkRenderingAttachmentInfo* colorAttachmentInfo = new VkRenderingAttachmentInfo();
-    *colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backend.backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    VkClearValue colorClear = {
+       .color = {
+           .uint32 = {0, 0, 0, 0}
+       }
+    };
+    *colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backend.backbufferImage.view, &colorClear, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     VkRenderingAttachmentInfo* depthAttachmentInfo = new VkRenderingAttachmentInfo();
     *depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(backend.depthImage.view);
     pass.renderingInfo = vkutil::init::renderingInfo(swapchainSize, colorAttachmentInfo, 1, depthAttachmentInfo);
 
     BasePassData* basePassData = new BasePassData();
     pass.draw = [&, basePassData, culledDraws, shadowPassData](VkCommandBuffer cmd, RenderPass& p) {
+        TracyVkZone(backend.currentFrame().tracyCtx, backend.currentFrame().tracyCmdBuffer, "Base pass");
+
         if (!basePassData->initialized) 
         {
             basePassData->initialized = true;

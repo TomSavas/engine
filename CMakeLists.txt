@@ -47,6 +47,7 @@ target_link_libraries(${PROJECT} glm::glm)
 add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
 
 option ( TRACY_ON_DEMAND " " ON )
+add_compile_definitions(TRACY_VK_USE_SYMBOL_TABLE)
 add_subdirectory(lib/tracy)
 target_link_libraries(${PROJECT} Tracy::TracyClient)
 

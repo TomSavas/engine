@@ -168,6 +168,7 @@ GPUShadowPassData* shadowPass(VulkanBackend& backend, RenderGraph& graph, Scene&
     pass.renderingInfo = vkutil::init::renderingInfo({gpuData->shadowMap.extent.width, gpuData->shadowMap.extent.height}, nullptr, 0, depthAttachmentInfo);
 
     pass.draw = [&, internalData, gpuData, cascadeCount](VkCommandBuffer cmd, RenderPass& p) {
+        TracyVkZone(backend.currentFrame().tracyCtx, backend.currentFrame().tracyCmdBuffer, "CSM pass");
         // NOTE: temporarily duplicated between this and basepass
         if (!internalData->initialized) 
         {
