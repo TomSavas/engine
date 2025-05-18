@@ -7,6 +7,8 @@
 #include "rhi/vulkan/utils/buffer.h"
 #include "rhi/vulkan/utils/inits.h"
 
+#include "imgui.h"
+
 #include <vulkan/vulkan_core.h>
 #include <glm/gtx/transform.hpp>
 
@@ -299,18 +301,29 @@ void basePass(VulkanBackend& backend, RenderGraph& graph, Scene& scene, Allocate
             .buffer = shadowPassData->shadowMapData.buffer
         };
 
+        // static bool renderCascades = false;
+        // static bool released = true;
+        // if (glfwGetKey(backend.window, GLFW_KEY_Q) == GLFW_PRESS && released)
+        // {
+        //     released = false;
+        //     renderCascades = !renderCascades;
+        // }
+        // if (glfwGetKey(backend.window, GLFW_KEY_Q) == GLFW_RELEASE)
+        // {
+        //     released = true;
+        // }
+
+        static bool open = true;
         static bool renderCascades = false;
-        static bool released = true;
-        if (glfwGetKey(backend.window, GLFW_KEY_Q) == GLFW_PRESS && released)
+        if (ImGui::Begin("Render debug", &open))
         {
-            released = false;
-            renderCascades = !renderCascades;
+            if (ImGui::CollapsingHeader("Base pass"))
+            {
+                ImGui::Checkbox("Render cascades", &renderCascades);
+            }
         }
-        if (glfwGetKey(backend.window, GLFW_KEY_Q) == GLFW_RELEASE)
-        {
-            released = true;
-        }
-        
+        ImGui::End();
+
         PushConstants pushConstants 
         {
             .model = glm::mat4(1.f), //SRT 
@@ -320,7 +333,6 @@ void basePass(VulkanBackend& backend, RenderGraph& graph, Scene& scene, Allocate
             .shadowData = vkGetBufferDeviceAddress(backend.device, &shadowDataAddressInfo),
             .shadowMapIndex = scene.images.size()
         };
-        // vkCmdPushConstants(cmd, p.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
         vkCmdPushConstants(cmd, p.pipeline->pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(PushConstants), &pushConstants);
     	vkCmdBindIndexBuffer(cmd, basePassData->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 

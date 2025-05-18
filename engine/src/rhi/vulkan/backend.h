@@ -14,6 +14,7 @@
 #include "tracy/Tracy.hpp"
 #include "tracy/TracyVulkan.hpp"
 
+#include <chrono>
 #include <glm/glm.hpp>
 #include <functional>
 
@@ -64,8 +65,10 @@ std::optional<VulkanBackend> initVulkanBackend();
 
 struct Frame 
 {
-    uint64_t startedAt;
+    std::chrono::time_point<std::chrono::high_resolution_clock> startTime;
     uint64_t frameIndex;
+
+    
 };
 
 struct VulkanBackend 
@@ -81,8 +84,9 @@ struct VulkanBackend
 
     FrameData& currentFrame();
 
-    Frame newFrame() { return Frame{}; }
-    void endFrame(Frame) {}
+    Frame newFrame();
+    void endFrame(Frame);
+
     bool shutdownRequested = false;
 
     GLFWwindow* window;

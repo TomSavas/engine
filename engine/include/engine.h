@@ -15,3 +15,7 @@
 #else
     #define BREAKPOINT
 #endif // defined(DEBUG)
+
+class VulkanBackend;
+class Scene;
+void drawDebugUI(VulkanBackend& backend, Scene& scene, double dt);

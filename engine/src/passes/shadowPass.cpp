@@ -7,6 +7,8 @@
 #include "rhi/vulkan/utils/buffer.h"
 #include "rhi/vulkan/utils/inits.h"
 
+#include "imgui.h"
+
 #include <vulkan/vulkan_core.h>
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
@@ -50,9 +52,8 @@ std::array<glm::vec3, 8> frustumCornersInWorldSpace(glm::mat4 invViewProj)
 	return frustumCorners;
 }
 
-void csmLightViewProjMats(glm::mat4* viewProjMats, float* cascadeDistances, int cascadeCount, glm::mat4 view, glm::mat4 proj, glm::vec3 lightDir, float nearClip, float farClip)
+void csmLightViewProjMats(glm::mat4* viewProjMats, float* cascadeDistances, int cascadeCount, glm::mat4 view, glm::mat4 proj, glm::vec3 lightDir, float nearClip, float farClip, float cascadeSplitLambda)
 {
-    float cascadeSplitLambda = 0.8f;
 	float cascadeSplits[cascadeCount];
 
 	float clipRange = farClip - nearClip;
@@ -255,17 +256,23 @@ GPUShadowPassData* shadowPass(VulkanBackend& backend, RenderGraph& graph, Scene&
             .extent = VkExtent2D{shadowMapSize, shadowMapSize}
         };
 
-        // glm::mat4 lightViewProjMats[cascadeCount];
-        // csmLightViewProjMats(lightViewProjMats, cascadeCount, scene.mainCamera.view(), scene.mainCamera.proj(), scene.lightDir,
-        //     scene.mainCamera.nearClippingPlaneDist, scene.mainCamera.farClippingPlaneDist);
-
-        // // For use in basepass
-        // backend.copyBufferWithStaging((void*)lightViewProjMats, cascadeCount * sizeof(glm::mat4), data->lightViewProjMatrices.buffer);
+        static bool open = true;
+        static int cascadeCount = 4;
+        static float cascadeSplitLambda = 0.8f;
+        if (ImGui::Begin("Render debug", &open))
+        {
+            if (ImGui::CollapsingHeader("CSM shadows"))
+            {
+                ImGui::SliderInt("Cascade count", &cascadeCount, 4, 4);
+                ImGui::SliderFloat("Cascade split lambda", &cascadeSplitLambda, 0.001f, 2.f);
+            }
+        }
+        ImGui::End();
 
         ShadowPassData data;
         data.cascadeCount = cascadeCount;
         csmLightViewProjMats(data.lightViewProjMatrices, data.cascadeDistances, cascadeCount, scene.mainCamera.view(), scene.mainCamera.proj(), scene.lightDir,
-            scene.mainCamera.nearClippingPlaneDist, scene.mainCamera.farClippingPlaneDist);
+            scene.mainCamera.nearClippingPlaneDist, scene.mainCamera.farClippingPlaneDist, cascadeSplitLambda);
         for (int i = 0; i < cascadeCount; ++i)
         {
             data.invLightViewProjMatrices[i] = glm::inverse(data.lightViewProjMatrices[i]);

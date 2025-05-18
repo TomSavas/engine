@@ -26,6 +26,7 @@
 #include <glm/glm.hpp>
 #include <vulkan/vulkan_core.h>
 
+#include <chrono>
 #include <cmath>
 
 std::optional<VulkanBackend> initVulkanBackend()
@@ -43,6 +44,20 @@ std::optional<VulkanBackend> initVulkanBackend()
     backend.registerCallbacks();
 
     return backend;
+}
+
+Frame VulkanBackend::newFrame() 
+{
+    return Frame
+    {
+        .startTime = std::chrono::high_resolution_clock::now(),
+        .frameIndex = currentFrameNumber
+    };
+}
+
+void VulkanBackend::endFrame(Frame) 
+{
+    
 }
 
 VulkanBackend::VulkanBackend(GLFWwindow* window) : 
@@ -66,7 +81,6 @@ VulkanBackend::VulkanBackend(GLFWwindow* window) :
         static_cast<uint32_t>(viewport.height)
     };
 
-    // NOTE: commented out because not using renderpasses
     initVulkan();
     initSwapchain();
     initCommandBuffers();
@@ -80,6 +94,8 @@ VulkanBackend::VulkanBackend(GLFWwindow* window) :
 
 void VulkanBackend::deinit()
 {
+    glfwDestroyWindow(window);
+    glfwTerminate();
 }
 
 void VulkanBackend::registerCallbacks()
@@ -480,8 +496,6 @@ void VulkanBackend::initProfiler()
 
         VK_CHECK(vkCreateFence(device, &fenceCreateInfo, nullptr, &frames[i].tracyRenderFence));
 
-        // TODO(savas): change to calibrated context
-        // frames[i].tracyCtx = TracyVkContext(gpu, device, graphicsQueue, frames[i].tracyCmdBuffer);
         frames[i].tracyCtx = TracyVkContextCalibrated(instance, gpu, device, graphicsQueue, frames[i].tracyCmdBuffer, vkbInstance.fp_vkGetInstanceProcAddr, vkbInstance.fp_vkGetDeviceProcAddr);
     }
 }
@@ -558,12 +572,10 @@ void VulkanBackend::draw(Scene& scene)
         // TODO: this should be multithreaded
         for (RenderPass& pass : graph.renderpasses)
         {
-            // ZoneScopedCpuGpuAutoStr(pass.debugName);
             ZoneScoped;
             ZoneName(pass.debugName.c_str(), pass.debugName.size());
 
             // TODO: transition resources here
-            // pass.transitionResources();
 
             // Get the attachments from rendergraph
             if (pass.pipeline) 
@@ -602,6 +614,8 @@ void VulkanBackend::draw(Scene& scene)
 
         {
             ZoneScopedCpuGpuAuto("Render Imgui");
+
+            ImGui::Render();
 
             vkutil::image::transitionImage(cmd, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
@@ -644,8 +658,6 @@ void VulkanBackend::draw(Scene& scene)
     VK_CHECK(vkQueueSubmit2(graphicsQueue, 1, &submit, frame.tracyRenderFence));
 
     FrameMark;
-
-    //TracyVkDestroy(tracyCtx);
 
     currentFrameNumber++;
     stats.finishedFrameCount++;
@@ -737,4 +749,3 @@ AllocatedImage VulkanBackend::allocateImage(VkImageCreateInfo info, VmaMemoryUsa
 
     return image;
 }
-
