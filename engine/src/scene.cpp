@@ -142,14 +142,16 @@ void Scene::load(const char* path)
     std::string err;
     std::string warn;
 
-    const char* modelPath = "../assets/Sponza/Sponza.gltf"; 
-    bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, modelPath);
-    if (!ret) {
+    if (!loader.LoadASCIIFromFile(&model, &err, &warn, path))
+    {
         std::println("{}", err);
         std::println("{}", warn);
-    } else {
-        std::println("Successfully loaded {}", modelPath);
     }
+    else
+    {
+        std::println("Successfully loaded {}", path);
+    }
+
     addMeshes(model);
 }
 
@@ -256,6 +258,12 @@ void Scene::addMeshes(tinygltf::Model& model, glm::vec3 offset)
                 tinygltf::Image& albedoImg = model.images[albedo.source];
                 m.albedoTexture = images.size();
                 images.push_back(albedoImg);
+
+                // TODO: remove above
+                Texture t = backend.textures.loadRaw(albedoImg.image.data(), albedoImg.image.size(),
+                    albedoImg.width, albedoImg.height, true, false, albedoImg.name);
+                bindlessImages.push_back(backend.bindless.addTexture(t));
+                m.albedoTexture = bindlessImages.back();
             }
 
             tinygltf::NormalTextureInfo& normalTextureInfo = material.normalTexture;
@@ -267,6 +275,12 @@ void Scene::addMeshes(tinygltf::Model& model, glm::vec3 offset)
                 tinygltf::Image& normalImg = model.images[normal.source];
                 m.normalTexture = images.size();
                 images.push_back(normalImg);
+                
+                // TODO: remove above
+                Texture t = backend.textures.loadRaw(normalImg.image.data(), normalImg.image.size(),
+                    normalImg.width, normalImg.height, true, false, normalImg.name);
+                bindlessImages.push_back(backend.bindless.addTexture(t));
+                m.normalTexture = bindlessImages.back();
             }
         }
     }

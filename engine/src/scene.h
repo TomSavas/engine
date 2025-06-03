@@ -3,6 +3,7 @@
 #include "camera.h"
 #include "mesh.h"
 
+#include "rhi/vulkan/utils/bindless.h"
 #include "rhi/vulkan/utils/texture.h"
 
 #include "tiny_gltf.h"
@@ -14,6 +15,7 @@
 #include <string>
 
 class GLFWwindow;
+class RHIBackend;
 
 struct Scene 
 {
@@ -23,6 +25,8 @@ struct Scene
     Camera mainCamera;
     Camera debugCamera;
 
+    RHIBackend& backend;
+
     std::vector<Mesh> meshes;
     std::vector<Vertex> vertexData;
     std::vector<uint32_t> indices;
@@ -31,9 +35,11 @@ struct Scene
     std::vector<tinygltf::Image> images;
     glm::vec3 lightDir = glm::vec3(0.1, -1.0, 0.1);
 
+    std::vector<BindlessResources::Handle> bindlessImages;
+
     bool worldPaused = true;
 
-    Scene(std::string name) : name(name), activeCamera(&mainCamera) {}
+    Scene(std::string name, RHIBackend& backend) : name(name), backend(backend), activeCamera(&mainCamera) {}
 
     void update(float dt, float currentTimeMs, GLFWwindow* window);
     void load(const char* path);

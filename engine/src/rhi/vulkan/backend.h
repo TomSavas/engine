@@ -67,8 +67,6 @@ struct Frame
 {
     std::chrono::time_point<std::chrono::high_resolution_clock> startTime;
     uint64_t frameIndex;
-
-    
 };
 
 struct VulkanBackend 
@@ -88,6 +86,9 @@ struct VulkanBackend
     void endFrame(Frame);
 
     bool shutdownRequested = false;
+
+    Textures textures;
+    BindlessResources bindlessResources;
 
     GLFWwindow* window;
 
@@ -137,7 +138,7 @@ struct VulkanBackend
     VkDescriptorSetLayout drawDescriptorSetLayout;
 
     VkDescriptorSet bindlessTexDesc;
-    VkDescriptorSetLayout  bindlessTexDescLayout;
+    VkDescriptorSetLayout bindlessTexDescLayout;
 
     // Caches
     ShaderModuleCache shaderModuleCache;
@@ -174,3 +175,5 @@ private:
     void initImgui();
     void initProfiler();
 };
+
+using RHIBackend = VulkanBackend;

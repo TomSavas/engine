@@ -14,6 +14,13 @@
 
 #include "GLFW/glfw3.h"
 
+struct ForwardOpaqueRenderer
+{
+    Pipeline pipeline;
+};
+
+void opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRenderer, RHIBackend& backend, RenderGraph& graph);
+
 struct ModelData 
 {
     // int albedoTex;

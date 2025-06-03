@@ -549,7 +549,6 @@ VkRenderingAttachmentInfo renderingDepthAttachmentInfo(VkImageView view, VkImage
 
 VkRenderingInfo renderingInfo(VkExtent2D extent, VkRenderingAttachmentInfo* colorAttachments, int colorAttachmentCount, VkRenderingAttachmentInfo* depthAttachments)
 {
-    
     VkRenderingInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
     info.pNext = nullptr;

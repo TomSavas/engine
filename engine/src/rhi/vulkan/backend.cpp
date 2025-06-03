@@ -81,6 +81,8 @@ VulkanBackend::VulkanBackend(GLFWwindow* window) :
         static_cast<uint32_t>(viewport.height)
     };
 
+    bindlessResources = BindlessResources(textures);
+
     initVulkan();
     initSwapchain();
     initCommandBuffers();
@@ -580,7 +582,9 @@ void VulkanBackend::draw(Scene& scene)
             // Get the attachments from rendergraph
             if (pass.pipeline) 
             {
-                vkCmdBeginRendering(cmd, &pass.renderingInfo);
+                VkRenderingInfo renderingInfo = pass.renderingInfo();
+                vkCmdBeginRendering(cmd, &renderingInfo);
+                // vkCmdBeginRendering(cmd, &pass.renderingInfo);
 
                 vkCmdBindPipeline(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipeline);
 

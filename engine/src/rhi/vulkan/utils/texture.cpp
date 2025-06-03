@@ -1,0 +1,154 @@
+#include "rhi/vulkan/utils/texture.h"
+
+#include <string>
+
+std::optional<Texture> Textures::load(std::string path, bool generateMips, bool cache)
+{
+    auto cachedTexture = textureCache.find(path);
+    if (cachedTexture != textureCache.end())
+    {
+        return cachedTexture->second;
+    }
+    else
+    {
+        std::println("Loading new texture {}", path);
+    }
+
+    int width;
+    int height;
+    int channels;
+    stbi_uc* pixels = stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+
+    if (!pixels)
+    {
+		std::println("Failed to load texture file {}", path);
+        return std::optional{};
+    }
+
+	return loadRaw(pixels, width * height * channels * 1, width, height, generateMips, cache, path);
+}
+
+std::optional<std::tuple<Texture, std::string>> Textures::loadRaw(void* data, int size, int width, int height, bool generateMips, std::string name, bool cache)
+{
+    int mipCount = floor(log2((double)std::min(width, height))) + 1;
+
+    // TODO: different image formats depending on how many channels
+    VkDeviceSize imageSize = size; // 1 byte per channel
+    VkFormat imageFormat = VK_FORMAT_R8G8B8A8_SRGB; // TODO: wtf, fix
+
+    AllocatedBuffer cpuImageBuffer = backend.createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+    backend.uploadData((void*)pixels, imageSize, 0, cpuImageBuffer.allocation);
+
+    Texture texture;
+    texture.mipCount = mipCount;
+
+    texture.image.extent.width = width;
+    texture.image.extent.height = height;
+    texture.image.extent.depth = 1;
+
+    VkImageCreateInfo imgCreateInfo = imageCreateInfo(imageFormat,
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        texture.image.extent, mipCount);
+
+    VmaAllocationCreateInfo imgAllocInfo = {};
+    imgAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+    vmaCreateImage(backend.allocator, &imgCreateInfo, &imgAllocInfo, &texture.image.image,
+        &texture.image.allocation, nullptr);
+
+    backend.immediateBlockingSubmit([&](VkCommandBuffer cmd)
+    {
+        VkImageMemoryBarrier imageMemoryBarrierForTransfer = imageMemoryBarrier(VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, texture.image.image, 0, VK_ACCESS_TRANSFER_WRITE_BIT, mipCount);
+
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr,
+            0, nullptr, 1, &imageMemoryBarrierForTransfer);
+
+        VkBufferImageCopy copyRegion = {};
+        copyRegion.bufferOffset = 0;
+        copyRegion.bufferRowLength = 0;
+        copyRegion.bufferImageHeight = 0;
+
+        copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        copyRegion.imageSubresource.mipLevel = 0;
+        copyRegion.imageSubresource.baseArrayLayer = 0;
+        copyRegion.imageSubresource.layerCount = 1;
+        copyRegion.imageExtent = texture.image.extent;
+
+        vkCmdCopyBufferToImage(cmd, cpuImageBuffer.buffer, texture.image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+
+        // Mip generation
+        VkImageMemoryBarrier finalFormatTransitionBarrier = imageMemoryBarrier(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, texture.image.image, VK_ACCESS_TRANSFER_WRITE_BIT,
+            VK_ACCESS_SHADER_READ_BIT, 1);
+        VkImageMemoryBarrier mipIntermediateTransitionBarrier = imageMemoryBarrier(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, texture.image.image, VK_ACCESS_TRANSFER_WRITE_BIT,
+            VK_ACCESS_TRANSFER_READ_BIT, 1);
+        int32_t mipWidth = width;
+        int32_t mipHeight = height;
+        for (int i = 1; i < mipCount; ++i) {
+            int32_t lastMipWidth = mipWidth;
+            int32_t lastMipHeight = mipHeight;
+            mipWidth /= 2;
+            mipHeight /= 2;
+
+            // Transition the last mip to SRC_OPTIMAL
+            mipIntermediateTransitionBarrier.subresourceRange.baseMipLevel = i - 1;
+            vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &mipIntermediateTransitionBarrier);
+
+            // Blit last mip to downsized current one
+            VkImageBlit blit = imageBlit(i - 1, { lastMipWidth, lastMipHeight, 1 }, i, { mipWidth, mipHeight, 1 });
+            vkCmdBlitImage(cmd, texture.image.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    texture.image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    1, &blit, VK_FILTER_LINEAR);
+            
+            // Finally transition last mip to SHADER_READ_ONLY_OPTIMAL
+            finalFormatTransitionBarrier.subresourceRange.baseMipLevel = i - 1;
+            vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &finalFormatTransitionBarrier);
+        }
+
+        // Transition the highest mip directly to SHADER_READ_ONLY_OPTIMAL
+        finalFormatTransitionBarrier.subresourceRange.baseMipLevel = mipCount - 1;
+        finalFormatTransitionBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        finalFormatTransitionBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &finalFormatTransitionBarrier);
+    });
+
+    vmaDestroyBuffer(backend.allocator, cpuImageBuffer.buffer, cpuImageBuffer.allocation);
+
+    VkImageViewCreateInfo imageViewInfo = imageViewCreateInfo(VK_FORMAT_R8G8B8A8_SRGB, texture.image.image, VK_IMAGE_ASPECT_COLOR_BIT, mipCount);
+    vkCreateImageView(backend.device, &imageViewInfo, nullptr, &texture.view);
+
+    if (cache)
+    {
+	    if (name.empty())
+	    {
+	    	static int genTextureNameCounter = 0;
+	    	name = std::format("texture_{}", genTextureNameCounter);
+	    	genTextureNameCounter += 1;
+
+	    	std::println("Naming raw texture: {}", name);
+	    }
+
+	    textureCache[name] = texture;
+    }
+
+    return make_tuple(texture, name);
+}
+
+void Textures::unload(std::string name)
+{
+	if (!textureCache.contains(name))
+	{
+		return;
+	}
+
+	unloadRaw(textureCache[name]);
+	texture.erase(name);
+}
+
+void Textures::unloadRaw(Texture texture)
+{
+	vmaDestroyImage(backend.allocator, texture.image.image, texture.image.allocation);
+	vkDestroyImageView(backend.device, texture.view, nullptr);
+}

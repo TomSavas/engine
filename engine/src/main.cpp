@@ -40,24 +40,65 @@ void operator delete(void* ptr)
     std::free(ptr);
 }
 
-using RHIBackend = VulkanBackend;
-
 struct WorldRenderer
 {
     RHIBackend& backend;
-    
-    explicit WorldRenderer(RHIBackend& backend) : backend(backend) {}
-    
+    std::optional<CompiledRenderGraph> compiledRenderGraph;
+
+    std::optional<GeometryCulling> culling;
+    std::optional<ShadowRenderer> shadows;
+    std::optional<ForwardOpaqueRenderer> opaque;
+    // LightCulling lightCulling;
+
+    explicit WorldRenderer(RHIBackend& backend) : backend(backend)
+    {
+    }
+
+    void compileRenderGraph()
+    {
+        // NOTE: Instead of the usual per-frame recompilation of render graph, it's enought to make
+        // it once and reuse the cached compiled render graph. Once we get into more complicated
+        // rendering we can start thinking about recompiling it every frame.
+        RenderGraph graph;
+
+        const auto culledDraws = cpuFrustumCullingPass(culling, backend, graph);
+        // const auto zPrePassDepth = zPrePass(backend, graph, culling.culledDraws);
+        const auto shadowData = csmPass(shadows, backend, graph);
+        // auto lightCulling = tiledLightCullingPass(lightCulling, backend, graph);
+        // auto planarReflections = planarRsflectionPass(reflections, backend, graph);
+        const auto opaqueData = opaqueForwardPass(backend, graph, culledDraws.culledDraws,
+            shadowData.cascadeData, shadowData.shadowMap);
+        // bloomPass(backend, graph);
+        // reinhardTonemapPass(backend, graph);
+        // smaaPass(backend, graph);
+
+        // auto culledDraws = cullingPass(backend, graph);
+        // auto depthStencil = zPrePass(backend, backend.graph, scene);
+        // auto shadowData = shadowPass(backend, graph);
+        // basePass(backend, graph, culledDraws, shadowData);
+        // basePass(backend, graph, culledDraws.culledDraws, shadowData.cascadeData, shadowData.shadowMap);
+
+        compiledRenderGraph = compile(std::move(graph));
+    }
+
     void render(Frame& frame, Scene& scene, double dt)
     {
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        drawDebugUI(backend, scene, dt);
-        
         scene.update(0.0016f, 0.f, backend.window);
-        backend.draw(scene);
+
+        drawDebugUI(backend, scene, dt);
+
+        // NOTE: for now let's just directly pass in the graph and let the backend figure out what it
+        // wants to do. Generally we should transform compiledRenderGraph into a command buffer or a
+        // list of secondary command buffers.
+        // backend.recordCommandBuffer(compiledRenderGraph);
+        if (compiledRenderGraph)
+        {
+            backend.recordCommandBuffers(scene, compiledRenderGraph);
+        }
     }
 };
 
@@ -67,33 +108,21 @@ int main(void)
     // TODO: add multithreading solution: Main thread, GPU thread and worker threads. 
 
     // NOTE: extract RHIBackend as interface when implementing other backends
-    RHIBackend backend;
-    // TODO: convert this to result type
-    if (std::optional<RHIBackend> maybeBackend = initVulkanBackend())
-    {
-        backend = std::move(*maybeBackend);
-    }
-    else
+    std::optional<RHIBackend> maybeBackend = initVulkanBackend();
+    if (!maybeBackend)
     {
         std::println("Failed to initialize backend");
         return 0;
     }
+    RHIBackend backend = std::move(*maybeBackend);
 
     WorldRenderer worldRenderer = WorldRenderer(backend);
     RenderGraph renderGraph;
 
-    Scene scene = Scene("Sponza");
     // TODO: should be a task for IO threads
+    Scene scene = Scene("Sponza", backend);
     scene.load("../assets/Sponza/Sponza.gltf");
 
-    // TODO: constructors should not depend on the scene and should be done in WorldRenderer
-    {
-        auto culledDraws = cullingPass(backend, backend.graph, scene);
-        // auto depthStencil = zPrePass(backend, backend.graph, scene);
-        auto shadowData = shadowPass(backend, backend.graph, scene);
-        basePass(backend, backend.graph, scene, culledDraws, shadowData);
-    }
-    
     Frame lastFrame = backend.newFrame();
     backend.endFrame(lastFrame);
     while (!backend.shutdownRequested)
