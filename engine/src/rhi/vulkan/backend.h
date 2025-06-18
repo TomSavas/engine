@@ -5,6 +5,7 @@
 #include "rhi/vulkan/utils/bindless.h"
 #include "rhi/vulkan/utils/image.h"
 #include "rhi/vulkan/utils/texture.h"
+#include "rhi/vulkan/vulkan.h"
 #include "rhi/vulkan/descriptors.h"
 #include "rhi/vulkan/shader.h"
 #include "rhi/vulkan/renderpass.h"
@@ -12,9 +13,11 @@
 #include "VkBootstrap.h"
 #include "vk_mem_alloc.h"
 
+#include "tracy/Tracy.hpp"
 #include "tracy/TracyVulkan.hpp"
 
 #include <chrono>
+#include <glm/glm.hpp>
 #include <functional>
 
 struct Stats
