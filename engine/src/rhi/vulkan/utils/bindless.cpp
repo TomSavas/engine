@@ -34,7 +34,7 @@ BindlessResources::BindlessResources(VulkanBackend& backend) : backend(&backend)
     builder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, bindlessFlags, maxBindlessResourceCount);
     // TODO: Add more bindings for buffers, etc.
     bindlessTexDescLayout = builder.build(backend.device, VK_SHADER_STAGE_ALL, VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT);
-    bindlessTexDesc = backend.bindlessDescPoolAllocator.allocate(backend.device, bindlessTexDescLayout, &variableDescriptorCountAllocInfo);
+    bindlessTexDesc = bindlessDescPoolAllocator.allocate(backend.device, bindlessTexDescLayout, &variableDescriptorCountAllocInfo);
 
     // Default textures. No need to deallocate -- we need these to always exist
     addTexture(whiteTexture(backend, 1));

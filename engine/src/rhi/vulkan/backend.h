@@ -5,7 +5,6 @@
 #include "rhi/vulkan/utils/bindless.h"
 #include "rhi/vulkan/utils/image.h"
 #include "rhi/vulkan/utils/texture.h"
-#include "rhi/vulkan/vulkan.h"
 #include "rhi/vulkan/descriptors.h"
 #include "rhi/vulkan/shader.h"
 #include "rhi/vulkan/renderpass.h"
@@ -13,11 +12,9 @@
 #include "VkBootstrap.h"
 #include "vk_mem_alloc.h"
 
-#include "tracy/Tracy.hpp"
 #include "tracy/TracyVulkan.hpp"
 
 #include <chrono>
-#include <glm/glm.hpp>
 #include <functional>
 
 struct Stats
@@ -38,24 +35,6 @@ struct FrameData
 
     VkCommandPool cmdPool;
     VkCommandBuffer cmdBuffer;
-};
-
-// struct PushConstants
-// {
-//     glm::mat4 model;
-//     glm::vec4 color;
-//     VkDeviceAddress vertexBufferAddr;
-//     VkDeviceAddress perModelDataBufferAddr;
-//     VkDeviceAddress shadowData;
-//     int shadowMapIndex;
-// };
-
-// TEMP(savas): temporary solution for quick drawing of meshes
-struct GpuMeshBuffers 
-{
-    AllocatedBuffer vertexBuffer;
-    AllocatedBuffer indexBuffer;
-    VkDeviceAddress vertexBufferAddress;
 };
 
 class GLFWwindow;
@@ -80,9 +59,6 @@ struct VulkanBackend
     // TODO: init?
     void deinit();
 
-    void registerCallbacks();
-    void draw(Scene& scene);
-
     FrameData& currentFrame();
 
     Frame newFrame();
@@ -90,13 +66,9 @@ struct VulkanBackend
 
     bool shutdownRequested = false;
 
-    std::optional<Textures> textures;
-    std::optional<BindlessResources> bindlessResources;
-
     GLFWwindow* window;
 
     vkb::Instance vkbInstance;
-    // Vk
     VkInstance instance;
     VkDebugUtilsMessengerEXT debugMessenger;
 
@@ -122,9 +94,9 @@ struct VulkanBackend
     VkCommandPool immediateCmdPool;
     VkCommandBuffer immediateCmdBuffer;
 
-    // Image we actually render to
+    // Backbuffer
     AllocatedImage backbufferImage;
-    AllocatedImage depthImage;
+    AllocatedImage depthImage; // TODO: remove
 
     // Frames
     static constexpr int MaxFramesInFlight = 2;
@@ -135,13 +107,6 @@ struct VulkanBackend
     VmaAllocator allocator;
 
     DescriptorAllocator descriptorAllocator;
-    DescriptorAllocator bindlessDescPoolAllocator;
-    // TEMP: probably a better place for this?
-    VkDescriptorSet drawDescriptorSet;
-    VkDescriptorSetLayout drawDescriptorSetLayout;
-
-    VkDescriptorSet bindlessTexDesc;
-    VkDescriptorSetLayout bindlessTexDescLayout;
 
     // Caches
     ShaderModuleCache shaderModuleCache;
@@ -150,12 +115,11 @@ struct VulkanBackend
     TracyVkCtx tracyCtx;
 
     // Debug
-    Stats       stats;
+    Stats stats;
 
-    std::unordered_map<Mesh*, GpuMeshBuffers> gpuMeshBuffers;
-
-    //
-    // RenderGraph graph;
+    // Resources
+    std::optional<Textures> textures;
+    std::optional<BindlessResources> bindlessResources;
 
     VkDescriptorSetLayout sceneDescriptorSetLayout;
 
@@ -174,11 +138,8 @@ private:
     void initVulkan();
     void initSwapchain();
     void initCommandBuffers();
-    void initDefaultRenderpass();
-    void initFramebuffers();
     void initSyncStructs();
     void initDescriptors();
-    void initPipelines();
     void initImgui();
     void initProfiler();
 };

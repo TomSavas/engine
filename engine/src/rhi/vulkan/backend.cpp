@@ -43,7 +43,6 @@ std::optional<VulkanBackend*> initVulkanBackend()
     GLFWwindow* window = glfwCreateWindow(1920, 1080, "Engine", NULL, NULL);
 
     VulkanBackend* backend = new VulkanBackend(window);
-    backend->registerCallbacks();
 
     return backend;
 }
@@ -89,7 +88,6 @@ VulkanBackend::VulkanBackend(GLFWwindow* window) :
     initCommandBuffers();
     initSyncStructs();
     initDescriptors();
-    initPipelines();
     initImgui();
     
     initProfiler();
@@ -102,10 +100,6 @@ void VulkanBackend::deinit()
 {
     glfwDestroyWindow(window);
     glfwTerminate();
-}
-
-void VulkanBackend::registerCallbacks()
-{
 }
 
 void VulkanBackend::initVulkan()
@@ -358,18 +352,6 @@ void VulkanBackend::initDescriptors()
     };
     descriptorAllocator.init(device, 20, poolSizes);
 
-    // Allocating for the "draw" descriptor set
-    {
-        DescriptorSetLayoutBuilder builder;
-        builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-        drawDescriptorSetLayout = builder.build(device, VK_SHADER_STAGE_COMPUTE_BIT);
-        drawDescriptorSet = descriptorAllocator.allocate(device, drawDescriptorSetLayout);
-
-        VkDescriptorImageInfo descriptorImage = vkutil::init::descriptorImageInfo(VK_NULL_HANDLE, backbufferImage.view, VK_IMAGE_LAYOUT_GENERAL);
-        VkWriteDescriptorSet descriptorImageWrite = vkutil::init::writeDescriptorImage(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, drawDescriptorSet, &descriptorImage, 0);
-        vkUpdateDescriptorSets(device, 1, &descriptorImageWrite, 0, nullptr);
-    }
-
     {
         auto bufInfo = vkutil::init::bufferCreateInfo(sizeof(SceneUniforms), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
         sceneUniformBuffer = allocateBuffer(bufInfo, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
@@ -387,50 +369,6 @@ void VulkanBackend::initDescriptors()
 
         vkUpdateDescriptorSets(device, 1, &descriptorImageWrite, 0, nullptr);
     }
-
-    // Bindless descriptor set pool
-    const uint32_t maxBindlessResourceCount = 10000;
-    {
-        VkDescriptorPoolSize poolSizes[] = 
-        {
-            VkDescriptorPoolSize{.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = maxBindlessResourceCount },
-        };
-        bindlessDescPoolAllocator.init(device, maxBindlessResourceCount, poolSizes,
-                                        VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT);
-    }
-
-    // Bindless descriptor set
-    // {
-    //     const VkDescriptorBindingFlags bindlessFlags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
-    //                                              VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
-    //                                              VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
-    //
-    //     VkDescriptorSetVariableDescriptorCountAllocateInfo variableDescriptorCountAllocInfo =
-    //     {
-    //         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
-    //         .pNext = nullptr,
-    //         .descriptorSetCount = 1,
-    //         // TODO: This should be an actual array that actually depends on how many descriptors we have
-    //         // For now it's only textures tho.
-    //         .pDescriptorCounts = &maxBindlessResourceCount
-    //     };
-    //
-    //     DescriptorSetLayoutBuilder builder;
-    //     builder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, bindlessFlags, maxBindlessResourceCount);
-    //     // Add more bindings for buffers, etc.
-    //     bindlessTexDescLayout = builder.build(device, VK_SHADER_STAGE_ALL, VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT);
-    //     bindlessTexDesc = bindlessDescPoolAllocator.allocate(device, bindlessTexDescLayout, &variableDescriptorCountAllocInfo);
-    //
-    //     // VkDescriptorImageInfo descriptorImage = vkutil::init::descriptorImageInfo(VK_NULL_HANDLE, backbufferImage.view, VK_IMAGE_LAYOUT_GENERAL);
-    //     // VkWriteDescriptorSet descriptorImageWrite = vkutil::init::writeDescriptorImage(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, drawDescriptorSet, &descriptorImage, 0);
-    //     // vkUpdateDescriptorSets(device, 1, &descriptorImageWrite, 0, nullptr);
-    // }
-
-}
-
-void VulkanBackend::initPipelines()
-{
-    ZoneScopedN("Build pipelines");
 }
 
 void VulkanBackend::initImgui()
@@ -512,167 +450,6 @@ FrameData& VulkanBackend::currentFrame()
     return frames[currentFrameNumber % MaxFramesInFlight];
 }
 
-//void VulkanBackend::draw(Scene& scene)
-//{
-//    ZoneScoped;
-//    constexpr uint64_t timeoutNs = 100'000'000'000'000;
-//
-//    auto frame = currentFrame();
-//    auto cmd = frame.cmdBuffer;
-//
-//    uint32_t swapchainImageIndex;
-//    {
-//        ZoneScopedN("Sync CPU");
-//
-//        VK_CHECK(vkWaitForFences(device, 1, &frame.renderFence, true, timeoutNs));
-//        // TODO: move after swapchain regen... maybe?
-//
-//        VK_CHECK(vkAcquireNextImageKHR(device, swapchain, timeoutNs,
-//            frame.presentSem, nullptr, &swapchainImageIndex));
-//        // TODO: if swapchain regen requested process, reacquire index and continue
-//
-//        VK_CHECK(vkResetFences(device, 1, &frame.renderFence));
-//    }
-//
-//    {
-//        ZoneScopedN("Sync Tracy");
-//
-//        VK_CHECK(vkWaitForFences(device, 1, &frame.tracyRenderFence, true, timeoutNs));
-//        VK_CHECK(vkResetFences(device, 1, &frame.tracyRenderFence));
-//        {
-//            VK_CHECK(vkResetCommandBuffer(frame.tracyCmdBuffer, 0));
-//            auto cmdBeginInfo = vkutil::init::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-//            VK_CHECK(vkBeginCommandBuffer(frame.tracyCmdBuffer, &cmdBeginInfo));
-//        }
-//    }
-//
-//    {
-//        ZoneScopedCpuGpuAuto("Record");
-//
-//        VK_CHECK(vkResetCommandBuffer(cmd, 0));
-//        auto cmdBeginInfo = vkutil::init::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-//        VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
-//
-//        {
-//            ZoneScopedCpuGpuAuto("Transition resources");
-//
-//            vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-//            vkutil::image::transitionImage(cmd, depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-//            vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-//        }
-//
-//        VkExtent2D swapchainSize { static_cast<uint32_t>(viewport.width), static_cast<uint32_t>(viewport.height) };
-//
-//        // Update scene descriptor set
-//        {
-//            ZoneScopedCpuGpuAuto("Memcpy SceneUniforms to GPU");
-//
-//            sceneUniforms.view = scene.activeCamera->view();
-//            sceneUniforms.projection = scene.activeCamera->proj();
-//
-//            uint8_t* dataOnGpu;
-//            vmaMapMemory(allocator, sceneUniformBuffer.allocation, (void**)&dataOnGpu);
-//            memcpy(dataOnGpu, &sceneUniforms, sizeof(sceneUniforms));
-//            vmaUnmapMemory(allocator, sceneUniformBuffer.allocation);
-//        }
-//
-//        // !!!!!!!!!!!!!!!!!!! OLD RENDERGRAPH
-//        // TODO: this should be multithreaded
-//        // for (RenderPass& pass : graph.renderpasses)
-//        // {
-//        //     ZoneScoped;
-//        //     ZoneName(pass.debugName.c_str(), pass.debugName.size());
-//
-//        //     // TODO: transition resources here
-//
-//        //     // Get the attachments from rendergraph
-//        //     if (pass.pipeline)
-//        //     {
-//        //         VkRenderingInfo renderingInfo = pass.renderingInfo();
-//        //         vkCmdBeginRendering(cmd, &renderingInfo);
-//        //         // vkCmdBeginRendering(cmd, &pass.renderingInfo);
-//
-//        //         vkCmdBindPipeline(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipeline);
-//
-//        //         if (pass.debugName == "base pass")
-//        //         {
-//        //             vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
-//        //             vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1, &bindlessTexDesc, 0, nullptr);
-//        //         }
-//
-//        //         vkCmdSetViewport(cmd, 0, 1, &viewport);
-//        //         vkCmdSetScissor(cmd, 0, 1, &scissor);
-//
-//        //         pass.draw(cmd, pass);
-//
-//        //         vkCmdEndRendering(cmd);
-//        //     }
-//        //     else
-//        //     {
-//        //         pass.draw(cmd, pass);
-//        //     }
-//        // }
-//
-//        VkExtent2D backbufferSize { backbufferImage.extent.width, backbufferImage.extent.height };
-//        {
-//            ZoneScopedCpuGpuAuto("Blit to swapchain");
-//
-//            vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-//            vkutil::image::transitionImage(cmd, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-//            vkutil::image::blitImageToImage(cmd, backbufferImage.image, backbufferSize, swapchainImages[swapchainImageIndex], swapchainSize);
-//        }
-//
-//        {
-//            ZoneScopedCpuGpuAuto("Render Imgui");
-//
-//            ImGui::Render();
-//
-//            vkutil::image::transitionImage(cmd, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-//
-//            VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(swapchainImageViews[swapchainImageIndex], nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-//            VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, 1, nullptr);
-//
-//            vkCmdBeginRendering(cmd, &renderingInfo);
-//            ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
-//            vkCmdEndRendering(cmd);
-//        }
-//
-//        vkutil::image::transitionImage(cmd, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
-//
-//        VK_CHECK(vkEndCommandBuffer(cmd));
-//    }
-//
-//    {
-//        ZoneScopedCpuGpuAuto("Submit");
-//
-//        auto cmdInfo = vkutil::init::commandBufferSubmitInfo(cmd);
-//        auto waitInfo = vkutil::init::semaphoreSubmitInfo(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR, frame.presentSem);
-//        auto signalInfo = vkutil::init::semaphoreSubmitInfo(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, frame.renderSem);
-//        auto submit = vkutil::init::submitInfo2(&cmdInfo, &waitInfo, &signalInfo);
-//
-//        VK_CHECK(vkQueueSubmit2(graphicsQueue, 1, &submit, frame.renderFence));
-//    }
-//
-//    {
-//        ZoneScopedCpuGpuAuto("Present");
-//
-//        auto presentInfo = vkutil::init::presentInfo(&swapchain, &frame.renderSem, &swapchainImageIndex);
-//        VK_CHECK(vkQueuePresentKHR(graphicsQueue, &presentInfo));
-//    }
-//
-//    TracyVkCollect(frame.tracyCtx, frame.tracyCmdBuffer);
-//
-//    VK_CHECK(vkEndCommandBuffer(frame.tracyCmdBuffer));
-//    auto cmdInfo = vkutil::init::commandBufferSubmitInfo(frame.tracyCmdBuffer);
-//    auto submit = vkutil::init::submitInfo2(&cmdInfo, nullptr, nullptr);
-//    VK_CHECK(vkQueueSubmit2(graphicsQueue, 1, &submit, frame.tracyRenderFence));
-//
-//    FrameMark;
-//
-//    currentFrameNumber++;
-//    stats.finishedFrameCount++;
-//}
-
 void VulkanBackend::render(CompiledRenderGraph& graph, Scene& scene)
 {
     ZoneScoped;
@@ -737,7 +514,6 @@ void VulkanBackend::render(CompiledRenderGraph& graph, Scene& scene)
             vmaUnmapMemory(allocator, sceneUniformBuffer.allocation);
         }
 
-
         {
             ZoneScopedCpuGpuAuto("Render graph", currentFrame());
 
@@ -756,10 +532,9 @@ void VulkanBackend::render(CompiledRenderGraph& graph, Scene& scene)
                     pass.beginRendering(cmd, graph);
                     vkCmdBindPipeline(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipeline);
 
-                    // TEMP: each renderpass should specify this
+                    // TEMP: each renderpass should specify this themselves
                     if (node.pass.debugName != "CSM pass")
                         vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
-                    //vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1, &bindlessTexDesc, 0, nullptr);
 
                     vkCmdSetViewport(cmd, 0, 1, &viewport);
                     vkCmdSetScissor(cmd, 0, 1, &scissor);
@@ -838,8 +613,9 @@ void VulkanBackend::render(CompiledRenderGraph& graph, Scene& scene)
 
 void VulkanBackend::immediateSubmit(std::function<void (VkCommandBuffer)>&& f)
 {
-    // TODO: instrument this
-    VK_CHECK(vkResetFences(device, 1, &immediateFence));   
+    ZoneScopedCpuGpuAuto("Immediate submit", currentFrame());
+
+    VK_CHECK(vkResetFences(device, 1, &immediateFence));
     VK_CHECK(vkResetCommandBuffer(immediateCmdBuffer, 0));
 
     {
@@ -863,7 +639,8 @@ void VulkanBackend::immediateSubmit(std::function<void (VkCommandBuffer)>&& f)
 
 void VulkanBackend::copyBuffer(VkBuffer src, VkBuffer dst, VkBufferCopy copyRegion) 
 {
-    immediateSubmit([&](VkCommandBuffer cmd) 
+    ZoneScopedCpuGpuAuto("Copy buffer", currentFrame());
+    immediateSubmit([&](VkCommandBuffer cmd)
         {
             vkCmdCopyBuffer(cmd, src, dst, 1, &copyRegion);
         }
@@ -872,6 +649,8 @@ void VulkanBackend::copyBuffer(VkBuffer src, VkBuffer dst, VkBufferCopy copyRegi
 
 void VulkanBackend::copyBufferWithStaging(void* data, size_t size, VkBuffer dst, VkBufferCopy copyRegion) 
 {
+    ZoneScopedCpuGpuAuto("Copy buffer with staging", currentFrame());
+
     auto bufInfo = vkutil::init::bufferCreateInfo(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
     AllocatedBuffer staging = allocateBuffer(bufInfo, VMA_MEMORY_USAGE_CPU_ONLY,
         VMA_ALLOCATION_CREATE_MAPPED_BIT,
