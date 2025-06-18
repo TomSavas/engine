@@ -36,16 +36,14 @@ layout(buffer_reference, std430) readonly buffer ModelDataBuffer
 
 layout(buffer_reference, std430) readonly buffer ShadowPassData
 { 
-	mat4 lightViewProj[4];
-	mat4 invLightViewProj[4];
-	float cascadeDistances[4];
+	mat4 lightViewProj[1];
+	mat4 invLightViewProj[1];
+	float cascadeDistances[1];
 	int cascadeCount;
 };
 
 layout(push_constant) uniform Constants
 {	
-    mat4 model;
-    vec4 color;
 	VertexBuffer vertexBuffer;
 	ModelDataBuffer modelData;
 	ShadowPassData shadowData;
@@ -63,11 +61,13 @@ layout (location = 7) out vec3 pos;
 void main() 
 {	
 	Vertex vert = constants.vertexBuffer.vertices[gl_VertexIndex];
-	gl_Position = scene.proj * scene.view * constants.model * vec4(vert.position.xyz, 1.f);
+	gl_Position = scene.proj * scene.view * vec4(vert.position.xyz, 1.f);
 	// gl_Position = constants.model * vec4(vert.position.xyz, 1.f);
 
-    geomColor = constants.color;
-    color = constants.color;
+    // geomColor = constants.color;
+    // color = constants.color;
+    geomColor = vec4(1.0, 0.0, 0.0, 1.0);
+    color = vec4(1.0, 0.0, 0.0, 1.0);
 
     normal = vert.normal.xyz;
 

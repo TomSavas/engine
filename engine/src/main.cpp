@@ -8,6 +8,11 @@
 #include "scene.h"
 #include "passes/passes.h"
 #include "rhi/vulkan/backend.h"
+#include "render_graph.h"
+
+#include "passes/culling.h"
+#include "passes/shadows.h"
+#include "passes/forward.h"
 
 // #define TINYOBJLOADER_IMPLEMENTATION
 // #include "tiny_obj_loader.h"
@@ -24,6 +29,8 @@
 #include <print>
 #include <math.h>
 #include <optional>
+
+#include "passes/testPass.h"
 
 // TEMP: test for tracy allocations
 void* operator new(std::size_t size) noexcept(false)
@@ -42,7 +49,7 @@ void operator delete(void* ptr)
 
 struct WorldRenderer
 {
-    RHIBackend& backend;
+    VulkanBackend& backend;
     std::optional<CompiledRenderGraph> compiledRenderGraph;
 
     std::optional<GeometryCulling> culling;
@@ -50,33 +57,31 @@ struct WorldRenderer
     std::optional<ForwardOpaqueRenderer> opaque;
     // LightCulling lightCulling;
 
-    explicit WorldRenderer(RHIBackend& backend) : backend(backend)
+    std::optional<TestRenderer> test;
+
+    explicit WorldRenderer(VulkanBackend& backend) : backend(backend)
     {
     }
 
     void compileRenderGraph()
     {
-        // NOTE: Instead of the usual per-frame recompilation of render graph, it's enought to make
+        // NOTE: Instead of the usual per-frame recompilation of render graph, it's enough to make
         // it once and reuse the cached compiled render graph. Once we get into more complicated
         // rendering we can start thinking about recompiling it every frame.
         RenderGraph graph;
 
         const auto culledDraws = cpuFrustumCullingPass(culling, backend, graph);
         // const auto zPrePassDepth = zPrePass(backend, graph, culling.culledDraws);
-        const auto shadowData = csmPass(shadows, backend, graph);
+        const auto shadowData = csmPass(shadows, backend, graph, 1);
         // auto lightCulling = tiledLightCullingPass(lightCulling, backend, graph);
         // auto planarReflections = planarRsflectionPass(reflections, backend, graph);
-        const auto opaqueData = opaqueForwardPass(backend, graph, culledDraws.culledDraws,
+        /* const auto opaqueData = */opaqueForwardPass(opaque, backend, graph, culledDraws.culledDraws,
             shadowData.cascadeData, shadowData.shadowMap);
         // bloomPass(backend, graph);
         // reinhardTonemapPass(backend, graph);
         // smaaPass(backend, graph);
 
-        // auto culledDraws = cullingPass(backend, graph);
-        // auto depthStencil = zPrePass(backend, backend.graph, scene);
-        // auto shadowData = shadowPass(backend, graph);
-        // basePass(backend, graph, culledDraws, shadowData);
-        // basePass(backend, graph, culledDraws.culledDraws, shadowData.cascadeData, shadowData.shadowMap);
+        testPass(test, backend, graph);
 
         compiledRenderGraph = compile(std::move(graph));
     }
@@ -97,7 +102,7 @@ struct WorldRenderer
         // backend.recordCommandBuffer(compiledRenderGraph);
         if (compiledRenderGraph)
         {
-            backend.recordCommandBuffers(scene, compiledRenderGraph);
+            backend.render(*compiledRenderGraph, scene);
         }
     }
 };
@@ -107,36 +112,35 @@ int main(void)
     // TODO: add an allocator here
     // TODO: add multithreading solution: Main thread, GPU thread and worker threads. 
 
-    // NOTE: extract RHIBackend as interface when implementing other backends
-    std::optional<RHIBackend> maybeBackend = initVulkanBackend();
-    if (!maybeBackend)
+    // NOTE: extract VulkanBackend as interface when implementing other backends
+    std::optional<VulkanBackend*> backend = initVulkanBackend();
+    if (!backend)
     {
         std::println("Failed to initialize backend");
         return 0;
     }
-    RHIBackend backend = std::move(*maybeBackend);
 
-    WorldRenderer worldRenderer = WorldRenderer(backend);
-    RenderGraph renderGraph;
+    WorldRenderer worldRenderer = WorldRenderer(**backend);
+    worldRenderer.compileRenderGraph();
 
     // TODO: should be a task for IO threads
-    Scene scene = Scene("Sponza", backend);
+    Scene scene = Scene("Sponza", **backend);
     scene.load("../assets/Sponza/Sponza.gltf");
 
-    Frame lastFrame = backend.newFrame();
-    backend.endFrame(lastFrame);
-    while (!backend.shutdownRequested)
+    Frame lastFrame = (*backend)->newFrame();
+    (*backend)->endFrame(lastFrame);
+    while (!(*backend)->shutdownRequested)
     {
-        Frame frame = backend.newFrame();
+        Frame frame = (*backend)->newFrame();
         std::chrono::duration<double> elapsed = frame.startTime - lastFrame.startTime;
 
         glfwPollEvents();
 
         worldRenderer.render(frame, scene, elapsed.count());
-        backend.endFrame(frame);
+        (*backend)->endFrame(frame);
         lastFrame = frame;
     }
-    backend.deinit();
+    (*backend)->deinit();
 
     return 0;
 }

@@ -3,10 +3,11 @@
 #include <vulkan/vulkan_core.h>
 
 #include <string>
-#include <vector>
 #include <functional>
 #include <optional>
-#include <utility>
+
+class CompiledRenderGraph;
+class Scene;
 
 struct RenderPass {
     std::string debugName;
@@ -19,13 +20,13 @@ struct RenderPass {
     std::optional<Pipeline> pipeline;
     // VkRenderingInfo renderingInfo;
 
-    std::function<void(VkCommandBuffer cmd, RenderPass&)> draw;
-    std::function<VkRenderingInfo(RenderPass&)> renderingInfo;
+    std::function<void(VkCommandBuffer cmd, CompiledRenderGraph&)> beginRendering;
+    std::function<void(VkCommandBuffer cmd, CompiledRenderGraph&, RenderPass&, Scene&)> draw;
 
     // virtual void draw(VkCommandBuffer cmd);
     // virtual VkRenderingInfo renderingInfo();
 };
 
-struct RenderGraph {
-    std::vector<RenderPass> renderpasses;
-};
+// struct RenderGraph {
+//     std::vector<RenderPass> renderpasses;
+// };

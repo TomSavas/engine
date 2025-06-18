@@ -79,7 +79,7 @@ VkDescriptorSet DescriptorAllocator::allocate(VkDevice device, VkDescriptorSetLa
 
     VkDescriptorSet descriptorSet;
     // TODO: VK_CHECK
-    vkAllocateDescriptorSets(device, &info, &descriptorSet);
+    VK_CHECK(vkAllocateDescriptorSets(device, &info, &descriptorSet));
 
     return descriptorSet;
 }

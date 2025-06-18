@@ -1,12 +1,12 @@
 #include "rhi/vulkan/utils/bindless.h"
+#include "rhi/vulkan/utils/inits.h"
 
+#include "rhi/vulkan/backend.h"
 #include "rhi/vulkan/descriptors.h"
 
-#include <vulkan/vulkan_core.h>
-
-BindlessResources::BindlessResources(RHIBackend& backend) : backend(backend)
+BindlessResources::BindlessResources(VulkanBackend& backend) : backend(&backend)
 {
-
+    const uint32_t maxBindlessResourceCount = 10000;
     const VkDescriptorBindingFlags bindlessFlags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | 
                                              VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT | 
                                              VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
@@ -24,11 +24,12 @@ BindlessResources::BindlessResources(RHIBackend& backend) : backend(backend)
     DescriptorSetLayoutBuilder builder;
     builder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, bindlessFlags, maxBindlessResourceCount);
     // Add more bindings for buffers, etc.
-    bindlessTexDescLayout = builder.build(device, VK_SHADER_STAGE_ALL, VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT);
-    bindlessTexDesc = bindlessDescPoolAllocator.allocate(device, bindlessTexDescLayout, &variableDescriptorCountAllocInfo);
+    bindlessTexDescLayout = builder.build(backend.device, VK_SHADER_STAGE_ALL, VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT);
+    // FIXME: pool allocator should not be in the backend
+    bindlessTexDesc = backend.bindlessDescPoolAllocator.allocate(backend.device, bindlessTexDescLayout, &variableDescriptorCountAllocInfo);
 }
 
-BindlessResources::Handle BindlessResources::addTexture(Texture texture)
+BindlessTexture BindlessResources::addTexture(Texture texture)
 {
     // TODO: Updating the bindless texture data should be moved
     VkSampler sampler;
@@ -37,7 +38,7 @@ BindlessResources::Handle BindlessResources::addTexture(Texture texture)
         VK_SAMPLER_ADDRESS_MODE_REPEAT,
         texture.mipCount
     );
-    vkCreateSampler(backend.device, &samplerInfo, nullptr, &sampler);
+    vkCreateSampler(backend->device, &samplerInfo, nullptr, &sampler);
 
     VkDescriptorImageInfo descriptorImageInfo = vkutil::init::descriptorImageInfo(
         sampler,
@@ -46,28 +47,40 @@ BindlessResources::Handle BindlessResources::addTexture(Texture texture)
     );
     VkWriteDescriptorSet descriptorWrite = vkutil::init::writeDescriptorImage(
         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        backend.bindlessTexDesc,
+        bindlessTexDesc,
         &descriptorImageInfo,
         0
     );
 
-	Handle index = lastUsedIndex;
-	if (freeIndices.empty())
+	BindlessTexture index = lastUsedIndex;
+	if (!freeIndices.empty())
 	{
-		index = freeIndices.pop_back();
+		index = *freeIndices.begin();
+		freeIndices.erase(index);
 	}
 	else
 	{
+	    textures.emplace_back();
 		lastUsedIndex += 1;
 	}
+    textures[index] = texture;
     descriptorWrite.dstArrayElement = index;
 
-    vkUpdateDescriptorSets(backend.device, 1, &descriptorWrite, 0, nullptr);
+    vkUpdateDescriptorSets(backend->device, 1, &descriptorWrite, 0, nullptr);
 
     return index;
 }
 
-void BindlessResources::removeTexture(Handle handle)
+Texture BindlessResources::getTexture(BindlessTexture handle, BindlessTexture defaultTexture)
 {
-	//LOL NE
+    if (handle < textures.size() && !freeIndices.contains(handle))
+        return textures[handle];
+
+    return textures[defaultTexture];
+}
+
+
+void BindlessResources::removeTexture(BindlessTexture handle)
+{
+    assert(false);
 }

@@ -1,3 +1,5 @@
+#include "passes/forward.h"
+
 #include "passes/passes.h"
 #include "scene.h"
 
@@ -6,12 +8,14 @@
 #include "rhi/vulkan/pipeline_builder.h"
 #include "rhi/vulkan/utils/buffer.h"
 #include "rhi/vulkan/utils/inits.h"
+#include "rhi/vulkan/vulkan.h"
 
 #include "imgui.h"
 
 #include <vulkan/vulkan_core.h>
 #include <glm/gtx/transform.hpp>
 
+#include "render_graph.h"
 #include "GLFW/glfw3.h"
 
 struct PushConstants
@@ -19,10 +23,10 @@ struct PushConstants
     VkDeviceAddress vertexBufferAddr;
     VkDeviceAddress perModelDataBufferAddr;
     VkDeviceAddress shadowData;
-    int shadowMapIndex;
+    uint32_t shadowMapIndex;
 };
 
-std::optional<ForwardOpaqueRenderer> initForwardOpaque(RHIBackend& backend)
+std::optional<ForwardOpaqueRenderer> initForwardOpaque(VulkanBackend& backend)
 {
     ForwardOpaqueRenderer renderer;
     
@@ -34,12 +38,12 @@ std::optional<ForwardOpaqueRenderer> initForwardOpaque(RHIBackend& backend)
     }
 
     VkPushConstantRange meshPushConstantRange = vkutil::init::pushConstantRange(VK_SHADER_STAGE_ALL, sizeof(PushConstants));
-    VkDescriptorSetLayout descriptors[] = {backend.sceneDescriptorSetLayout, backend.bindlessTexDescLayout};
+    VkDescriptorSetLayout descriptors[] = {backend.sceneDescriptorSetLayout, backend.bindlessResources->bindlessTexDescLayout};
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkutil::init::layoutCreateInfo(descriptors, 2, &meshPushConstantRange, 1);
-    VK_CHECK(vkCreatePipelineLayout(backend.device, &pipelineLayoutInfo, nullptr, renderer.pipeline->pipelineLayout));
+    VK_CHECK(vkCreatePipelineLayout(backend.device, &pipelineLayoutInfo, nullptr, &renderer.pipeline.pipelineLayout));
 
     // TODO: convert into optional
-    renderer.pipeline = PipelineBuilder()
+    renderer.pipeline.pipeline = PipelineBuilder()
         .shaders((*vertexShader)->module, (*fragmentShader)->module)
         .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .polyMode(VK_POLYGON_MODE_FILL)
@@ -49,24 +53,24 @@ std::optional<ForwardOpaqueRenderer> initForwardOpaque(RHIBackend& backend)
         .colorAttachmentFormat(backend.backbufferImage.format)
         .depthFormat(backend.depthImage.format)
         .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
-        .build(backend.device, pass.pipeline->pipelineLayout);
+        .build(backend.device, renderer.pipeline.pipelineLayout);
     
     return renderer;
 }
 
-void opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRenderer, RHIBackend& backend, RenderGraph& graph,
+void opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRenderer, VulkanBackend& backend, RenderGraph& graph,
     RenderGraphResource<Buffer> culledDraws, RenderGraphResource<Buffer> shadowData,
     RenderGraphResource<BindlessTexture> shadowMap)
 {
-    if (forwardOpaqueRenderer)
+    if (!forwardOpaqueRenderer)
     {
-        forwardOpaqueRenderer = initForwardOpaque();
+        forwardOpaqueRenderer = initForwardOpaque(backend);
     }
 
-    RenderPass& pass = createPass(graph);
-    pass.debugName = "Forward Opaque pass";
-    pass.pipeline = forwardOpaque.pipeline;
-    pass.pipeline->pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    RenderGraph::Node& pass = createPass(graph);
+    pass.pass.debugName = "Forward Opaque pass";
+    pass.pass.pipeline = forwardOpaqueRenderer->pipeline;
+    pass.pass.pipeline->pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
     // RenderGraph resources
     struct ForwardOpaqueRenderGraphData
@@ -79,7 +83,7 @@ void opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
     data.shadowData = readResource<Buffer>(graph, pass, shadowData);
     data.shadowMap = readResource<BindlessTexture>(graph, pass, shadowMap);
 
-    pass.beginRendering = [data](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass& pass)
+    pass.pass.beginRendering = [data, &backend](VkCommandBuffer cmd, CompiledRenderGraph&)
     {
         // TODO: attach depth from Z prepass
         VkExtent2D swapchainSize { static_cast<uint32_t>(backend.viewport.width), static_cast<uint32_t>(backend.viewport.height) };
@@ -91,20 +95,23 @@ void opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
         VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backend.backbufferImage.view, &colorClear, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         VkRenderingAttachmentInfo depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(backend.depthImage.view);
         VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, 1, &depthAttachmentInfo);
-        VkCmdBeginRendering(cmd, &renderingInfo);
+        vkCmdBeginRendering(cmd, &renderingInfo);
     };
     
-    pass.draw = [data](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass& pass, Scene& scene) {
+    pass.pass.draw = [data, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass& pass, Scene& scene)
     {
-        PushConstants pushConstants 
+        ZoneScopedCpuGpuAuto("Forward opaque pass", backend.currentFrame());
+
+        PushConstants pushConstants
         {
-            .vertexBufferAddr = backend.getBufferDeviceAddress(scene.vertexBuffer)
-            // .perModelDataBufferAddr = vkGetBufferDeviceAddress(backend.device, &perModelDataAddressInfo),
-            .shadowData = backend.getBufferDeviceAddress(getResource(graph, data.shadowData)),
-            .shadowMapIndex = getResource(graph, data.shadowMap)
+            .vertexBufferAddr = backend.getBufferDeviceAddress(scene.vertexBuffer.buffer),
+            .perModelDataBufferAddr = backend.getBufferDeviceAddress(scene.perModelBuffer.buffer),
+            .shadowData = backend.getBufferDeviceAddress(*getResource<Buffer>(graph, data.shadowData)),
+            .shadowMapIndex = *getResource<BindlessTexture>(graph, data.shadowMap)
         };
-        vkCmdPushConstants(cmd, p.pipeline->pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(PushConstants), &pushConstants);
-    	vkCmdBindIndexBuffer(cmd, basePassData->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-        vkCmdDrawIndexedIndirect(cmd, culledDraws.buffer, 0, scene.meshes.size(), sizeof(VkDrawIndexedIndirectCommand));
-    }
+        vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(PushConstants), &pushConstants);
+        vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1, &backend.bindlessResources->bindlessTexDesc, 0, nullptr);
+    	vkCmdBindIndexBuffer(cmd, scene.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexedIndirect(cmd, *getResource<Buffer>(graph, data.culledDraws), 0, scene.meshes.size(), sizeof(VkDrawIndexedIndirectCommand));
+    };
 }

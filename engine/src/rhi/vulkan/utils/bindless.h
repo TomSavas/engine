@@ -1,26 +1,37 @@
 #pragma once
 
-#include <stdint.h>
+#include "rhi/vulkan/utils/texture.h"
 
-class RHIBackend;
+#include <vulkan/vulkan.h>
+
+#include <stdint.h>
+#include <unordered_set>
+#include <vector>
+
+using BindlessTexture = uint32_t;
+
+struct VulkanBackend;
 
 struct BindlessResources
 {
-	using Handle = uint32_t;
+	static constexpr BindlessTexture k_white = 0;
+	static constexpr BindlessTexture k_black = 1;
+	static constexpr BindlessTexture k_error = 2;
 
-	RHIBackend& backend;
+	VulkanBackend* backend;
 
     VkDescriptorSet bindlessTexDesc;
     VkDescriptorSetLayout bindlessTexDescLayout;
 
     // CPU mirror of what data is in the GPU buffer
     std::vector<Texture> textures;
-    uint32_t lastUsedIndex;
+    BindlessTexture lastUsedIndex;
     int capacity;
-    std::vector<Handle> freeIndices; // All free indices that occur before lastUsedIndex
+    std::unordered_set<BindlessTexture> freeIndices; // All free indices that occur before lastUsedIndex
 	
-	explicit BindlessResources(RHIBackend& backend);
+	explicit BindlessResources(VulkanBackend& backend);
 
-	Handle addTexture(Texture texture);
-	void removeTexture(Handle handle);
+	BindlessTexture addTexture(Texture texture);
+	Texture getTexture(BindlessTexture handle, BindlessTexture defaultTexture = k_error);
+	void removeTexture(BindlessTexture handle);
 };

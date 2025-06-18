@@ -1,4 +1,5 @@
 #include "scene.h"
+#include "rhi/vulkan/backend.h"
 
 #include "tracy/Tracy.hpp"
 
@@ -11,6 +12,8 @@
 #include <atomic>
 #include <algorithm>
 #include <print>
+
+#include "rhi/vulkan/utils/inits.h"
 
 glm::vec3 right(glm::mat4 mat) {
     return mat * glm::vec4(1.f, 0.f, 0.f, 0.f);
@@ -153,6 +156,7 @@ void Scene::load(const char* path)
     }
 
     addMeshes(model);
+    createBuffers();
 }
 
 void Scene::addMeshes(tinygltf::Model& model, glm::vec3 offset)
@@ -260,9 +264,9 @@ void Scene::addMeshes(tinygltf::Model& model, glm::vec3 offset)
                 images.push_back(albedoImg);
 
                 // TODO: remove above
-                Texture t = backend.textures.loadRaw(albedoImg.image.data(), albedoImg.image.size(),
+                auto maybeTexture = backend.textures->loadRaw(albedoImg.image.data(), albedoImg.image.size(),
                     albedoImg.width, albedoImg.height, true, false, albedoImg.name);
-                bindlessImages.push_back(backend.bindless.addTexture(t));
+                bindlessImages.push_back(backend.bindlessResources->addTexture(std::get<0>(*maybeTexture)));
                 m.albedoTexture = bindlessImages.back();
             }
 
@@ -277,11 +281,82 @@ void Scene::addMeshes(tinygltf::Model& model, glm::vec3 offset)
                 images.push_back(normalImg);
                 
                 // TODO: remove above
-                Texture t = backend.textures.loadRaw(normalImg.image.data(), normalImg.image.size(),
+                auto maybeTexture = backend.textures->loadRaw(normalImg.image.data(), normalImg.image.size(),
                     normalImg.width, normalImg.height, true, false, normalImg.name);
-                bindlessImages.push_back(backend.bindless.addTexture(t));
+                bindlessImages.push_back(backend.bindlessResources->addTexture(std::get<0>(*maybeTexture)));
                 m.normalTexture = bindlessImages.back();
             }
         }
     }
+}
+
+void Scene::createBuffers()
+{
+    const uint32_t vertexBufferSize = vertexData.size() * sizeof(decltype(vertexData)::value_type);
+    const uint32_t indexBufferSize = indices.size() * sizeof(decltype(indices)::value_type);
+
+    std::println("Vert count: {}, element size: {}, total size: {}", vertexData.size(), sizeof(decltype(vertexData)::value_type), vertexBufferSize);
+    std::println("Index count: {}, element size: {}, total size: {}", indices.size(), sizeof(decltype(indices)::value_type), indexBufferSize);
+
+    auto info = vkutil::init::bufferCreateInfo(vertexBufferSize,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+    vertexBuffer = backend.allocateBuffer(info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    info = vkutil::init::bufferCreateInfo(indexBufferSize,
+        VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+    indexBuffer = backend.allocateBuffer(info, VMA_MEMORY_USAGE_GPU_ONLY,
+       VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    backend.copyBufferWithStaging(vertexData.data(), vertexBufferSize, vertexBuffer.buffer);
+    backend.copyBufferWithStaging(indices.data(), indexBufferSize, indexBuffer.buffer);
+
+    struct ModelData {
+        glm::vec4 textures;
+        glm::mat4 model;
+    };
+    std::vector<ModelData> modelData;
+    modelData.reserve(meshes.size());
+    for (auto& mesh : meshes)
+    {
+        ModelData data;
+        // data.albedoTex = mesh.albedoTexture;
+        // data.normalTex = mesh.normalTexture;
+        data.textures = glm::vec4(mesh.albedoTexture, mesh.normalTexture, 0.f, 0.f);
+        data.model = glm::mat4(1.f);
+        modelData.push_back(data);
+    }
+
+    const uint32_t perModelBufferSize = modelData.size() * sizeof(decltype(modelData)::value_type);
+    info = vkutil::init::bufferCreateInfo(perModelBufferSize,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+    perModelBuffer = backend.allocateBuffer(info, VMA_MEMORY_USAGE_GPU_ONLY,
+       VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    backend.copyBufferWithStaging(modelData.data(), modelData.size() * sizeof(ModelData), perModelBuffer.buffer);
+
+    info = vkutil::init::bufferCreateInfo(sizeof(VkDrawIndexedIndirectCommand) * meshes.size(),
+        VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+    indirectCommands = backend.allocateBuffer(info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    std::vector<VkDrawIndexedIndirectCommand> cmds;
+    cmds.reserve(meshes.size());
+    for (uint32_t i = 0; i < meshes.size(); ++i)
+    {
+        auto& mesh = meshes[i];
+        VkDrawIndexedIndirectCommand command =
+        {
+            .indexCount = static_cast<uint32_t>(mesh.indexCount),
+            .instanceCount = 1,
+            .firstIndex = static_cast<uint32_t>(mesh.indexOffset),
+            .vertexOffset = 0,
+            .firstInstance = i
+        };
+        cmds.push_back(command);
+    }
+    backend.copyBufferWithStaging(cmds.data(), sizeof(VkDrawIndexedIndirectCommand) * cmds.size(),
+        indirectCommands.buffer);
 }

@@ -1,5 +1,3 @@
-#include "passes/passes.h"
-
 #include "passes/culling.h"
 #include "scene.h"
 
@@ -33,32 +31,36 @@ bool insideCameraFrustum(const glm::vec3 aabbMin, const glm::vec3 aabbMax, const
     return true;
 }
 
-std::optional<GeometryCulling> initCulling(RHIBackend& backend)
+std::optional<GeometryCulling> initCulling(VulkanBackend& backend)
 {
     GeometryCulling geometryCulling;
     
-    auto info = vkutil::init::bufferCreateInfo(sizeof(VkDrawIndexedIndirectCommand) * scene.meshes.size(),
+    // FIXME: we should not be hardcoding the mesh count
+    // auto info = vkutil::init::bufferCreateInfo(sizeof(VkDrawIndexedIndirectCommand) * scene.meshes.size(),
+    auto info = vkutil::init::bufferCreateInfo(sizeof(VkDrawIndexedIndirectCommand) * 1000,
         VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
     geometryCulling.culledDraws = backend.allocateBuffer(info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    return geometryCulling;
 }
 
-CullingPassRenderGraphData cpuFrustumCullingPass(std::optional<GeometryCulling>& geometryCulling, RHIBackend& backend, RenderGraph& graph)
+CullingPassRenderGraphData cpuFrustumCullingPass(std::optional<GeometryCulling>& geometryCulling, VulkanBackend& backend, RenderGraph& graph)
 {
-    if (geometryCulling)
+    if (!geometryCulling)
     {
-        geometryCulling = initCulling();
+        geometryCulling = initCulling(backend);
     }
 
-    RenderPass& pass = createPass(graph);
-    pass.debugName = "CPU frustum culling pass";
+    RenderGraph::Node& pass = createPass(graph);
+    pass.pass.debugName = "CPU frustum culling pass";
     // pass.pipeline = shadowRenderer.pipeline;
     // pass.pipeline->pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
-    CullingPassRenderGraphData data;
-    data.culledDraws = importResource<Buffer>(graph, pass, geometryCulling->culledDraws);
+    CullingPassRenderGraphData data = {};
+    data.culledDraws = importResource<Buffer>(graph, pass, &geometryCulling->culledDraws.buffer);
 
-    pass.draw = [data](VkCommandBuffer, CompiledRenderGraph&, RenderPass&, Scene& scene)
+    pass.pass.draw = [data, &backend](VkCommandBuffer, CompiledRenderGraph& graph, RenderPass&, Scene& scene)
     {
         const glm::mat4 view = glm::inverse(glm::translate(glm::mat4(1.f), scene.mainCamera.position) * scene.mainCamera.rotation);
         const glm::mat4 projection = glm::perspectiveFov<float>(scene.mainCamera.verticalFov, backend.backbufferImage.extent.width,
@@ -66,7 +68,6 @@ CullingPassRenderGraphData cpuFrustumCullingPass(std::optional<GeometryCulling>&
             scene.mainCamera.farClippingPlaneDist);
         const glm::mat4 viewProj = projection * view;
         const glm::mat4 viewProjTranspose = glm::transpose(viewProj);
-
         const std::array<glm::vec4, 6> frustumPlanes = {
             (viewProjTranspose[3] + viewProjTranspose[0]),
             (viewProjTranspose[3] - viewProjTranspose[0]),
@@ -79,30 +80,24 @@ CullingPassRenderGraphData cpuFrustumCullingPass(std::optional<GeometryCulling>&
         // TODO: shouldn't recalculate this unecessarily
     	std::vector<VkDrawIndexedIndirectCommand> indirectCmds;
     	indirectCmds.reserve(scene.meshes.size());
-    	int culledCount = 0;
-    	for (int i = 0; i < scene.meshes.size(); ++i)
+    	for (uint32_t i = 0; i < scene.meshes.size(); ++i)
     	{
     	    auto& mesh = scene.meshes[i];
+    	    uint32_t instanceCount = insideCameraFrustum(mesh.aabbMin, mesh.aabbMax, frustumPlanes) ? 1 : 0;
     	    VkDrawIndexedIndirectCommand command =
 	        {
-    	        .indexCount = mesh.indexCount,
-    	        .instanceCount = 1,
-    	        .firstIndex = mesh.indexOffset,
+    	        .indexCount = static_cast<uint32_t>(mesh.indexCount),
+    	        .instanceCount = instanceCount,
+    	        .firstIndex = static_cast<uint32_t>(mesh.indexOffset),
     	        .vertexOffset = 0,
     	        .firstInstance = i
-    	    } 
-        	if (!insideCameraFrustum(mesh.aabbMin, mesh.aabbMax, frustumPlanes))
-        	{
-            	command.instanceCount = 0;
-            	culledCount += 1;
-        	}
-
+    	    };
             indirectCmds.push_back(command);
     	}
 
-        backend.copyBufferWithStaging((void*)indirectCmds.data(), sizeof(VkDrawIndexedIndirectCommand) * indirectCmds.size(),
-                                       draws.indirectCommands.buffer);
-    }
+        backend.copyBufferWithStaging(indirectCmds.data(), sizeof(VkDrawIndexedIndirectCommand) * indirectCmds.size(),
+                                       *getResource<Buffer>(graph, data.culledDraws));
+    };
 
     return data;
 }

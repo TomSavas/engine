@@ -2,7 +2,9 @@
 
 #include "engine.h"
 #include "rhi/vulkan/utils/buffer.h"
+#include "rhi/vulkan/utils/bindless.h"
 #include "rhi/vulkan/utils/image.h"
+#include "rhi/vulkan/utils/texture.h"
 #include "rhi/vulkan/vulkan.h"
 #include "rhi/vulkan/descriptors.h"
 #include "rhi/vulkan/shader.h"
@@ -38,15 +40,15 @@ struct FrameData
     VkCommandBuffer cmdBuffer;
 };
 
-struct PushConstants
-{
-    glm::mat4 model;
-    glm::vec4 color;
-    VkDeviceAddress vertexBufferAddr;  
-    VkDeviceAddress perModelDataBufferAddr;
-    VkDeviceAddress shadowData;
-    int shadowMapIndex;
-};
+// struct PushConstants
+// {
+//     glm::mat4 model;
+//     glm::vec4 color;
+//     VkDeviceAddress vertexBufferAddr;
+//     VkDeviceAddress perModelDataBufferAddr;
+//     VkDeviceAddress shadowData;
+//     int shadowMapIndex;
+// };
 
 // TEMP(savas): temporary solution for quick drawing of meshes
 struct GpuMeshBuffers 
@@ -59,9 +61,10 @@ struct GpuMeshBuffers
 class GLFWwindow;
 class Scene;
 class Mesh;
+class CompiledRenderGraph;
 
 class VulkanBackend;
-std::optional<VulkanBackend> initVulkanBackend();
+std::optional<VulkanBackend*> initVulkanBackend();
 
 struct Frame 
 {
@@ -69,7 +72,7 @@ struct Frame
     uint64_t frameIndex;
 };
 
-struct VulkanBackend 
+struct VulkanBackend
 {
     VulkanBackend() {}
     
@@ -87,8 +90,8 @@ struct VulkanBackend
 
     bool shutdownRequested = false;
 
-    Textures textures;
-    BindlessResources bindlessResources;
+    std::optional<Textures> textures;
+    std::optional<BindlessResources> bindlessResources;
 
     GLFWwindow* window;
 
@@ -152,9 +155,11 @@ struct VulkanBackend
     std::unordered_map<Mesh*, GpuMeshBuffers> gpuMeshBuffers;
 
     //
-    RenderGraph graph;
+    // RenderGraph graph;
 
     VkDescriptorSetLayout sceneDescriptorSetLayout;
+
+    void render(CompiledRenderGraph& compiledRenderGraph, Scene& scene);
 
     void immediateSubmit(std::function<void (VkCommandBuffer)>&& f);
     void copyBuffer(VkBuffer src, VkBuffer dst, VkBufferCopy copyRegion);
@@ -162,6 +167,8 @@ struct VulkanBackend
 
     AllocatedBuffer allocateBuffer(VkBufferCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags, VkMemoryPropertyFlags requiredFlags);
     AllocatedImage allocateImage(VkImageCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags, VkMemoryPropertyFlags requiredFlags, VkImageAspectFlags aspectFlags);
+
+    VkDeviceAddress getBufferDeviceAddress(VkBuffer buffer);
 
 private:
     void initVulkan();
@@ -175,5 +182,3 @@ private:
     void initImgui();
     void initProfiler();
 };
-
-using RHIBackend = VulkanBackend;

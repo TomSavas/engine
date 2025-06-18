@@ -16,15 +16,14 @@ layout(buffer_reference, std430) readonly buffer VertexBuffer
 
 layout(buffer_reference, std430) readonly buffer ShadowPassData
 { 
-	mat4 lightViewProj[4];
-	mat4 invLightViewProj[4];
-	float cascadeDistances[4];
+	mat4 lightViewProj[1];
+	mat4 invLightViewProj[1];
+	float cascadeDistances[1];
 	int cascadeCount;
 };
 
 layout(push_constant) uniform Constants
 {	
-    // mat4 lightViewProj;
 	VertexBuffer vertexBuffer;
 	ShadowPassData shadowPassData;
 	int cascade;

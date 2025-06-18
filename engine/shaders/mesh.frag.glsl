@@ -39,16 +39,14 @@ layout(buffer_reference, std430) readonly buffer ModelDataBuffer
 
 layout(buffer_reference, std430) readonly buffer ShadowPassData
 { 
-	mat4 lightViewProj[4];
-	mat4 invLightViewProj[4];
-	float cascadeDistances[4];
+	mat4 lightViewProj[1];
+	mat4 invLightViewProj[1];
+	float cascadeDistances[1];
 	int cascadeCount;
 };
 
 layout(push_constant) uniform Constants
 {	
-    mat4 model;
-    vec4 color;
 	VertexBuffer vertexBuffer;
 	ModelDataBuffer modelData;
 	ShadowPassData shadowData;
@@ -89,17 +87,17 @@ float textureProj(vec4 shadowCoord, vec2 offset, uint cascadeIndex)
 
 void main()
 {
-	uint cascadeIndex = 0;
-	for(uint i = 0; i < 3; ++i) {
-		if(viewPos.z < constants.shadowData.cascadeDistances[i]) {	
-			cascadeIndex = i + 1;
-		}
-	}
 	// uint cascadeIndex = 0;
+	// for(uint i = 0; i < 3; ++i) {
+	// 	if(viewPos.z < constants.shadowData.cascadeDistances[i]) {	
+	// 		cascadeIndex = i + 1;
+	// 	}
+	// }
 
-	vec4 shadowCoord = (biasMat * constants.shadowData.lightViewProj[cascadeIndex]) * vec4(pos, 1.0);	
+	// vec4 shadowCoord = (biasMat * constants.shadowData.lightViewProj[cascadeIndex]) * vec4(pos, 1.0);	
+	// // float shadow = textureProj(shadowCoord / shadowCoord.w, vec2(0.0), cascadeIndex);
 	// float shadow = textureProj(shadowCoord / shadowCoord.w, vec2(0.0), cascadeIndex);
-	float shadow = textureProj(shadowCoord / shadowCoord.w, vec2(0.0), cascadeIndex);
+	float shadow = 1.f;
 		
     // outColor = vec4(1.0, 0.0, 0.0, 1.0);
     const vec3 lightDir = normalize(vec3(1.f, -1.f, 1.f));
@@ -113,30 +111,31 @@ void main()
 
     vec4 textureIndices = constants.modelData.data[index].textures;
     int index = int(textureIndices.x);
-    // int index = constants.modelData.data[index].albedo;
-    // int albedoIndex = int(constants.modelData.data[index].textures.x);
+    // // int index = constants.modelData.data[index].albedo;
+    // // int albedoIndex = int(constants.modelData.data[index].textures.x);
     c = texture(textures[index], uv).rgb;
+    // c = vec3(index % 15, index % 30, index % 45);
     outColor = vec4(c * lightLevel * shadow, color.w);
     // outColor = vec4(c * lightLevel, color.w);
 
-    if (constants.color.r > 0.0)
-    {
-	    switch(cascadeIndex) 
-		{
-			case 0 : 
-				outColor.rgb *= vec3(1.0f, 0.25f, 0.25f);
-				break;
-			case 1 : 
-				outColor.rgb *= vec3(0.25f, 1.0f, 0.25f);
-				break;
-			case 2 : 
-				outColor.rgb *= vec3(0.25f, 0.25f, 1.0f);
-				break;
-			case 3 : 
-				outColor.rgb *= vec3(1.0f, 1.0f, 0.25f);
-				break;
-		}
-	}
+ //    if (constants.color.r > 0.0)
+ //    {
+	//     switch(cascadeIndex) 
+	// 	{
+	// 		case 0 : 
+	// 			outColor.rgb *= vec3(1.0f, 0.25f, 0.25f);
+	// 			break;
+	// 		case 1 : 
+	// 			outColor.rgb *= vec3(0.25f, 1.0f, 0.25f);
+	// 			break;
+	// 		case 2 : 
+	// 			outColor.rgb *= vec3(0.25f, 0.25f, 1.0f);
+	// 			break;
+	// 		case 3 : 
+	// 			outColor.rgb *= vec3(1.0f, 1.0f, 0.25f);
+	// 			break;
+	// 	}
+	// }
      // outColor = vec4(normal * 0.5 + 0.5, 1.0);
      // outColor = vec4(vec3(normal.y / 20.f), 1.0);
 }

@@ -1,29 +1,23 @@
-#include "passes/passes.h"
-#include "scene.h"
+#pragma once 
 
-#include "rhi/vulkan/backend.h"
-#include "rhi/vulkan/renderpass.h"
 #include "rhi/vulkan/pipeline_builder.h"
 #include "rhi/vulkan/utils/buffer.h"
-#include "rhi/vulkan/utils/inits.h"
+#include "rhi/vulkan/utils/bindless.h"
+#include "render_graph.h"
 
-#include "imgui.h"
-
-#include <vulkan/vulkan_core.h>
-#include <glm/glm.hpp>
-#include <glm/gtx/transform.hpp>
+struct VulkanBackend;
 
 struct ShadowRenderer
 {
-    Pipeline pipeline;
+    RenderPass::Pipeline pipeline;
     AllocatedBuffer shadowMapData;
-    BindlessResources::Handle shadowMap;
+    BindlessTexture shadowMap;
 };
 
 struct ShadowPassRenderGraphData
 {
     RenderGraphResource<BindlessTexture> shadowMap;
-    RenderGraphResource<Buffer> data;
+    RenderGraphResource<Buffer> cascadeData;
 };
 
-ShadowPassRenderGraphData csmPass(ShadowRenderer& shadowRenderer, RHIBackend& backend, RenderGraph& graph, int cascadeCount);
+ShadowPassRenderGraphData csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend, RenderGraph& graph, int cascadeCount=4);
