@@ -8,6 +8,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include "rhi/vulkan/descriptors.h"
+
 using BindlessTexture = uint32_t;
 
 struct VulkanBackend;
@@ -19,6 +21,8 @@ struct BindlessResources
 	static constexpr BindlessTexture k_error = 2;
 
 	VulkanBackend* backend;
+
+	DescriptorAllocator bindlessDescPoolAllocator;
 
     VkDescriptorSet bindlessTexDesc;
     VkDescriptorSetLayout bindlessTexDescLayout;

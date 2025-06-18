@@ -1,17 +1,26 @@
 #include "rhi/vulkan/utils/bindless.h"
 #include "rhi/vulkan/utils/inits.h"
+#include "rhi/vulkan/utils/texture.h"
 
 #include "rhi/vulkan/backend.h"
 #include "rhi/vulkan/descriptors.h"
 
 BindlessResources::BindlessResources(VulkanBackend& backend) : backend(&backend)
 {
-    const uint32_t maxBindlessResourceCount = 10000;
-    const VkDescriptorBindingFlags bindlessFlags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | 
+    constexpr uint32_t maxBindlessResourceCount = 10000;
+    {
+        VkDescriptorPoolSize poolSizes[] =
+        {
+            VkDescriptorPoolSize{.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = maxBindlessResourceCount },
+        };
+        bindlessDescPoolAllocator.init(backend.device, maxBindlessResourceCount, poolSizes,
+                                        VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT);
+    }
+
+    constexpr VkDescriptorBindingFlags bindlessFlags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
                                              VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT | 
                                              VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
-
-    VkDescriptorSetVariableDescriptorCountAllocateInfo variableDescriptorCountAllocInfo = 
+    VkDescriptorSetVariableDescriptorCountAllocateInfo variableDescriptorCountAllocInfo =
     {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
         .pNext = nullptr,
@@ -23,10 +32,14 @@ BindlessResources::BindlessResources(VulkanBackend& backend) : backend(&backend)
     
     DescriptorSetLayoutBuilder builder;
     builder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, bindlessFlags, maxBindlessResourceCount);
-    // Add more bindings for buffers, etc.
+    // TODO: Add more bindings for buffers, etc.
     bindlessTexDescLayout = builder.build(backend.device, VK_SHADER_STAGE_ALL, VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT);
-    // FIXME: pool allocator should not be in the backend
     bindlessTexDesc = backend.bindlessDescPoolAllocator.allocate(backend.device, bindlessTexDescLayout, &variableDescriptorCountAllocInfo);
+
+    // Default textures. No need to deallocate -- we need these to always exist
+    addTexture(whiteTexture(backend, 1));
+    addTexture(blackTexture(backend, 1));
+    addTexture(errorTexture(backend, 64));
 }
 
 BindlessTexture BindlessResources::addTexture(Texture texture)

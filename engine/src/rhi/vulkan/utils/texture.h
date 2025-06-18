@@ -19,6 +19,10 @@ struct Texture
 	uint32_t mipCount;
 };
 
+Texture whiteTexture(VulkanBackend& backend, uint32_t dimension);
+Texture blackTexture(VulkanBackend& backend, uint32_t dimension);
+Texture errorTexture(VulkanBackend& backend, uint32_t dimension);
+
 struct Textures
 {
     VulkanBackend* backend;
