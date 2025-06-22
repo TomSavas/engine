@@ -11,7 +11,7 @@ struct PipelineBuilder
     VkPipelineRasterizationStateCreateInfo rasterizer;
     VkPipelineColorBlendAttachmentState colorBlendAttachment;
     VkPipelineMultisampleStateCreateInfo multisampling;
-    //VkPipelineLayout pipelineLayout;
+    // VkPipelineLayout pipelineLayout;
     VkPipelineDepthStencilStateCreateInfo depthStencil;
     VkPipelineRenderingCreateInfo renderInfo;
     std::vector<VkFormat> colorAttachments;
@@ -33,6 +33,6 @@ struct PipelineBuilder
     PipelineBuilder& enableDepthTest(bool depthWriteEnable, VkCompareOp compareOp);
     PipelineBuilder& disableDepthTest();
     PipelineBuilder& setDepthClamp(bool enable);
-        
+
     VkPipeline build(VkDevice device, VkPipelineLayout layout);
 };

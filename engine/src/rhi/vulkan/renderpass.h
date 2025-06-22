@@ -1,18 +1,20 @@
-#pragma once 
+#pragma once
 
 #include <vulkan/vulkan_core.h>
 
-#include <string>
 #include <functional>
 #include <optional>
+#include <string>
 
 class CompiledRenderGraph;
 class Scene;
 
-struct RenderPass {
+struct RenderPass
+{
     std::string debugName;
 
-    struct Pipeline {
+    struct Pipeline
+    {
         VkPipelineBindPoint pipelineBindPoint;
         VkPipelineLayout pipelineLayout;
         VkPipeline pipeline;

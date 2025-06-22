@@ -1,19 +1,19 @@
 #pragma once
 
-#include "rhi/vulkan/renderpass.h"
-
 #include <vulkan/vulkan_core.h>
 
 #include <vector>
+
+#include "rhi/vulkan/renderpass.h"
 
 using Handle = uint32_t;
 
 struct RenderGraph
 {
-    struct Node 
+    struct Node
     {
-        std::vector<Handle> reads;    
-        std::vector<Handle> writes;    
+        std::vector<Handle> reads;
+        std::vector<Handle> writes;
         RenderPass pass;
     };
 
@@ -47,10 +47,10 @@ Handle getHandle(RenderGraph& graph);
 //     return T{};
 // }
 
-template<typename T>
+template <typename T>
 using RenderGraphResource = Handle;
 
-template<typename T>
+template <typename T>
 RenderGraphResource<T> importResource(RenderGraph& graph, RenderGraph::Node& node, T* data)
 {
     Handle handle = getHandle(graph);
@@ -58,7 +58,7 @@ RenderGraphResource<T> importResource(RenderGraph& graph, RenderGraph::Node& nod
     return handle;
 }
 
-template<typename T>
+template <typename T>
 RenderGraphResource<T> readResource(RenderGraph& graph, RenderGraph::Node& node, RenderGraphResource<T> handle)
 {
     node.reads.push_back(handle);
@@ -67,7 +67,7 @@ RenderGraphResource<T> readResource(RenderGraph& graph, RenderGraph::Node& node,
     return newHandle;
 }
 
-template<typename T>
+template <typename T>
 RenderGraphResource<T> writeResource(RenderGraph& graph, RenderGraph::Node& node, RenderGraphResource<T> handle)
 {
     node.writes.push_back(handle);
@@ -76,7 +76,7 @@ RenderGraphResource<T> writeResource(RenderGraph& graph, RenderGraph::Node& node
     return newHandle;
 }
 
-template<typename T>
+template <typename T>
 T* getResource(CompiledRenderGraph& graph, RenderGraphResource<T> handle)
 {
     // Inject barrier here

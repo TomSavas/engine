@@ -1,11 +1,9 @@
-#include "passes/passes.h"
-
-//#include "rhi/vulkan/backend.h"
-//#include "rhi/vulkan/renderpass.h"
-//#include "rhi/vulkan/pipeline_builder.h"
-//#include "rhi/vulkan/utils/inits.h"
+// #include "rhi/vulkan/backend.h"
+// #include "rhi/vulkan/renderpass.h"
+// #include "rhi/vulkan/pipeline_builder.h"
+// #include "rhi/vulkan/utils/inits.h"
 //
-//#include <vulkan/vulkan_core.h>
+// #include <vulkan/vulkan_core.h>
 
 // std::optional<RenderPass> infGrid(VulkanBackend& backend) {
 //     RenderPass pass;
@@ -13,15 +11,17 @@
 //     pass.pipeline = std::optional<RenderPass::Pipeline>(RenderPass::Pipeline{});
 //     pass.pipeline->pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
-//     std::optional<ShaderModule*> vertexShader = backend.shaderModuleCache.loadModule(backend.device, SHADER_PATH("inf_grid.vert.glsl"));
-//     std::optional<ShaderModule*> fragmentShader = backend.shaderModuleCache.loadModule(backend.device, SHADER_PATH("inf_grid.frag.glsl"));
-//     if (!vertexShader || !fragmentShader)
+//     std::optional<ShaderModule*> vertexShader = backend.shaderModuleCache.loadModule(backend.device,
+//     SHADER_PATH("inf_grid.vert.glsl")); std::optional<ShaderModule*> fragmentShader =
+//     backend.shaderModuleCache.loadModule(backend.device, SHADER_PATH("inf_grid.frag.glsl")); if (!vertexShader ||
+//     !fragmentShader)
 //     {
 //         return std::optional<RenderPass>();
 //     }
 
-//     VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkutil::init::layoutCreateInfo(&backend.sceneDescriptorSetLayout, 1);
-//     VK_CHECK(vkCreatePipelineLayout(backend.device, &pipelineLayoutInfo, nullptr, &pass.pipeline->pipelineLayout));
+//     VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkutil::init::layoutCreateInfo(&backend.sceneDescriptorSetLayout,
+//     1); VK_CHECK(vkCreatePipelineLayout(backend.device, &pipelineLayoutInfo, nullptr,
+//     &pass.pipeline->pipelineLayout));
 
 //     pass.pipeline->pipeline = PipelineBuilder()
 //         .shaders((*vertexShader)->module, (*fragmentShader)->module)

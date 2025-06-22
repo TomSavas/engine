@@ -1,28 +1,26 @@
 #pragma once
 
-#include "camera.h"
-#include "mesh.h"
-
-#include "rhi/vulkan/utils/buffer.h"
-#include "rhi/vulkan/utils/bindless.h"
-#include "rhi/vulkan/utils/texture.h"
-
-#include "tiny_gltf.h"
-
-#include "result.hpp"
-
 #include <glm/glm.hpp>
 #include <glm/gtx/quaternion.hpp>
-
-#include <vector>
 #include <string>
+#include <vector>
+
+#include "camera.h"
+#include "mesh.h"
+#include "result.hpp"
+#include "rhi/vulkan/utils/bindless.h"
+#include "rhi/vulkan/utils/buffer.h"
+#include "rhi/vulkan/utils/texture.h"
+#include "tiny_gltf.h"
 
 class GLFWwindow;
 struct VulkanBackend;
 
-enum class assetError {};
+enum class assetError
+{
+};
 
-struct Scene 
+struct Scene
 {
     std::string name;
 
@@ -50,7 +48,8 @@ struct Scene
 
     Scene(std::string name, VulkanBackend& backend) : name(name), activeCamera(&mainCamera), backend(backend) {}
 
-    Scene(Scene& other) : Scene(other.name, other.backend) {
+    Scene(Scene& other) : Scene(other.name, other.backend)
+    {
         name = other.name;
         mainCamera = other.mainCamera;
         debugCamera = other.debugCamera;
@@ -67,7 +66,8 @@ struct Scene
         indirectCommands = other.indirectCommands;
     }
 
-    Scene(Scene&& other) : Scene(other.name, other.backend) {
+    Scene(Scene&& other) : Scene(other.name, other.backend)
+    {
         name = other.name;
         mainCamera = other.mainCamera;
         debugCamera = other.debugCamera;
@@ -84,7 +84,8 @@ struct Scene
         indirectCommands = other.indirectCommands;
     }
 
-    Scene& operator=(Scene& other) {
+    Scene& operator=(Scene& other)
+    {
         name = other.name;
         mainCamera = other.mainCamera;
         debugCamera = other.debugCamera;
@@ -102,7 +103,8 @@ struct Scene
         return *this;
     }
 
-    Scene& operator=(Scene&& other) {
+    Scene& operator=(Scene&& other)
+    {
         name = other.name;
         mainCamera = other.mainCamera;
         debugCamera = other.debugCamera;

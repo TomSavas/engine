@@ -8,7 +8,7 @@ std::vector<uint32_t> readFile(std::string path)
     std::vector<uint32_t> buffer;
 
     std::ifstream file(path, std::ios::ate | std::ios::binary);
-    if (file.is_open()) 
+    if (file.is_open())
     {
         size_t fileSize = (size_t)file.tellg();
         buffer.resize(fileSize / sizeof(uint32_t));
@@ -29,13 +29,14 @@ std::optional<ShaderModule*> ShaderModuleCache::loadModule(VkDevice device, Shad
         std::println("Loading cached module {} - {:x}", path.filename, path.hash());
         return &moduleFromCache->second;
     }
-    std::println("Loading new module {} from {} (src: {}) - {:x}\n", path.filename, path.spirvPath, path.sourcePath, path.hash());
+    std::println("Loading new module {} from {} (src: {}) - {:x}\n", path.filename, path.spirvPath, path.sourcePath,
+        path.hash());
 
     cache.emplace(path, ShaderModule(path));
     ShaderModule& module = cache.at(path);
     module.spirvCode = readFile(path.spirvPath);
     // TODO: add source code here for debugging
-    
+
     VkShaderModuleCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.pNext = nullptr;
@@ -44,7 +45,7 @@ std::optional<ShaderModule*> ShaderModuleCache::loadModule(VkDevice device, Shad
     createInfo.pCode = module.spirvCode.data();
 
     VkShaderModule shaderModule;
-    if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) 
+    if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
     {
         std::println("Failed creating a shader module for {}", path.filename);
         // TODO: remove from cache

@@ -1,13 +1,14 @@
 #include "rhi/vulkan/descriptors.h"
 
-#include "rhi/vulkan/vulkan.h"
-
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 
 #include <algorithm>
 
-void DescriptorSetLayoutBuilder::addBinding(uint32_t bindingIndex, VkDescriptorType type, VkDescriptorBindingFlags flags, uint32_t count)
+#include "rhi/vulkan/vulkan.h"
+
+void DescriptorSetLayoutBuilder::addBinding(
+    uint32_t bindingIndex, VkDescriptorType type, VkDescriptorBindingFlags flags, uint32_t count)
 {
     VkDescriptorSetLayoutBinding binding = {};
     binding.binding = bindingIndex;
@@ -18,8 +19,10 @@ void DescriptorSetLayoutBuilder::addBinding(uint32_t bindingIndex, VkDescriptorT
     bindingFlags.push_back(flags);
 }
 
-// void DescriptorSetLayoutBuilder::build(VkDevice device, VkShaderStageFlags shaderStages, void* pNext, VkDescriptorSetLayoutCreateFlags flags)
-VkDescriptorSetLayout DescriptorSetLayoutBuilder::build(VkDevice device, VkShaderStageFlags shaderStages, VkDescriptorSetLayoutCreateFlags flags)
+// void DescriptorSetLayoutBuilder::build(VkDevice device, VkShaderStageFlags shaderStages, void* pNext,
+// VkDescriptorSetLayoutCreateFlags flags)
+VkDescriptorSetLayout DescriptorSetLayoutBuilder::build(
+    VkDevice device, VkShaderStageFlags shaderStages, VkDescriptorSetLayoutCreateFlags flags)
 {
     for (auto& binding : bindings)
     {
@@ -49,14 +52,15 @@ VkDescriptorSetLayout DescriptorSetLayoutBuilder::build(VkDevice device, VkShade
     return setLayout;
 }
 
-void DescriptorAllocator::init(VkDevice device, uint32_t maxSets, std::span<VkDescriptorPoolSize> poolSizes, VkDescriptorPoolCreateFlags flags)
+void DescriptorAllocator::init(
+    VkDevice device, uint32_t maxSets, std::span<VkDescriptorPoolSize> poolSizes, VkDescriptorPoolCreateFlags flags)
 {
-    VkDescriptorPoolCreateInfo info = {};   
+    VkDescriptorPoolCreateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     info.pNext = nullptr;
 
-    maxSets = std::ranges::fold_left(poolSizes, 0,
-      [](uint32_t total, VkDescriptorPoolSize size) {return size.descriptorCount + total;});
+    maxSets = std::ranges::fold_left(
+        poolSizes, 0, [](uint32_t total, VkDescriptorPoolSize size) { return size.descriptorCount + total; });
 
     info.flags = flags;
     info.maxSets = maxSets;

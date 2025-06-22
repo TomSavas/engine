@@ -6,10 +6,10 @@
 
 struct AllocatedImage
 {
-    VkImage       image;
-    VkExtent3D    extent;
-    VkFormat      format;
-    VkImageView   view;
+    VkImage image;
+    VkExtent3D extent;
+    VkFormat format;
+    VkImageView view;
 
     VmaAllocation allocation;
 };
@@ -18,4 +18,4 @@ namespace vkutil::image
 {
 void transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout);
 void blitImageToImage(VkCommandBuffer cmd, VkImage src, VkExtent2D srcSize, VkImage dst, VkExtent2D dstSize);
-}
+}  // namespace vkutil::image

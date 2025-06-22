@@ -1,13 +1,11 @@
-#pragma once 
+#pragma once
 
 #include <glm/glm.hpp>
-
-#include <vector>
 #include <string>
 
-struct Vertex 
+struct Vertex
 {
-    union 
+    union
     {
         struct
         {
@@ -21,7 +19,7 @@ struct Vertex
 };
 
 struct Texture;
-struct Mesh 
+struct Mesh
 {
     std::string debugName;
 

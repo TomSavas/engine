@@ -2,41 +2,34 @@
 
 #include "rhi/vulkan/backend.h"
 
-#include "backend.h"
-#include "scene.h"
-
-#include "rhi/vulkan/pipeline_builder.h"
-#include "rhi/vulkan/utils/inits.h"
-#include "rhi/vulkan/utils/image.h"
-#include "rhi/vulkan/utils/buffer.h"
-
-#include "rhi/vulkan/renderpass.h"
-
-#include "render_graph.h"
-
-#include "tracy/Tracy.hpp"
-#include "tracy/TracyVulkan.hpp"
-
-#include "imgui.h"
-#include "imgui_impl_glfw.h"
-#include "imgui_impl_vulkan.h"
-
-#include "result.hpp"
-
-#include "GLFW/glfw3.h"
-
-#include <glm/ext/matrix_clip_space.hpp>
-#include <glm/ext/matrix_transform.hpp>
-#include <glm/glm.hpp>
 #include <vulkan/vulkan_core.h>
 
 #include <chrono>
 #include <cmath>
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/matrix_transform.hpp>
+#include <glm/glm.hpp>
 
+#include "GLFW/glfw3.h"
+#include "backend.h"
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_vulkan.h"
+#include "renderGraph.h"
+#include "result.hpp"
+#include "rhi/vulkan/pipelineBuilder.h"
+#include "rhi/vulkan/renderpass.h"
+#include "rhi/vulkan/utils/buffer.h"
+#include "rhi/vulkan/utils/image.h"
+#include "rhi/vulkan/utils/inits.h"
+#include "scene.h"
+#include "tracy/Tracy.hpp"
+#include "tracy/TracyVulkan.hpp"
 
 result::result<VulkanBackend*, backendError> initVulkanBackend()
 {
-    if (!glfwInit()) {
+    if (!glfwInit())
+    {
         std::println("Failed initing GLFW");
         return result::fail(backendError{});
     }
@@ -50,27 +43,22 @@ result::result<VulkanBackend*, backendError> initVulkanBackend()
     return backend;
 }
 
-Frame VulkanBackend::newFrame() 
+Frame VulkanBackend::newFrame()
 {
-    return Frame
-    {
+    return Frame{
         .stats =
-        {
-            .startTime = std::chrono::high_resolution_clock::now(),
-            .frameIndex = currentFrameNumber,
-            .shutdownRequested = glfwWindowShouldClose(window),
-        },
+            {
+                .startTime = std::chrono::high_resolution_clock::now(),
+                .frameIndex = currentFrameNumber,
+                .shutdownRequested = glfwWindowShouldClose(window),
+            },
         .data = currentFrame(),
     };
 }
 
-FrameStats VulkanBackend::endFrame(Frame&& frame)
-{
-    return frame.stats;
-}
+FrameStats VulkanBackend::endFrame(Frame&& frame) { return frame.stats; }
 
-VulkanBackend::VulkanBackend(GLFWwindow* window) : 
-    window(window) 
+VulkanBackend::VulkanBackend(GLFWwindow* window) : window(window)
 {
     int32_t width;
     int32_t height;
@@ -83,13 +71,8 @@ VulkanBackend::VulkanBackend(GLFWwindow* window) :
     viewport.minDepth = 0.f;
     viewport.maxDepth = 1.f;
 
-    scissor.offset = { 0, 0 };
-    scissor.extent =
-    { 
-        static_cast<uint32_t>(viewport.width),
-        static_cast<uint32_t>(viewport.height)
-    };
-
+    scissor.offset = {0, 0};
+    scissor.extent = {static_cast<uint32_t>(viewport.width), static_cast<uint32_t>(viewport.height)};
 
     initVulkan();
     initSwapchain();
@@ -97,7 +80,7 @@ VulkanBackend::VulkanBackend(GLFWwindow* window) :
     initSyncStructs();
     initDescriptors();
     initImgui();
-    
+
     initProfiler();
 
     textures = Textures(*this);
@@ -113,21 +96,22 @@ void VulkanBackend::deinit()
 void VulkanBackend::initVulkan()
 {
     vkb::InstanceBuilder builder;
-    vkbInstance = builder.set_app_name("engine")
+    vkbInstance = builder
+                      .set_app_name("engine")
 #ifdef DEBUG
-        .request_validation_layers(true)
-#else //DEBUG
-        .request_validation_layers(false)
-#endif //DEBUG
-        .require_api_version(1, 3, 0)
-        .use_default_debug_messenger()
-        .build()
-        .value();
+                      .request_validation_layers(true)
+#else   // DEBUG
+                      .request_validation_layers(false)
+#endif  // DEBUG
+                      .require_api_version(1, 3, 0)
+                      .use_default_debug_messenger()
+                      .build()
+                      .value();
     instance = vkbInstance.instance;
     debugMessenger = vkbInstance.debug_messenger;
 
     VkResult err = glfwCreateWindowSurface(instance, window, NULL, &surface);
-    if (err != VK_SUCCESS) 
+    if (err != VK_SUCCESS)
     {
         std::println("Failed creating surface");
     }
@@ -155,16 +139,15 @@ void VulkanBackend::initVulkan()
     features.drawIndirectFirstInstance = true;
     features.depthClamp = true;
 
-    vkb::PhysicalDeviceSelector selector { vkbInstance };
-    vkb::PhysicalDevice physicalDevice = selector
-        .set_minimum_version(1, 3)
-        .set_required_features(features)
-        .set_required_features_12(features12)
-        .set_required_features_13(features13)
-        .set_surface(surface)
-        .select()
-        .value();
-    vkb::DeviceBuilder deviceBuilder { physicalDevice };
+    vkb::PhysicalDeviceSelector selector{vkbInstance};
+    vkb::PhysicalDevice physicalDevice = selector.set_minimum_version(1, 3)
+                                             .set_required_features(features)
+                                             .set_required_features_12(features12)
+                                             .set_required_features_13(features13)
+                                             .set_surface(surface)
+                                             .select()
+                                             .value();
+    vkb::DeviceBuilder deviceBuilder{physicalDevice};
     VkPhysicalDeviceShaderDrawParametersFeatures shaderDrawParametersFeatures = {};
     shaderDrawParametersFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES;
     shaderDrawParametersFeatures.pNext = nullptr;
@@ -191,52 +174,53 @@ void VulkanBackend::initSwapchain()
 {
     vkDeviceWaitIdle(device);
 
-    vkb::SwapchainBuilder builder { gpu, device, surface };
+    vkb::SwapchainBuilder builder{gpu, device, surface};
     vkb::Swapchain vkbSwapchain = builder
-        .use_default_format_selection()
-        //.set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
-        .set_desired_present_mode(VK_PRESENT_MODE_MAILBOX_KHR)
-        //.set_desired_present_mode(VK_PRESENT_MODE_FIFO_RELAXED_KHR)
-        //.set_desired_present_mode(VK_PRESENT_MODE_IMMEDIATE_KHR)
-        .set_desired_min_image_count(MaxFramesInFlight)
-        .set_desired_extent(viewport.width, viewport.height)
-        .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
-        .build()
-        .value();
+                                      .use_default_format_selection()
+                                      //.set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
+                                      .set_desired_present_mode(VK_PRESENT_MODE_MAILBOX_KHR)
+                                      //.set_desired_present_mode(VK_PRESENT_MODE_FIFO_RELAXED_KHR)
+                                      //.set_desired_present_mode(VK_PRESENT_MODE_IMMEDIATE_KHR)
+                                      .set_desired_min_image_count(MaxFramesInFlight)
+                                      .set_desired_extent(viewport.width, viewport.height)
+                                      .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+                                      .build()
+                                      .value();
 
     swapchain = vkbSwapchain.swapchain;
     swapchainImages = vkbSwapchain.get_images().value();
     swapchainImageViews = vkbSwapchain.get_image_views().value();
     swapchainImageFormat = vkbSwapchain.image_format;
 
-    //swapchainDeinitQueue.enqueue([=]() {
-    //    LOG_CALL(vkDestroySwapchainKHR(device, swapchain, nullptr));
-    //});
+    // swapchainDeinitQueue.enqueue([=]() {
+    //     LOG_CALL(vkDestroySwapchainKHR(device, swapchain, nullptr));
+    // });
 
-    //VkExtent3D depthImageExtent(viewport.width, viewport.height, 1.f);
-    //depthFormat = VK_FORMAT_D32_SFLOAT;
+    // VkExtent3D depthImageExtent(viewport.width, viewport.height, 1.f);
+    // depthFormat = VK_FORMAT_D32_SFLOAT;
 
-    //VkImageCreateInfo depthImageInfo = imageCreateInfo(depthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, depthImageExtent);
+    // VkImageCreateInfo depthImageInfo = imageCreateInfo(depthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+    // depthImageExtent);
 
-    //VmaAllocationCreateInfo depthImageAlloc = {};
-    //depthImageAlloc.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    //depthImageAlloc.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    //vmaCreateImage(allocator, &depthImageInfo, &depthImageAlloc, &depthImage.image, &depthImage.allocation, nullptr);
+    // VmaAllocationCreateInfo depthImageAlloc = {};
+    // depthImageAlloc.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    // depthImageAlloc.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    // vmaCreateImage(allocator, &depthImageInfo, &depthImageAlloc, &depthImage.image, &depthImage.allocation, nullptr);
 
-    //swapchainDeinitQueue.enqueue([=]() {
-    //    LOG_CALL(vmaDestroyImage(allocator, depthImage.image, depthImage.allocation));
-    //});
+    // swapchainDeinitQueue.enqueue([=]() {
+    //     LOG_CALL(vmaDestroyImage(allocator, depthImage.image, depthImage.allocation));
+    // });
 
-    //VkImageViewCreateInfo depthViewInfo = imageViewCreateInfo(depthFormat, depthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
-    //VK_CHECK(vkCreateImageView(device, &depthViewInfo, nullptr, &depthImageView));
+    // VkImageViewCreateInfo depthViewInfo = imageViewCreateInfo(depthFormat, depthImage.image,
+    // VK_IMAGE_ASPECT_DEPTH_BIT); VK_CHECK(vkCreateImageView(device, &depthViewInfo, nullptr, &depthImageView));
 
-    //swapchainDeinitQueue.enqueue([=]() {
-    //    LOG_CALL(vkDestroyImageView(device, depthImageView, nullptr));
-    //});
-    
+    // swapchainDeinitQueue.enqueue([=]() {
+    //     LOG_CALL(vkDestroyImageView(device, depthImageView, nullptr));
+    // });
+
     // Backbuffer
     backbufferImage.format = VK_FORMAT_R16G16B16A16_SFLOAT;
-    backbufferImage.extent = { static_cast<uint32_t>(viewport.width), static_cast<uint32_t>(viewport.height), 1 };
+    backbufferImage.extent = {static_cast<uint32_t>(viewport.width), static_cast<uint32_t>(viewport.height), 1};
     VkImageUsageFlags backbufferUsageFlags = {};
     backbufferUsageFlags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     backbufferUsageFlags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -251,7 +235,8 @@ void VulkanBackend::initSwapchain()
     allocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     vmaCreateImage(allocator, &imgInfo, &allocInfo, &backbufferImage.image, &backbufferImage.allocation, nullptr);
 
-    auto imgViewInfo = vkutil::init::imageViewCreateInfo(backbufferImage.format, backbufferImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
+    auto imgViewInfo = vkutil::init::imageViewCreateInfo(
+        backbufferImage.format, backbufferImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
     VK_CHECK(vkCreateImageView(device, &imgViewInfo, nullptr, &backbufferImage.view));
 
     // Depth
@@ -276,9 +261,11 @@ void VulkanBackend::initSwapchain()
 
 void VulkanBackend::initCommandBuffers()
 {
-    auto commandPoolInfo = vkutil::init::commandPoolCreateInfo(graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+    auto commandPoolInfo = vkutil::init::commandPoolCreateInfo(
+        graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
     auto cmdAllocInfo = vkutil::init::commandBufferAllocateInfo(1, VK_COMMAND_BUFFER_LEVEL_PRIMARY, VK_NULL_HANDLE);
-    for (int i = 0; i < MaxFramesInFlight; i++) {
+    for (int i = 0; i < MaxFramesInFlight; i++)
+    {
         VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &frames[i].cmdPool));
         cmdAllocInfo.commandPool = frames[i].cmdPool;
         VK_CHECK(vkAllocateCommandBuffers(device, &cmdAllocInfo, &frames[i].cmdBuffer));
@@ -288,34 +275,36 @@ void VulkanBackend::initCommandBuffers()
     VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &immediateCmdPool));
     cmdAllocInfo = vkutil::init::commandBufferAllocateInfo(1, VK_COMMAND_BUFFER_LEVEL_PRIMARY, immediateCmdPool);
     VK_CHECK(vkAllocateCommandBuffers(device, &cmdAllocInfo, &immediateCmdBuffer));
-    
-    //deinitQueue.enqueue([=]() {
-    //        LOG_CALL(
-    //                for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    //                vkDestroyCommandPool(device, inFlightFrames[i].cmdPool, nullptr);
-    //                }
-    //                );
-    //        });
 
-    //VkCommandPoolCreateInfo uploadCmdPoolInfo = commandPoolCreateInfo(graphicsQueueFamily, 0);
-    //VK_CHECK(vkCreateCommandPool(device, &uploadCmdPoolInfo, nullptr, &uploadCtx.cmdPool));
+    // deinitQueue.enqueue([=]() {
+    //         LOG_CALL(
+    //                 for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    //                 vkDestroyCommandPool(device, inFlightFrames[i].cmdPool, nullptr);
+    //                 }
+    //                 );
+    //         });
 
-    //VkCommandBufferAllocateInfo uploadCmdAllocInfo = commandBufferAllocateInfo(1, VK_COMMAND_BUFFER_LEVEL_PRIMARY, uploadCtx.cmdPool);
-    //VK_CHECK(vkAllocateCommandBuffers(device, &uploadCmdAllocInfo, &uploadCtx.cmdBuffer));
+    // VkCommandPoolCreateInfo uploadCmdPoolInfo = commandPoolCreateInfo(graphicsQueueFamily, 0);
+    // VK_CHECK(vkCreateCommandPool(device, &uploadCmdPoolInfo, nullptr, &uploadCtx.cmdPool));
 
-    //deinitQueue.enqueue([=]() {
-    //        LOG_CALL(vkDestroyCommandPool(device, uploadCtx.cmdPool, nullptr));
-    //});
+    // VkCommandBufferAllocateInfo uploadCmdAllocInfo = commandBufferAllocateInfo(1, VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+    // uploadCtx.cmdPool); VK_CHECK(vkAllocateCommandBuffers(device, &uploadCmdAllocInfo, &uploadCtx.cmdBuffer));
+
+    // deinitQueue.enqueue([=]() {
+    //         LOG_CALL(vkDestroyCommandPool(device, uploadCtx.cmdPool, nullptr));
+    // });
 }
 
 void VulkanBackend::initSyncStructs()
 {
-    // We want to create the fence with the Create Signaled flag, so we can wait on it before using it on a GPU command (for the first frame)
+    // We want to create the fence with the Create Signaled flag, so we can wait on it before using it on a GPU command
+    // (for the first frame)
     auto fenceCreateInfo = vkutil::init::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
     // For the semaphores we don't need any flags
     auto semCreateInfo = vkutil::init::semaphoreCreateInfo(0);
 
-    for (int i = 0; i < MaxFramesInFlight; i++) {
+    for (int i = 0; i < MaxFramesInFlight; i++)
+    {
         VK_CHECK(vkCreateFence(device, &fenceCreateInfo, nullptr, &frames[i].renderFence));
         VK_CHECK(vkCreateSemaphore(device, &semCreateInfo, nullptr, &frames[i].presentSem));
         VK_CHECK(vkCreateSemaphore(device, &semCreateInfo, nullptr, &frames[i].renderSem));
@@ -324,25 +313,25 @@ void VulkanBackend::initSyncStructs()
     // TEMP: move somewhere else. Immediate context
     VK_CHECK(vkCreateFence(device, &fenceCreateInfo, nullptr, &immediateFence));
 
-    //deinitQueue.enqueue([=](){
-    //    LOG_CALL(
-    //        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    //            vkDestroyFence(device, inFlightFrames[i].renderFence, nullptr);
-    //            vkDestroySemaphore(device, inFlightFrames[i].presentSem, nullptr);
-    //            vkDestroySemaphore(device, inFlightFrames[i].renderSem, nullptr);
-    //        }
-    //    );
-    //});
+    // deinitQueue.enqueue([=](){
+    //     LOG_CALL(
+    //         for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    //             vkDestroyFence(device, inFlightFrames[i].renderFence, nullptr);
+    //             vkDestroySemaphore(device, inFlightFrames[i].presentSem, nullptr);
+    //             vkDestroySemaphore(device, inFlightFrames[i].renderSem, nullptr);
+    //         }
+    //     );
+    // });
 
-    //VkFenceCreateInfo uploadFenceCreateInfo = vkutil::init::fenceCreateInfo(0);
-    //VK_CHECK(vkCreateFence(device, &uploadFenceCreateInfo, nullptr, &uploadCtx.uploadFence));
-    //deinitQueue.enqueue([=](){
-    //    LOG_CALL(vkDestroyFence(device, uploadCtx.uploadFence, nullptr));
-    //});
+    // VkFenceCreateInfo uploadFenceCreateInfo = vkutil::init::fenceCreateInfo(0);
+    // VK_CHECK(vkCreateFence(device, &uploadFenceCreateInfo, nullptr, &uploadCtx.uploadFence));
+    // deinitQueue.enqueue([=](){
+    //     LOG_CALL(vkDestroyFence(device, uploadCtx.uploadFence, nullptr));
+    // });
 }
 
 // TODO(savas): REMOVE ME! Testing purposes only
-struct SceneUniforms 
+struct SceneUniforms
 {
     glm::mat4 view;
     glm::mat4 projection;
@@ -353,10 +342,9 @@ static VkDescriptorSet sceneDescriptorSet;
 
 void VulkanBackend::initDescriptors()
 {
-    VkDescriptorPoolSize poolSizes[] =
-    {
-        VkDescriptorPoolSize { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 10 },
-        VkDescriptorPoolSize { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10 },
+    VkDescriptorPoolSize poolSizes[] = {
+        VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 10},
+        VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10},
     };
     descriptorAllocator.init(device, 20, poolSizes);
 
@@ -369,11 +357,14 @@ void VulkanBackend::initDescriptors()
         DescriptorSetLayoutBuilder builder;
         builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
         // sceneDescriptorSetLayout = builder.build(device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-        sceneDescriptorSetLayout = builder.build(device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
+        sceneDescriptorSetLayout = builder.build(
+            device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
         sceneDescriptorSet = descriptorAllocator.allocate(device, sceneDescriptorSetLayout);
 
-        VkDescriptorBufferInfo descriptorBufferInfo = vkutil::init::descriptorBufferInfo(sceneUniformBuffer.buffer, 0, sizeof(SceneUniforms));
-        VkWriteDescriptorSet descriptorImageWrite = vkutil::init::writeDescriptorBuffer(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, sceneDescriptorSet, &descriptorBufferInfo, 0);
+        VkDescriptorBufferInfo descriptorBufferInfo = vkutil::init::descriptorBufferInfo(
+            sceneUniformBuffer.buffer, 0, sizeof(SceneUniforms));
+        VkWriteDescriptorSet descriptorImageWrite = vkutil::init::writeDescriptorBuffer(
+            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, sceneDescriptorSet, &descriptorBufferInfo, 0);
 
         vkUpdateDescriptorSets(device, 1, &descriptorImageWrite, 0, nullptr);
     }
@@ -381,20 +372,12 @@ void VulkanBackend::initDescriptors()
 
 void VulkanBackend::initImgui()
 {
-    VkDescriptorPoolSize pool_sizes[] = 
-        { 
-            { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
-        		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
-        		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
-        		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
-        		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
-        		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
-        		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
-        		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
-        		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
-        		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
-        		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 } 
-        };
+    VkDescriptorPoolSize pool_sizes[] = {{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000}, {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000}, {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
+        {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000}, {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000}, {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000}, {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000}};
 
     VkDescriptorPoolCreateInfo poolCreateInfo = {};
     poolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -422,14 +405,14 @@ void VulkanBackend::initImgui()
     imguiInitInfo.ImageCount = 3;
     imguiInitInfo.UseDynamicRendering = true;
 
-    //dynamic rendering parameters for imgui to use
+    // dynamic rendering parameters for imgui to use
     imguiInitInfo.PipelineRenderingCreateInfo = {};
     imguiInitInfo.PipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
     imguiInitInfo.PipelineRenderingCreateInfo.pNext = nullptr;
 
     imguiInitInfo.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
     imguiInitInfo.PipelineRenderingCreateInfo.pColorAttachmentFormats = &swapchainImageFormat;
-	
+
     imguiInitInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 
     ImGui_ImplVulkan_Init(&imguiInitInfo);
@@ -439,31 +422,32 @@ void VulkanBackend::initImgui()
 
 void VulkanBackend::initProfiler()
 {
-    auto commandPoolInfo = vkutil::init::commandPoolCreateInfo(graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+    auto commandPoolInfo = vkutil::init::commandPoolCreateInfo(
+        graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
     auto fenceCreateInfo = vkutil::init::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
-    for (int i = 0; i < MaxFramesInFlight; i++) {
+    for (int i = 0; i < MaxFramesInFlight; i++)
+    {
         VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &frames[i].tracyCmdPool));
 
-        auto cmdAllocInfo = vkutil::init::commandBufferAllocateInfo(1, VK_COMMAND_BUFFER_LEVEL_PRIMARY, frames[i].tracyCmdPool);
+        auto cmdAllocInfo = vkutil::init::commandBufferAllocateInfo(
+            1, VK_COMMAND_BUFFER_LEVEL_PRIMARY, frames[i].tracyCmdPool);
         VK_CHECK(vkAllocateCommandBuffers(device, &cmdAllocInfo, &frames[i].tracyCmdBuffer));
 
         VK_CHECK(vkCreateFence(device, &fenceCreateInfo, nullptr, &frames[i].tracyRenderFence));
 
-        frames[i].tracyCtx = TracyVkContextCalibrated(instance, gpu, device, graphicsQueue, frames[i].tracyCmdBuffer, vkbInstance.fp_vkGetInstanceProcAddr, vkbInstance.fp_vkGetDeviceProcAddr);
+        frames[i].tracyCtx = TracyVkContextCalibrated(instance, gpu, device, graphicsQueue, frames[i].tracyCmdBuffer,
+            vkbInstance.fp_vkGetInstanceProcAddr, vkbInstance.fp_vkGetDeviceProcAddr);
     }
 }
 
-FrameData& VulkanBackend::currentFrame()
-{
-    return frames[currentFrameNumber % MaxFramesInFlight];
-}
+FrameData& VulkanBackend::currentFrame() { return frames[currentFrameNumber % MaxFramesInFlight]; }
 
 void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scene& scene)
 {
     ZoneScoped;
     constexpr uint64_t timeoutNs = 100'000'000'000'000;
 
-    //auto frame = currentFrame();
+    // auto frame = currentFrame();
     FrameData& frame = fframe.data;
     auto cmd = frame.cmdBuffer;
 
@@ -474,8 +458,7 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
         VK_CHECK(vkWaitForFences(device, 1, &frame.renderFence, true, timeoutNs));
         // TODO: move after swapchain regen... maybe?
 
-        VK_CHECK(vkAcquireNextImageKHR(device, swapchain, timeoutNs,
-            frame.presentSem, nullptr, &swapchainImageIndex));
+        VK_CHECK(vkAcquireNextImageKHR(device, swapchain, timeoutNs, frame.presentSem, nullptr, &swapchainImageIndex));
         // TODO: if swapchain regen requested process, reacquire index and continue
 
         VK_CHECK(vkResetFences(device, 1, &frame.renderFence));
@@ -503,12 +486,15 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
         {
             ZoneScopedCpuGpuAuto("Transition resources", currentFrame());
 
-            vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-            vkutil::image::transitionImage(cmd, depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-            vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            vkutil::image::transitionImage(
+                cmd, backbufferImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+            vkutil::image::transitionImage(
+                cmd, depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+            vkutil::image::transitionImage(
+                cmd, backbufferImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         }
 
-        VkExtent2D swapchainSize { static_cast<uint32_t>(viewport.width), static_cast<uint32_t>(viewport.height) };
+        VkExtent2D swapchainSize{static_cast<uint32_t>(viewport.width), static_cast<uint32_t>(viewport.height)};
 
         // Update scene descriptor set
         {
@@ -543,7 +529,8 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
 
                     // TEMP: each renderpass should specify this themselves
                     if (node.pass.debugName != "CSM pass")
-                        vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 0, 1, &sceneDescriptorSet, 0, nullptr);
+                        vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 0,
+                            1, &sceneDescriptorSet, 0, nullptr);
 
                     vkCmdSetViewport(cmd, 0, 1, &viewport);
                     vkCmdSetScissor(cmd, 0, 1, &scissor);
@@ -559,13 +546,16 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
             }
         }
 
-        VkExtent2D backbufferSize { backbufferImage.extent.width, backbufferImage.extent.height };
+        VkExtent2D backbufferSize{backbufferImage.extent.width, backbufferImage.extent.height};
         {
             ZoneScopedCpuGpuAuto("Blit to swapchain", currentFrame());
 
-            vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-            vkutil::image::transitionImage(cmd, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-            vkutil::image::blitImageToImage(cmd, backbufferImage.image, backbufferSize, swapchainImages[swapchainImageIndex], swapchainSize);
+            vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+            vkutil::image::transitionImage(cmd, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            vkutil::image::blitImageToImage(
+                cmd, backbufferImage.image, backbufferSize, swapchainImages[swapchainImageIndex], swapchainSize);
         }
 
         {
@@ -573,17 +563,21 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
 
             ImGui::Render();
 
-            vkutil::image::transitionImage(cmd, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            vkutil::image::transitionImage(cmd, swapchainImages[swapchainImageIndex],
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-            VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(swapchainImageViews[swapchainImageIndex], nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-            VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, 1, nullptr);
+            VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(
+                swapchainImageViews[swapchainImageIndex], nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(
+                swapchainSize, &colorAttachmentInfo, 1, nullptr);
 
             vkCmdBeginRendering(cmd, &renderingInfo);
             ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
             vkCmdEndRendering(cmd);
         }
 
-        vkutil::image::transitionImage(cmd, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        vkutil::image::transitionImage(cmd, swapchainImages[swapchainImageIndex],
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
         VK_CHECK(vkEndCommandBuffer(cmd));
     }
@@ -592,7 +586,8 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
         ZoneScopedCpuGpuAuto("Submit", currentFrame());
 
         auto cmdInfo = vkutil::init::commandBufferSubmitInfo(cmd);
-        auto waitInfo = vkutil::init::semaphoreSubmitInfo(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR, frame.presentSem);
+        auto waitInfo = vkutil::init::semaphoreSubmitInfo(
+            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR, frame.presentSem);
         auto signalInfo = vkutil::init::semaphoreSubmitInfo(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, frame.renderSem);
         auto submit = vkutil::init::submitInfo2(&cmdInfo, &waitInfo, &signalInfo);
 
@@ -620,7 +615,7 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
     stats.finishedFrameCount++;
 }
 
-void VulkanBackend::immediateSubmit(std::function<void (VkCommandBuffer)>&& f)
+void VulkanBackend::immediateSubmit(std::function<void(VkCommandBuffer)>&& f)
 {
     ZoneScopedCpuGpuAuto("Immediate submit", currentFrame());
 
@@ -632,7 +627,7 @@ void VulkanBackend::immediateSubmit(std::function<void (VkCommandBuffer)>&& f)
 
         auto cmdBeginInfo = vkutil::init::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
         VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
-        
+
         f(cmd);
 
         VK_CHECK(vkEndCommandBuffer(cmd));
@@ -646,23 +641,18 @@ void VulkanBackend::immediateSubmit(std::function<void (VkCommandBuffer)>&& f)
     }
 }
 
-void VulkanBackend::copyBuffer(VkBuffer src, VkBuffer dst, VkBufferCopy copyRegion) 
+void VulkanBackend::copyBuffer(VkBuffer src, VkBuffer dst, VkBufferCopy copyRegion)
 {
     ZoneScopedCpuGpuAuto("Copy buffer", currentFrame());
-    immediateSubmit([&](VkCommandBuffer cmd)
-        {
-            vkCmdCopyBuffer(cmd, src, dst, 1, &copyRegion);
-        }
-    );
+    immediateSubmit([&](VkCommandBuffer cmd) { vkCmdCopyBuffer(cmd, src, dst, 1, &copyRegion); });
 }
 
-void VulkanBackend::copyBufferWithStaging(void* data, size_t size, VkBuffer dst, VkBufferCopy copyRegion) 
+void VulkanBackend::copyBufferWithStaging(void* data, size_t size, VkBuffer dst, VkBufferCopy copyRegion)
 {
     ZoneScopedCpuGpuAuto("Copy buffer with staging", currentFrame());
 
     auto bufInfo = vkutil::init::bufferCreateInfo(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-    AllocatedBuffer staging = allocateBuffer(bufInfo, VMA_MEMORY_USAGE_CPU_ONLY,
-        VMA_ALLOCATION_CREATE_MAPPED_BIT,
+    AllocatedBuffer staging = allocateBuffer(bufInfo, VMA_MEMORY_USAGE_CPU_ONLY, VMA_ALLOCATION_CREATE_MAPPED_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     VmaAllocationInfo stagingInfo;
     vmaGetAllocationInfo(allocator, staging.allocation, &stagingInfo);
@@ -676,32 +666,32 @@ void VulkanBackend::copyBufferWithStaging(void* data, size_t size, VkBuffer dst,
     // TODO: release staging data
 }
 
-AllocatedBuffer VulkanBackend::allocateBuffer(VkBufferCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags, VkMemoryPropertyFlags requiredFlags)
+AllocatedBuffer VulkanBackend::allocateBuffer(
+    VkBufferCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags, VkMemoryPropertyFlags requiredFlags)
 {
     AllocatedBuffer buffer;
-    
-    VmaAllocationCreateInfo allocInfo
-    {
+
+    VmaAllocationCreateInfo allocInfo{
         .flags = flags,
         .usage = usage,
-        .requiredFlags = requiredFlags,    
+        .requiredFlags = requiredFlags,
     };
     VK_CHECK(vmaCreateBuffer(allocator, &info, &allocInfo, &buffer.buffer, &buffer.allocation, nullptr));
 
     return buffer;
 }
 
-AllocatedImage VulkanBackend::allocateImage(VkImageCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags, VkMemoryPropertyFlags requiredFlags, VkImageAspectFlags aspectFlags)
+AllocatedImage VulkanBackend::allocateImage(VkImageCreateInfo info, VmaMemoryUsage usage,
+    VmaAllocationCreateFlags flags, VkMemoryPropertyFlags requiredFlags, VkImageAspectFlags aspectFlags)
 {
     AllocatedImage image;
     image.format = info.format;
     image.extent = info.extent;
-    
-    VmaAllocationCreateInfo allocInfo
-    {
+
+    VmaAllocationCreateInfo allocInfo{
         .flags = flags,
         .usage = usage,
-        .requiredFlags = requiredFlags,    
+        .requiredFlags = requiredFlags,
     };
     VK_CHECK(vmaCreateImage(allocator, &info, &allocInfo, &image.image, &image.allocation, nullptr));
 
@@ -713,11 +703,7 @@ AllocatedImage VulkanBackend::allocateImage(VkImageCreateInfo info, VmaMemoryUsa
 
 VkDeviceAddress VulkanBackend::getBufferDeviceAddress(VkBuffer buffer)
 {
-    VkBufferDeviceAddressInfo addressInfo =
-    {
-        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-        .buffer = buffer
-    };
+    VkBufferDeviceAddressInfo addressInfo = {.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffer};
 
     return vkGetBufferDeviceAddress(device, &addressInfo);
 }

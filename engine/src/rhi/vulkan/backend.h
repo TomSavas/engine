@@ -1,26 +1,23 @@
-#pragma once 
+#pragma once
 
+#include <chrono>
+#include <functional>
+#include <glm/glm.hpp>
+
+#include "VkBootstrap.h"
 #include "engine.h"
-#include "rhi/vulkan/utils/buffer.h"
+#include "result.hpp"
+#include "rhi/vulkan/descriptors.h"
+#include "rhi/vulkan/renderpass.h"
+#include "rhi/vulkan/shader.h"
 #include "rhi/vulkan/utils/bindless.h"
+#include "rhi/vulkan/utils/buffer.h"
 #include "rhi/vulkan/utils/image.h"
 #include "rhi/vulkan/utils/texture.h"
 #include "rhi/vulkan/vulkan.h"
-#include "rhi/vulkan/descriptors.h"
-#include "rhi/vulkan/shader.h"
-#include "rhi/vulkan/renderpass.h"
-
-#include "VkBootstrap.h"
-#include "vk_mem_alloc.h"
-
 #include "tracy/Tracy.hpp"
 #include "tracy/TracyVulkan.hpp"
-
-#include "result.hpp"
-
-#include <chrono>
-#include <glm/glm.hpp>
-#include <functional>
+#include "vk_mem_alloc.h"
 
 struct Stats
 {
@@ -48,7 +45,9 @@ class Mesh;
 class CompiledRenderGraph;
 
 class VulkanBackend;
-enum class backendError {};
+enum class backendError
+{
+};
 result::result<VulkanBackend*, backendError> initVulkanBackend();
 
 struct FrameStats
@@ -67,7 +66,7 @@ struct Frame
 struct VulkanBackend
 {
     VulkanBackend() {}
-    
+
     VulkanBackend(GLFWwindow* window);
     // TODO: init?
     void deinit();
@@ -91,13 +90,13 @@ struct VulkanBackend
     VkQueue graphicsQueue;
     uint32_t graphicsQueueFamily;
 
-    VkViewport  viewport;
-    VkRect2D    scissor;
+    VkViewport viewport;
+    VkRect2D scissor;
 
     // Swapchain
-    VkSwapchainKHR           swapchain;
-    VkFormat                 swapchainImageFormat;
-    std::vector<VkImage>     swapchainImages;
+    VkSwapchainKHR swapchain;
+    VkFormat swapchainImageFormat;
+    std::vector<VkImage> swapchainImages;
     std::vector<VkImageView> swapchainImageViews;
 
     // Immediate ctx
@@ -107,7 +106,7 @@ struct VulkanBackend
 
     // Backbuffer
     AllocatedImage backbufferImage;
-    AllocatedImage depthImage; // TODO: remove
+    AllocatedImage depthImage;  // TODO: remove
 
     // Frames
     static constexpr int MaxFramesInFlight = 2;
@@ -136,16 +135,18 @@ struct VulkanBackend
 
     void render(const Frame& frame, CompiledRenderGraph& compiledRenderGraph, Scene& scene);
 
-    void immediateSubmit(std::function<void (VkCommandBuffer)>&& f);
+    void immediateSubmit(std::function<void(VkCommandBuffer)>&& f);
     void copyBuffer(VkBuffer src, VkBuffer dst, VkBufferCopy copyRegion);
     void copyBufferWithStaging(void* data, size_t size, VkBuffer dst, VkBufferCopy copyRegion = VkBufferCopy());
 
-    AllocatedBuffer allocateBuffer(VkBufferCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags, VkMemoryPropertyFlags requiredFlags);
-    AllocatedImage allocateImage(VkImageCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags, VkMemoryPropertyFlags requiredFlags, VkImageAspectFlags aspectFlags);
+    AllocatedBuffer allocateBuffer(VkBufferCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags,
+        VkMemoryPropertyFlags requiredFlags);
+    AllocatedImage allocateImage(VkImageCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags,
+        VkMemoryPropertyFlags requiredFlags, VkImageAspectFlags aspectFlags);
 
     VkDeviceAddress getBufferDeviceAddress(VkBuffer buffer);
 
-private:
+   private:
     void initVulkan();
     void initSwapchain();
     void initCommandBuffers();

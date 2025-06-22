@@ -1,27 +1,24 @@
-#include "rhi/vulkan/pipeline_builder.h"
-#include "rhi/vulkan/utils/inits.h"
+#include "rhi/vulkan/pipelineBuilder.h"
 
-#include <print>
 #include <vulkan/vulkan_core.h>
 
-PipelineBuilder::PipelineBuilder()
-{
-    reset();
-}
+#include <print>
+
+#include "rhi/vulkan/utils/inits.h"
+
+PipelineBuilder::PipelineBuilder() { reset(); }
 
 void PipelineBuilder::reset()
 {
-    inputAssembly = { .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
-    rasterizer = { .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
+    inputAssembly = {.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
+    rasterizer = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
     colorBlendAttachment = {};
-    multisampling = { .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
-    //pipelineLayout = {};
-    depthStencil = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
-    renderInfo = { 
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+    multisampling = {.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
+    // pipelineLayout = {};
+    depthStencil = {.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
+    renderInfo = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
         .colorAttachmentCount = 0,
-        .pColorAttachmentFormats = nullptr
-     };
+        .pColorAttachmentFormats = nullptr};
 
     shaderStages.clear();
     colorAttachments.clear();
@@ -35,7 +32,8 @@ PipelineBuilder& PipelineBuilder::shaders(VkShaderModule vertexShader, VkShaderM
     return *this;
 }
 
-PipelineBuilder& PipelineBuilder::shaders(VkShaderModule vertexShader, VkShaderModule geometryShader, VkShaderModule fragmentShader)
+PipelineBuilder& PipelineBuilder::shaders(
+    VkShaderModule vertexShader, VkShaderModule geometryShader, VkShaderModule fragmentShader)
 {
     shaderStages.push_back(vkutil::init::shaderStageCreateInfo(VK_SHADER_STAGE_VERTEX_BIT, vertexShader));
     shaderStages.push_back(vkutil::init::shaderStageCreateInfo(VK_SHADER_STAGE_GEOMETRY_BIT, geometryShader));
@@ -82,21 +80,17 @@ PipelineBuilder& PipelineBuilder::disableMultisampling()
 
 PipelineBuilder& PipelineBuilder::disableBlending()
 {
-     colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-                                           VK_COLOR_COMPONENT_G_BIT |
-                                           VK_COLOR_COMPONENT_B_BIT |
-                                           VK_COLOR_COMPONENT_A_BIT;
-     colorBlendAttachment.blendEnable = VK_FALSE;
+    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    colorBlendAttachment.blendEnable = VK_FALSE;
 
-     return *this;
+    return *this;
 }
 
 PipelineBuilder& PipelineBuilder::enableAlphaBlending()
 {
-    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-                                          VK_COLOR_COMPONENT_G_BIT |
-                                          VK_COLOR_COMPONENT_B_BIT |
-                                          VK_COLOR_COMPONENT_A_BIT;
+    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     colorBlendAttachment.blendEnable = VK_TRUE;
     colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
     colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -121,7 +115,7 @@ PipelineBuilder& PipelineBuilder::colorAttachmentFormat(VkFormat format)
 PipelineBuilder& PipelineBuilder::depthFormat(VkFormat format)
 {
     renderInfo.depthAttachmentFormat = format;
-    
+
     return *this;
 }
 
@@ -183,9 +177,10 @@ VkPipeline PipelineBuilder::build(VkDevice device, VkPipelineLayout layout)
     colorBlending.pAttachments = &colorBlendAttachment;
 
     // completely clear VertexInputStateCreateInfo, as we have no need for it
-    VkPipelineVertexInputStateCreateInfo vertexInputInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
 
-    VkGraphicsPipelineCreateInfo pipelineInfo = { .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
+    VkGraphicsPipelineCreateInfo pipelineInfo = {.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
     // connect the renderInfo to the pNext extension mechanism
     pipelineInfo.pNext = &renderInfo;
 
@@ -200,16 +195,16 @@ VkPipeline PipelineBuilder::build(VkDevice device, VkPipelineLayout layout)
     pipelineInfo.pDepthStencilState = &depthStencil;
     pipelineInfo.layout = layout;
 
-    VkDynamicState state[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+    VkDynamicState state[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
 
-    VkPipelineDynamicStateCreateInfo dynamicInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
+    VkPipelineDynamicStateCreateInfo dynamicInfo = {.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
     dynamicInfo.pDynamicStates = &state[0];
     dynamicInfo.dynamicStateCount = 2;
 
     pipelineInfo.pDynamicState = &dynamicInfo;
 
     VkPipeline newPipeline;
-    if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &newPipeline) != VK_SUCCESS) 
+    if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &newPipeline) != VK_SUCCESS)
     {
         std::println("Failed creating pipeline");
         newPipeline = VK_NULL_HANDLE;

@@ -1,9 +1,9 @@
-#pragma once 
+#pragma once
 
-#include "rhi/vulkan/pipeline_builder.h"
-#include "rhi/vulkan/utils/buffer.h"
+#include "renderGraph.h"
+#include "rhi/vulkan/pipelineBuilder.h"
 #include "rhi/vulkan/utils/bindless.h"
-#include "render_graph.h"
+#include "rhi/vulkan/utils/buffer.h"
 
 struct VulkanBackend;
 
@@ -20,4 +20,5 @@ struct ShadowPassRenderGraphData
     RenderGraphResource<Buffer> cascadeData;
 };
 
-ShadowPassRenderGraphData csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend, RenderGraph& graph, int cascadeCount=4);
+ShadowPassRenderGraphData csmPass(
+    std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend, RenderGraph& graph, int cascadeCount = 4);

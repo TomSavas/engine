@@ -1,14 +1,13 @@
 #pragma once
 
-#include "rhi/vulkan/utils/texture.h"
-
+#include <stdint.h>
 #include <vulkan/vulkan.h>
 
-#include <stdint.h>
 #include <unordered_set>
 #include <vector>
 
 #include "rhi/vulkan/descriptors.h"
+#include "rhi/vulkan/utils/texture.h"
 
 using BindlessTexture = uint32_t;
 
@@ -16,13 +15,13 @@ struct VulkanBackend;
 
 struct BindlessResources
 {
-	static constexpr BindlessTexture k_white = 0;
-	static constexpr BindlessTexture k_black = 1;
-	static constexpr BindlessTexture k_error = 2;
+    static constexpr BindlessTexture k_white = 0;
+    static constexpr BindlessTexture k_black = 1;
+    static constexpr BindlessTexture k_error = 2;
 
-	VulkanBackend* backend;
+    VulkanBackend* backend;
 
-	DescriptorAllocator bindlessDescPoolAllocator;
+    DescriptorAllocator bindlessDescPoolAllocator;
 
     VkDescriptorSet bindlessTexDesc;
     VkDescriptorSetLayout bindlessTexDescLayout;
@@ -31,11 +30,11 @@ struct BindlessResources
     std::vector<Texture> textures;
     BindlessTexture lastUsedIndex;
     int capacity;
-    std::unordered_set<BindlessTexture> freeIndices; // All free indices that occur before lastUsedIndex
-	
-	explicit BindlessResources(VulkanBackend& backend);
+    std::unordered_set<BindlessTexture> freeIndices;  // All free indices that occur before lastUsedIndex
 
-	BindlessTexture addTexture(Texture texture);
-	Texture getTexture(BindlessTexture handle, BindlessTexture defaultTexture = k_error);
-	void removeTexture(BindlessTexture handle);
+    explicit BindlessResources(VulkanBackend& backend);
+
+    BindlessTexture addTexture(Texture texture);
+    Texture getTexture(BindlessTexture handle, BindlessTexture defaultTexture = k_error);
+    void removeTexture(BindlessTexture handle);
 };
