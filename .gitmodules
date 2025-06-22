@@ -25,3 +25,6 @@
 [submodule "lib/imgui"]
 	path = lib/imgui
 	url = https://github.com/ocornut/imgui.git
+[submodule "lib/result"]
+	path = lib/result
+	url = https://github.com/bitwizeshift/result.git

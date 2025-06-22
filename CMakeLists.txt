@@ -54,6 +54,10 @@ target_link_libraries(${PROJECT} Tracy::TracyClient)
 add_subdirectory(lib/VulkanMemoryAllocator)
 target_link_libraries(${PROJECT} GPUOpen::VulkanMemoryAllocator)
 
+add_subdirectory(lib/result)
+target_link_libraries(${PROJECT} Result::Result)
+add_compile_definitions(RESULT_NAMESPACE=result)
+
 add_definitions(-DGLFW_INCLUDE_NONE)
 
 find_program(GLSLC glslc HINTS /usr/bin /usr/local/bin $ENV{VULKAN_SDK}/Bin/ $ENV{VULKAN_SDK}/Bin32/)
