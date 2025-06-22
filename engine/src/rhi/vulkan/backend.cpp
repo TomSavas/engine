@@ -12,12 +12,16 @@
 
 #include "rhi/vulkan/renderpass.h"
 
+#include "render_graph.h"
+
 #include "tracy/Tracy.hpp"
 #include "tracy/TracyVulkan.hpp"
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
+
+#include "result.hpp"
 
 #include "GLFW/glfw3.h"
 
@@ -29,13 +33,12 @@
 #include <chrono>
 #include <cmath>
 
-#include "render_graph.h"
 
-std::optional<VulkanBackend*> initVulkanBackend()
+result::result<VulkanBackend*, backendError> initVulkanBackend()
 {
     if (!glfwInit()) {
         std::println("Failed initing GLFW");
-        return {};
+        return result::fail(backendError{});
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -51,14 +54,19 @@ Frame VulkanBackend::newFrame()
 {
     return Frame
     {
-        .startTime = std::chrono::high_resolution_clock::now(),
-        .frameIndex = currentFrameNumber
+        .stats =
+        {
+            .startTime = std::chrono::high_resolution_clock::now(),
+            .frameIndex = currentFrameNumber,
+            .shutdownRequested = glfwWindowShouldClose(window),
+        },
+        .data = currentFrame(),
     };
 }
 
-void VulkanBackend::endFrame(Frame) 
+FrameStats VulkanBackend::endFrame(Frame&& frame)
 {
-    
+    return frame.stats;
 }
 
 VulkanBackend::VulkanBackend(GLFWwindow* window) : 
@@ -450,12 +458,13 @@ FrameData& VulkanBackend::currentFrame()
     return frames[currentFrameNumber % MaxFramesInFlight];
 }
 
-void VulkanBackend::render(CompiledRenderGraph& graph, Scene& scene)
+void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scene& scene)
 {
     ZoneScoped;
     constexpr uint64_t timeoutNs = 100'000'000'000'000;
 
-    auto frame = currentFrame();
+    //auto frame = currentFrame();
+    FrameData& frame = fframe.data;
     auto cmd = frame.cmdBuffer;
 
     uint32_t swapchainImageIndex;

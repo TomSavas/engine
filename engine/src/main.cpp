@@ -32,7 +32,6 @@
 
 #include "passes/testPass.h"
 
-// TEMP: test for tracy allocations
 void* operator new(std::size_t size) noexcept(false)
 {
     void* ptr = std::malloc(size);
@@ -88,6 +87,8 @@ struct WorldRenderer
 
     void render(Frame& frame, Scene& scene, double dt)
     {
+        glfwPollEvents();
+
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
@@ -102,45 +103,37 @@ struct WorldRenderer
         // backend.recordCommandBuffer(compiledRenderGraph);
         if (compiledRenderGraph)
         {
-            backend.render(*compiledRenderGraph, scene);
+            backend.render(frame, *compiledRenderGraph, scene);
         }
     }
 };
 
-int main(void) 
+int main(void)
 {
     // TODO: add an allocator here
-    // TODO: add multithreading solution: Main thread, GPU thread and worker threads. 
+    // TODO: add multithreading solution: Main thread, GPU thread and worker threads.
 
     // NOTE: extract VulkanBackend as interface when implementing other backends
-    std::optional<VulkanBackend*> backend = initVulkanBackend();
-    if (!backend)
-    {
-        std::println("Failed to initialize backend");
-        return 0;
-    }
+    VulkanBackend* backend = initVulkanBackend()
+        .expect("Failed initialising Vulkan backend");
 
-    WorldRenderer worldRenderer = WorldRenderer(**backend);
+    WorldRenderer worldRenderer = WorldRenderer(*backend);
     worldRenderer.compileRenderGraph();
 
-    // TODO: should be a task for IO threads
-    Scene scene = Scene("Sponza", **backend);
-    scene.load("../assets/Sponza/Sponza.gltf");
+    Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf")
+        .value_or(emptyScene(*backend)); // TODO: Not ideal, would be better if we could pass a lambda here
 
-    Frame lastFrame = (*backend)->newFrame();
-    (*backend)->endFrame(lastFrame);
-    while (!(*backend)->shutdownRequested)
+    FrameStats lastFrameStats = backend->endFrame(backend->newFrame());
+    while (!lastFrameStats.shutdownRequested)
     {
-        Frame frame = (*backend)->newFrame();
-        std::chrono::duration<double> elapsed = frame.startTime - lastFrame.startTime;
-
-        glfwPollEvents();
+        Frame frame = backend->newFrame();
+        std::chrono::duration<double> elapsed = frame.stats.startTime - lastFrameStats.startTime;
 
         worldRenderer.render(frame, scene, elapsed.count());
-        (*backend)->endFrame(frame);
-        lastFrame = frame;
+
+        lastFrameStats = backend->endFrame(std::move(frame));
     }
-    (*backend)->deinit();
+    backend->deinit();
 
     return 0;
 }

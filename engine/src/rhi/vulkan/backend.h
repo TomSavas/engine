@@ -16,6 +16,8 @@
 #include "tracy/Tracy.hpp"
 #include "tracy/TracyVulkan.hpp"
 
+#include "result.hpp"
+
 #include <chrono>
 #include <glm/glm.hpp>
 #include <functional>
@@ -46,12 +48,20 @@ class Mesh;
 class CompiledRenderGraph;
 
 class VulkanBackend;
-std::optional<VulkanBackend*> initVulkanBackend();
+enum class backendError {};
+result::result<VulkanBackend*, backendError> initVulkanBackend();
 
-struct Frame 
+struct FrameStats
 {
     std::chrono::time_point<std::chrono::high_resolution_clock> startTime;
     uint64_t frameIndex;
+    bool shutdownRequested;
+};
+
+struct Frame
+{
+    FrameStats stats;
+    std::reference_wrapper<FrameData> data;
 };
 
 struct VulkanBackend
@@ -65,9 +75,7 @@ struct VulkanBackend
     FrameData& currentFrame();
 
     Frame newFrame();
-    void endFrame(Frame);
-
-    bool shutdownRequested = false;
+    FrameStats endFrame(Frame&& frame);
 
     GLFWwindow* window;
 
@@ -126,7 +134,7 @@ struct VulkanBackend
 
     VkDescriptorSetLayout sceneDescriptorSetLayout;
 
-    void render(CompiledRenderGraph& compiledRenderGraph, Scene& scene);
+    void render(const Frame& frame, CompiledRenderGraph& compiledRenderGraph, Scene& scene);
 
     void immediateSubmit(std::function<void (VkCommandBuffer)>&& f);
     void copyBuffer(VkBuffer src, VkBuffer dst, VkBufferCopy copyRegion);

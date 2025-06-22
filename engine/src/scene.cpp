@@ -138,6 +138,35 @@ void Scene::update(float dt, float currentTimeMs, GLFWwindow* window)
     updateFreeCamera(dt, window, *activeCamera);
 }
 
+result::result<Scene, assetError> loadScene(VulkanBackend& backend, std::string name, std::string path)
+{
+    Scene scene = Scene(name, backend);
+
+    tinygltf::Model model;
+    tinygltf::TinyGLTF loader;
+    std::string err;
+    std::string warn;
+
+    std::println("Loading {}", path);
+    if (!loader.LoadASCIIFromFile(&model, &err, &warn, path))
+    {
+        std::println("{}", err);
+        std::println("{}", warn);
+        return result::fail(assetError{});
+    }
+
+    std::println("Successfully loaded {}", path);
+    scene.addMeshes(model);
+    scene.createBuffers();
+
+    return scene;
+}
+
+Scene emptyScene(VulkanBackend& backend)
+{
+    return Scene("empty", backend);
+}
+
 void Scene::load(const char* path)
 {
     tinygltf::Model model;
