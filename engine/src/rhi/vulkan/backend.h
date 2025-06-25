@@ -24,7 +24,7 @@ struct Stats
     uint64_t finishedFrameCount = 0;
 };
 
-struct FrameData
+struct FrameCtx
 {
     VkSemaphore presentSem;
     VkSemaphore renderSem;
@@ -45,9 +45,7 @@ class Mesh;
 class CompiledRenderGraph;
 
 class VulkanBackend;
-enum class backendError
-{
-};
+enum class backendError {};
 result::result<VulkanBackend*, backendError> initVulkanBackend();
 
 struct FrameStats
@@ -60,7 +58,7 @@ struct FrameStats
 struct Frame
 {
     FrameStats stats;
-    std::reference_wrapper<FrameData> data;
+    std::reference_wrapper<FrameCtx> ctx;
 };
 
 struct VulkanBackend
@@ -71,7 +69,7 @@ struct VulkanBackend
     // TODO: init?
     void deinit();
 
-    FrameData& currentFrame();
+    FrameCtx& currentFrame();
 
     Frame newFrame();
     FrameStats endFrame(Frame&& frame);
@@ -109,7 +107,7 @@ struct VulkanBackend
 
     // Frames
     static constexpr int MaxFramesInFlight = 2;
-    FrameData frames[MaxFramesInFlight];
+    FrameCtx frames[MaxFramesInFlight];
     uint64_t currentFrameNumber = 0;
 
     // Allocators

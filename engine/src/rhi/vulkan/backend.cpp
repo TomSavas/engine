@@ -52,7 +52,7 @@ Frame VulkanBackend::newFrame()
                 .frameIndex = currentFrameNumber,
                 .shutdownRequested = glfwWindowShouldClose(window),
             },
-        .data = currentFrame(),
+        .ctx = currentFrame(),
     };
 }
 
@@ -406,9 +406,9 @@ void VulkanBackend::initProfiler()
     }
 }
 
-FrameData& VulkanBackend::currentFrame() { return frames[currentFrameNumber % MaxFramesInFlight]; }
+FrameCtx& VulkanBackend::currentFrame() { return frames[currentFrameNumber % MaxFramesInFlight]; }
 
-void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scene& scene)
+void VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene& scene)
 {
     ZoneScoped;
     std::string profilerTag = std::format("Rendering (frame={}, mod={})", currentFrameNumber, currentFrameNumber % MaxFramesInFlight);
@@ -416,20 +416,20 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
 
     constexpr uint64_t timeoutNs = 100'000'000'000'000;
 
-    FrameData& frame = fframe.data;
-    auto cmd = frame.cmdBuffer;
+    FrameCtx& frameCtx = frame.ctx;
+    auto cmd = frameCtx.cmdBuffer;
 
     uint32_t swapchainImageIndex;
     {
         ZoneScopedN("Sync CPU");
 
-        VK_CHECK(vkWaitForFences(device, 1, &frame.renderFence, true, timeoutNs));
+        VK_CHECK(vkWaitForFences(device, 1, &frameCtx.renderFence, true, timeoutNs));
         // TODO: move after swapchain regen... maybe?
 
-        VK_CHECK(vkAcquireNextImageKHR(device, swapchain, timeoutNs, frame.presentSem, nullptr, &swapchainImageIndex));
+        VK_CHECK(vkAcquireNextImageKHR(device, swapchain, timeoutNs, frameCtx.presentSem, nullptr, &swapchainImageIndex));
         // TODO: if swapchain regen requested process, reacquire index and continue
 
-        VK_CHECK(vkResetFences(device, 1, &frame.renderFence));
+        VK_CHECK(vkResetFences(device, 1, &frameCtx.renderFence));
     }
 
     // {
@@ -452,7 +452,7 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
         VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
         {
-            ZoneScopedCpuGpuAuto("Transition resources", frame);
+            ZoneScopedCpuGpuAuto("Transition resources", frameCtx);
 
             vkutil::image::transitionImage(
                 cmd, backbufferImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
@@ -464,7 +464,7 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
 
         // Update scene descriptor set
         {
-            ZoneScopedCpuGpuAuto("Memcpy SceneUniforms to GPU", frame);
+            ZoneScopedCpuGpuAuto("Memcpy SceneUniforms to GPU", frameCtx);
 
             sceneUniforms.view = scene.activeCamera->view();
             sceneUniforms.projection = scene.activeCamera->proj();
@@ -476,7 +476,7 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
         }
 
         {
-            ZoneScopedCpuGpuAuto("Render graph", frame);
+            ZoneScopedCpuGpuAuto("Render graph", frameCtx);
 
             for (CompiledRenderGraph::Node& node : graph.nodes)
             {
@@ -523,7 +523,7 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
 
         VkExtent2D backbufferSize{backbufferImage.extent.width, backbufferImage.extent.height};
         {
-            ZoneScopedCpuGpuAuto("Blit to swapchain", frame);
+            ZoneScopedCpuGpuAuto("Blit to swapchain", frameCtx);
 
             vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
@@ -534,7 +534,7 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
         }
 
         {
-            ZoneScopedCpuGpuAuto("Render Imgui", frame);
+            ZoneScopedCpuGpuAuto("Render Imgui", frameCtx);
 
             ImGui::Render();
 
@@ -558,31 +558,31 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
     }
 
     {
-        ZoneScopedCpuGpuAuto("Submit", frame);
+        ZoneScopedCpuGpuAuto("Submit", frameCtx);
 
         auto cmdInfo = vkutil::init::commandBufferSubmitInfo(cmd);
         auto waitInfo = vkutil::init::semaphoreSubmitInfo(
-            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR, frame.presentSem);
-        auto signalInfo = vkutil::init::semaphoreSubmitInfo(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, frame.renderSem);
+            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR, frameCtx.presentSem);
+        auto signalInfo = vkutil::init::semaphoreSubmitInfo(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, frameCtx.renderSem);
         auto submit = vkutil::init::submitInfo2(&cmdInfo, &waitInfo, &signalInfo);
 
-        VK_CHECK(vkQueueSubmit2(graphicsQueue, 1, &submit, frame.renderFence));
+        VK_CHECK(vkQueueSubmit2(graphicsQueue, 1, &submit, frameCtx.renderFence));
     }
 
     {
-        ZoneScopedCpuGpuAuto("Present", frame);
+        ZoneScopedCpuGpuAuto("Present", frameCtx);
 
-        auto presentInfo = vkutil::init::presentInfo(&swapchain, &frame.renderSem, &swapchainImageIndex);
+        auto presentInfo = vkutil::init::presentInfo(&swapchain, &frameCtx.renderSem, &swapchainImageIndex);
         VK_CHECK(vkQueuePresentKHR(graphicsQueue, &presentInfo));
     }
 
     // {
-    //     ZoneScopedCpuGpuAuto("Tracy", frame);
-    //     TracyVkCollect(frame.tracyCtx, frame.tracyCmdBuffer);
-    //     VK_CHECK(vkEndCommandBuffer(frame.tracyCmdBuffer));
-    //     auto cmdInfo = vkutil::init::commandBufferSubmitInfo(frame.tracyCmdBuffer);
+    //     ZoneScopedCpuGpuAuto("Tracy", frameCtx);
+    //     TracyVkCollect(frameCtx.tracyCtx, frameCtx.tracyCmdBuffer);
+    //     VK_CHECK(vkEndCommandBuffer(frameCtx.tracyCmdBuffer));
+    //     auto cmdInfo = vkutil::init::commandBufferSubmitInfo(frameCtx.tracyCmdBuffer);
     //     auto submit = vkutil::init::submitInfo2(&cmdInfo, nullptr, nullptr);
-    //     VK_CHECK(vkQueueSubmit2(graphicsQueue, 1, &submit, frame.tracyRenderFence));
+    //     VK_CHECK(vkQueueSubmit2(graphicsQueue, 1, &submit, frameCtx.tracyRenderFence));
     // }
 }
 

@@ -51,7 +51,6 @@ struct WorldRenderer
     std::optional<ZPrePassRenderer> prePass;
     std::optional<ShadowRenderer> shadows;
     std::optional<ForwardOpaqueRenderer> opaque;
-    // LightCulling lightCulling;
 
     std::optional<TestRenderer> test;
 
@@ -70,11 +69,9 @@ struct WorldRenderer
         const auto [culledDraws] = cpuFrustumCullingPass(culling, backend, graph);
         const auto [depthMap] = zPrePass(prePass, backend, graph, culledDraws);
         const auto [shadowMap, cascadeData] = csmPass(shadows, backend, graph, 4);
-        // auto lightCulling = tiledLightCullingPass(lightCulling, backend,
-        // graph); auto planarReflections = planarReflectionPass(reflections,
-        // backend, graph);
-        opaqueForwardPass(opaque, backend, graph, culledDraws, depthMap,
-            cascadeData, shadowMap);
+        // auto lightCulling = tiledLightCullingPass(lightCulling, backend, graph);
+        // auto planarReflections = planarReflectionPass(reflections, backend, graph);
+        opaqueForwardPass(opaque, backend, graph, culledDraws, depthMap, cascadeData, shadowMap);
         // bloomPass(backend, graph);
         // reinhardTonemapPass(backend, graph);
         // smaaPass(backend, graph);

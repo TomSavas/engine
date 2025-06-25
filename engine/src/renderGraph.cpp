@@ -29,12 +29,12 @@ CompiledRenderGraph compile(VulkanBackend& backend, RenderGraph&& graph)
         CompiledRenderGraph::Node& compiledNode = compiledGraph.nodes.emplace_back();
         compiledNode.pass = node.pass;
 
-        int read = 0;
-        int write = 0;
+        uint32_t read = 0;
+        uint32_t write = 0;
         while (read + write < node.reads.size() + node.writes.size())
         {
-            const Handle newReadHandle = read < node.reads.size() ? node.reads[read].newHandle : std::numeric_limits<int>::max();
-            const Handle newWriteHandle = write < node.writes.size() ? node.writes[write].newHandle : std::numeric_limits<int>::max();
+            const Handle newReadHandle = read < node.reads.size() ? node.reads[read].newHandle : std::numeric_limits<uint32_t>::max();
+            const Handle newWriteHandle = write < node.writes.size() ? node.writes[write].newHandle : std::numeric_limits<uint32_t>::max();
             const RenderGraph::ResourceAccess& olderAccess = newReadHandle < newWriteHandle ? node.reads[read] : node.writes[write];
             (newReadHandle < newWriteHandle ? read : write) += 1;
 
