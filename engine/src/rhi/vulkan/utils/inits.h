@@ -80,7 +80,7 @@ VkSubmitInfo2 submitInfo2(VkCommandBufferSubmitInfo* cmdSubmitInfo, VkSemaphoreS
 VkRenderingAttachmentInfo renderingColorAttachmentInfo(
     VkImageView view, VkClearValue* clear, VkImageLayout layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 VkRenderingAttachmentInfo renderingDepthAttachmentInfo(
-    VkImageView view, VkImageLayout layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+    VkImageView view, VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR, VkImageLayout layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 VkRenderingInfo renderingInfo(VkExtent2D extent, VkRenderingAttachmentInfo* colorAttachments, int colorAttachmentCount,
     VkRenderingAttachmentInfo* depthAttachments);
 }  // namespace vkutil::init

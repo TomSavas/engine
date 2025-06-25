@@ -106,7 +106,6 @@ struct VulkanBackend
 
     // Backbuffer
     AllocatedImage backbufferImage;
-    AllocatedImage depthImage;  // TODO: remove
 
     // Frames
     static constexpr int MaxFramesInFlight = 2;

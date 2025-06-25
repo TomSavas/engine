@@ -15,9 +15,9 @@ struct VulkanBackend;
 
 struct BindlessResources
 {
-    static constexpr BindlessTexture k_white = 0;
-    static constexpr BindlessTexture k_black = 1;
-    static constexpr BindlessTexture k_error = 2;
+    static constexpr BindlessTexture kWhite = 0;
+    static constexpr BindlessTexture kBlack = 1;
+    static constexpr BindlessTexture kError = 2;
 
     VulkanBackend* backend;
 
@@ -35,6 +35,6 @@ struct BindlessResources
     explicit BindlessResources(VulkanBackend& backend);
 
     BindlessTexture addTexture(Texture texture);
-    Texture getTexture(BindlessTexture handle, BindlessTexture defaultTexture = k_error);
+    const Texture& getTexture(BindlessTexture handle, BindlessTexture defaultTexture = kError);
     void removeTexture(BindlessTexture handle);
 };

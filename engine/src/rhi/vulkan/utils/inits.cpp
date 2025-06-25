@@ -569,7 +569,8 @@ VkRenderingAttachmentInfo renderingColorAttachmentInfo(VkImageView view, VkClear
     return info;
 }
 
-VkRenderingAttachmentInfo renderingDepthAttachmentInfo(VkImageView view, VkImageLayout layout)
+VkRenderingAttachmentInfo renderingDepthAttachmentInfo(VkImageView view, VkAttachmentLoadOp loadOp,
+    VkImageLayout layout)
 {
     VkRenderingAttachmentInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -577,7 +578,7 @@ VkRenderingAttachmentInfo renderingDepthAttachmentInfo(VkImageView view, VkImage
 
     info.imageView = view;
     info.imageLayout = layout;
-    info.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    info.loadOp = loadOp;
     info.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     info.clearValue.depthStencil.depth = 1.f;
 

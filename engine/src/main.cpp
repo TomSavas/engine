@@ -25,6 +25,7 @@
 #include <print>
 
 #include "passes/testPass.h"
+#include "passes/zPrePass.h"
 #include "tiny_gltf.h"
 
 void* operator new(std::size_t size) noexcept(false)
@@ -47,6 +48,7 @@ struct WorldRenderer
     std::optional<CompiledRenderGraph> compiledRenderGraph;
 
     std::optional<GeometryCulling> culling;
+    std::optional<ZPrePassRenderer> prePass;
     std::optional<ShadowRenderer> shadows;
     std::optional<ForwardOpaqueRenderer> opaque;
     // LightCulling lightCulling;
@@ -61,24 +63,25 @@ struct WorldRenderer
         // it's enough to make it once and reuse the cached compiled render
         // graph. Once we get into more complicated rendering we can start
         // thinking about recompiling it every frame.
-        RenderGraph graph;
+        RenderGraph graph = {
+            .backend = backend
+        };
 
-        const auto culledDraws = cpuFrustumCullingPass(culling, backend, graph);
-        // const auto zPrePassDepth = zPrePass(backend, graph,
-        // culling.culledDraws);
-        const auto shadowData = csmPass(shadows, backend, graph, 1);
+        const auto [culledDraws] = cpuFrustumCullingPass(culling, backend, graph);
+        const auto [depthMap] = zPrePass(prePass, backend, graph, culledDraws);
+        const auto [shadowMap, cascadeData] = csmPass(shadows, backend, graph, 4);
         // auto lightCulling = tiledLightCullingPass(lightCulling, backend,
-        // graph); auto planarReflections = planarRsflectionPass(reflections,
+        // graph); auto planarReflections = planarReflectionPass(reflections,
         // backend, graph);
-        /* const auto opaqueData = */ opaqueForwardPass(
-            opaque, backend, graph, culledDraws.culledDraws, shadowData.cascadeData, shadowData.shadowMap);
+        opaqueForwardPass(opaque, backend, graph, culledDraws, depthMap,
+            cascadeData, shadowMap);
         // bloomPass(backend, graph);
         // reinhardTonemapPass(backend, graph);
         // smaaPass(backend, graph);
 
         testPass(test, backend, graph);
 
-        compiledRenderGraph = compile(std::move(graph));
+        compiledRenderGraph = compile(backend, std::move(graph));
     }
 
     void render(Frame& frame, Scene& scene, double dt)

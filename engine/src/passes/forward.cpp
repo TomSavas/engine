@@ -31,7 +31,7 @@ std::optional<ForwardOpaqueRenderer> initForwardOpaque(VulkanBackend& backend)
         backend.device, SHADER_PATH("mesh.frag.glsl"));
     if (!vertexShader || !fragmentShader)
     {
-        return std::optional<ForwardOpaqueRenderer>();
+        return std::nullopt;
     }
 
     VkPushConstantRange meshPushConstantRange = vkutil::init::pushConstantRange(
@@ -42,7 +42,6 @@ std::optional<ForwardOpaqueRenderer> initForwardOpaque(VulkanBackend& backend)
         descriptors, 2, &meshPushConstantRange, 1);
     VK_CHECK(vkCreatePipelineLayout(backend.device, &pipelineLayoutInfo, nullptr, &renderer.pipeline.pipelineLayout));
 
-    // TODO: convert into optional
     renderer.pipeline.pipeline = PipelineBuilder()
                                      .shaders((*vertexShader)->module, (*fragmentShader)->module)
                                      .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
@@ -51,16 +50,17 @@ std::optional<ForwardOpaqueRenderer> initForwardOpaque(VulkanBackend& backend)
                                      .disableMultisampling()
                                      .enableAlphaBlending()
                                      .colorAttachmentFormat(backend.backbufferImage.format)
-                                     .depthFormat(backend.depthImage.format)
+                                     .depthFormat(VK_FORMAT_D32_SFLOAT) // TEMP: this should be taken from bindless
                                      .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
                                      .build(backend.device, renderer.pipeline.pipelineLayout);
+    renderer.pipeline.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
     return renderer;
 }
 
 void opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRenderer, VulkanBackend& backend,
-    RenderGraph& graph, RenderGraphResource<Buffer> culledDraws, RenderGraphResource<Buffer> shadowData,
-    RenderGraphResource<BindlessTexture> shadowMap)
+    RenderGraph& graph, RenderGraphResource<Buffer> culledDraws, RenderGraphResource<BindlessTexture> depthMap,
+    RenderGraphResource<Buffer> shadowData, RenderGraphResource<BindlessTexture> shadowMap)
 {
     if (!forwardOpaqueRenderer)
     {
@@ -70,21 +70,21 @@ void opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
     RenderGraph::Node& pass = createPass(graph);
     pass.pass.debugName = "Forward Opaque pass";
     pass.pass.pipeline = forwardOpaqueRenderer->pipeline;
-    pass.pass.pipeline->pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
-    // RenderGraph resources
     struct ForwardOpaqueRenderGraphData
     {
         RenderGraphResource<Buffer> culledDraws;
         RenderGraphResource<Buffer> shadowData;
         RenderGraphResource<BindlessTexture> shadowMap;
+        RenderGraphResource<BindlessTexture> depthMap;
     } data = {
         .culledDraws = readResource<Buffer>(graph, pass, culledDraws),
         .shadowData = readResource<Buffer>(graph, pass, shadowData),
-        .shadowMap = readResource<BindlessTexture>(graph, pass, shadowMap),
+        .shadowMap = readResource<BindlessTexture>(graph, pass, shadowMap, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL),
+        .depthMap = readResource<BindlessTexture>(graph, pass, depthMap, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL)
     };
 
-    pass.pass.beginRendering = [&backend](VkCommandBuffer cmd, CompiledRenderGraph&)
+    pass.pass.beginRendering = [data, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph)
     {
         // TODO: attach depth from Z prepass
         VkExtent2D swapchainSize = {
@@ -97,7 +97,9 @@ void opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
         VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(
             backend.backbufferImage.view, &colorClear, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         VkRenderingAttachmentInfo depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(
-            backend.depthImage.view);
+            backend.bindlessResources->getTexture(
+                *getResource<BindlessTexture>(graph, data.depthMap)).view,
+                VK_ATTACHMENT_LOAD_OP_LOAD);
         VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(
             swapchainSize, &colorAttachmentInfo, 1, &depthAttachmentInfo);
         vkCmdBeginRendering(cmd, &renderingInfo);

@@ -117,45 +117,15 @@ struct PushConstants
 
 struct ShadowCascadeData
 {
-    glm::mat4 lightViewProjMatrices[1];
-    glm::mat4 invLightViewProjMatrices[1];
-    float cascadeDistances[1];
+    glm::mat4 lightViewProjMatrices[4];
+    glm::mat4 invLightViewProjMatrices[4];
+    float cascadeDistances[4];
     int cascadeCount;
 };
 
 std::optional<ShadowRenderer> initCsm(VulkanBackend& backend, uint32_t cascadeCount)
 {
     ShadowRenderer renderer;
-
-    std::optional<ShaderModule*> vertexShader = backend.shaderModuleCache.loadModule(
-        backend.device, SHADER_PATH("simple_shadowpass.vert.glsl"));
-    std::optional<ShaderModule*> fragmentShader = backend.shaderModuleCache.loadModule(
-        backend.device, SHADER_PATH("empty.frag.glsl"));
-    if (!vertexShader || !fragmentShader)
-    {
-        return std::optional<ShadowRenderer>();
-    }
-
-    VkPushConstantRange meshPushConstantRange = vkutil::init::pushConstantRange(
-        VK_SHADER_STAGE_VERTEX_BIT, sizeof(PushConstants));
-    // VkDescriptorSetLayout descriptors[] = {backend.sceneDescriptorSetLayout, backend.bindlessTexDescLayout};
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkutil::init::layoutCreateInfo(
-        nullptr, 0, &meshPushConstantRange, 1);
-    VK_CHECK(vkCreatePipelineLayout(backend.device, &pipelineLayoutInfo, nullptr, &renderer.pipeline.pipelineLayout));
-
-    // TODO: convert into optional
-    renderer.pipeline.pipeline = PipelineBuilder()
-                                     .shaders((*vertexShader)->module, (*fragmentShader)->module)
-                                     .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-                                     .polyMode(VK_POLYGON_MODE_FILL)
-                                     .cullMode(VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE)  // Front face!
-                                     .disableMultisampling()
-                                     .disableBlending()
-                                     .depthFormat(backend.depthImage.format)
-                                     .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
-                                     .setDepthClamp(true)
-                                     .build(backend.device, renderer.pipeline.pipelineLayout);
-    renderer.pipeline.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
     // Persistent data
     auto info = vkutil::init::bufferCreateInfo(
@@ -179,11 +149,41 @@ std::optional<ShadowRenderer> initCsm(VulkanBackend& backend, uint32_t cascadeCo
     };
     renderer.shadowMap = backend.bindlessResources->addTexture(shadowMap);
 
+    std::optional<ShaderModule*> vertexShader = backend.shaderModuleCache.loadModule(
+        backend.device, SHADER_PATH("simple_shadowpass.vert.glsl"));
+    std::optional<ShaderModule*> fragmentShader = backend.shaderModuleCache.loadModule(
+        backend.device, SHADER_PATH("empty.frag.glsl"));
+    if (!vertexShader || !fragmentShader)
+    {
+        return std::nullopt;
+    }
+
+    VkPushConstantRange meshPushConstantRange = vkutil::init::pushConstantRange(
+        VK_SHADER_STAGE_VERTEX_BIT, sizeof(PushConstants));
+    // VkDescriptorSetLayout descriptors[] = {backend.sceneDescriptorSetLayout, backend.bindlessTexDescLayout};
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkutil::init::layoutCreateInfo(
+        nullptr, 0, &meshPushConstantRange, 1);
+    VK_CHECK(vkCreatePipelineLayout(backend.device, &pipelineLayoutInfo, nullptr, &renderer.pipeline.pipelineLayout));
+
+    // TODO: convert into optional
+    renderer.pipeline.pipeline = PipelineBuilder()
+                                     .shaders((*vertexShader)->module, (*fragmentShader)->module)
+                                     .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+                                     .polyMode(VK_POLYGON_MODE_FILL)
+                                     .cullMode(VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE)  // Front face!
+                                     .disableMultisampling()
+                                     .disableBlending()
+                                     .depthFormat(shadowMapImage.format)
+                                     .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
+                                     .setDepthClamp(true)
+                                     .build(backend.device, renderer.pipeline.pipelineLayout);
+    renderer.pipeline.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+
     return renderer;
 }
 
-ShadowPassRenderGraphData csmPass(
-    std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend, RenderGraph& graph, int cascadeCount)
+ShadowPassRenderGraphData csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend,
+    RenderGraph& graph, int cascadeCount)
 {
     if (!shadowRenderer)
     {
@@ -194,13 +194,20 @@ ShadowPassRenderGraphData csmPass(
     pass.pass.debugName = "CSM pass";
     pass.pass.pipeline = shadowRenderer->pipeline;
 
-    ShadowPassRenderGraphData data;
-    data.shadowMap = importResource<BindlessTexture>(graph, pass, &shadowRenderer->shadowMap);
-    // NOTE: potentially we can change this to writeAttachmentResource to automatically generate
-    // rendering info.
-    data.shadowMap = writeResource<BindlessTexture>(graph, pass, data.shadowMap);
-    data.cascadeData = importResource<Buffer>(graph, pass, &shadowRenderer->shadowMapData.buffer);
-    data.cascadeData = writeResource<Buffer>(graph, pass, data.cascadeData);
+    ShadowPassRenderGraphData data = {
+        .shadowMap = writeResource<BindlessTexture>(graph, pass,
+            importResource<BindlessTexture>(graph, pass, &shadowRenderer->shadowMap),
+            VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL),
+        .cascadeData = writeResource<Buffer>(graph, pass,
+            importResource<Buffer>(graph, pass, &shadowRenderer->shadowMapData.buffer))
+    };
+    //data.shadowMap = importResource<BindlessTexture>(graph, pass, &shadowRenderer->shadowMap);
+    //// NOTE: potentially we can change this to writeAttachmentResource to automatically generate
+    //// rendering info.
+    //data.shadowMap = writeResource<BindlessTexture>(graph, pass, data.shadowMap,
+    //    VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+    //data.cascadeData = importResource<Buffer>(graph, pass, &shadowRenderer->shadowMapData.buffer);
+    //data.cascadeData = writeResource<Buffer>(graph, pass, data.cascadeData);
 
     pass.pass.beginRendering = [data, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph)
     {
@@ -262,10 +269,8 @@ ShadowPassRenderGraphData csmPass(
             vkCmdSetViewport(cmd, 0, 1, &viewport);
             vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-            // vkCmdDrawIndexedIndirect(cmd, internalData->indirectCommands.buffer, 0, scene.meshes.size(),
-            // sizeof(VkDrawIndexedIndirectCommand));
-            vkCmdDrawIndexedIndirect(
-                cmd, scene.indirectCommands.buffer, 0, scene.meshes.size(), sizeof(VkDrawIndexedIndirectCommand));
+            vkCmdDrawIndexedIndirect(cmd, scene.indirectCommands.buffer, 0, scene.meshes.size(),
+                sizeof(VkDrawIndexedIndirectCommand));
         }
     };
 

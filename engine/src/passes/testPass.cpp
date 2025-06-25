@@ -17,7 +17,7 @@ std::optional<TestRenderer> initTestRenderer(VulkanBackend& backend)
         backend.device, SHADER_PATH("colored_triangle.frag.glsl"));
     if (!vertexShader || !fragmentShader)
     {
-        return std::optional<TestRenderer>();
+        return std::nullopt;
     }
 
     VkDescriptorSetLayout descriptors[] = {backend.sceneDescriptorSetLayout};
@@ -33,8 +33,9 @@ std::optional<TestRenderer> initTestRenderer(VulkanBackend& backend)
                                      .disableMultisampling()
                                      .enableAlphaBlending()
                                      .colorAttachmentFormat(backend.backbufferImage.format)
-                                     .depthFormat(backend.depthImage.format)
-                                     .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
+                                     .disableDepthTest()
+                                     // .depthFormat(VK_FORMAT_D32_SFLOAT)
+                                     // .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
                                      .build(backend.device, renderer.pipeline.pipelineLayout);
     renderer.pipeline.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
@@ -60,10 +61,8 @@ void testPass(std::optional<TestRenderer> renderer, VulkanBackend& backend, Rend
         };
         VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(
             backend.backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        VkRenderingAttachmentInfo depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(
-            backend.depthImage.view);
         VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(
-            swapchainSize, &colorAttachmentInfo, 1, &depthAttachmentInfo);
+            swapchainSize, &colorAttachmentInfo, 1, nullptr);
         vkCmdBeginRendering(cmd, &renderingInfo);
     };
 

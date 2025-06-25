@@ -56,7 +56,14 @@ Frame VulkanBackend::newFrame()
     };
 }
 
-FrameStats VulkanBackend::endFrame(Frame&& frame) { return frame.stats; }
+FrameStats VulkanBackend::endFrame(Frame&& frame)
+{
+    FrameMark;
+    currentFrameNumber++;
+    stats.finishedFrameCount++;
+
+    return frame.stats;
+}
 
 VulkanBackend::VulkanBackend(GLFWwindow* window) : window(window)
 {
@@ -196,28 +203,6 @@ void VulkanBackend::initSwapchain()
     //     LOG_CALL(vkDestroySwapchainKHR(device, swapchain, nullptr));
     // });
 
-    // VkExtent3D depthImageExtent(viewport.width, viewport.height, 1.f);
-    // depthFormat = VK_FORMAT_D32_SFLOAT;
-
-    // VkImageCreateInfo depthImageInfo = imageCreateInfo(depthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-    // depthImageExtent);
-
-    // VmaAllocationCreateInfo depthImageAlloc = {};
-    // depthImageAlloc.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    // depthImageAlloc.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    // vmaCreateImage(allocator, &depthImageInfo, &depthImageAlloc, &depthImage.image, &depthImage.allocation, nullptr);
-
-    // swapchainDeinitQueue.enqueue([=]() {
-    //     LOG_CALL(vmaDestroyImage(allocator, depthImage.image, depthImage.allocation));
-    // });
-
-    // VkImageViewCreateInfo depthViewInfo = imageViewCreateInfo(depthFormat, depthImage.image,
-    // VK_IMAGE_ASPECT_DEPTH_BIT); VK_CHECK(vkCreateImageView(device, &depthViewInfo, nullptr, &depthImageView));
-
-    // swapchainDeinitQueue.enqueue([=]() {
-    //     LOG_CALL(vkDestroyImageView(device, depthImageView, nullptr));
-    // });
-
     // Backbuffer
     backbufferImage.format = VK_FORMAT_R16G16B16A16_SFLOAT;
     backbufferImage.extent = {static_cast<uint32_t>(viewport.width), static_cast<uint32_t>(viewport.height), 1};
@@ -238,25 +223,6 @@ void VulkanBackend::initSwapchain()
     auto imgViewInfo = vkutil::init::imageViewCreateInfo(
         backbufferImage.format, backbufferImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
     VK_CHECK(vkCreateImageView(device, &imgViewInfo, nullptr, &backbufferImage.view));
-
-    // Depth
-    depthImage.format = VK_FORMAT_D32_SFLOAT;
-    depthImage.extent = backbufferImage.extent;
-    VkImageUsageFlags depthUsageFlags = {};
-    depthUsageFlags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-
-    imgInfo = vkutil::init::imageCreateInfo(depthImage.format, depthUsageFlags, depthImage.extent);
-
-    allocInfo = {};
-    // TODO: probably want this in tracy and on various debug tools in imgui
-    allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    allocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    vmaCreateImage(allocator, &imgInfo, &allocInfo, &depthImage.image, &depthImage.allocation, nullptr);
-
-    imgViewInfo = vkutil::init::imageViewCreateInfo(depthImage.format, depthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
-    VK_CHECK(vkCreateImageView(device, &imgViewInfo, nullptr, &depthImage.view));
-
-    // TODO: delete later
 }
 
 void VulkanBackend::initCommandBuffers()
@@ -445,9 +411,11 @@ FrameData& VulkanBackend::currentFrame() { return frames[currentFrameNumber % Ma
 void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scene& scene)
 {
     ZoneScoped;
+    std::string profilerTag = std::format("Rendering (frame={}, mod={})", currentFrameNumber, currentFrameNumber % MaxFramesInFlight);
+    ZoneName(profilerTag.c_str(), profilerTag.size());
+
     constexpr uint64_t timeoutNs = 100'000'000'000'000;
 
-    // auto frame = currentFrame();
     FrameData& frame = fframe.data;
     auto cmd = frame.cmdBuffer;
 
@@ -464,32 +432,30 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
         VK_CHECK(vkResetFences(device, 1, &frame.renderFence));
     }
 
-    {
-        ZoneScopedN("Sync Tracy");
+    // {
+    //     ZoneScopedN("Sync Tracy");
 
-        VK_CHECK(vkWaitForFences(device, 1, &frame.tracyRenderFence, true, timeoutNs));
-        VK_CHECK(vkResetFences(device, 1, &frame.tracyRenderFence));
-        {
-            VK_CHECK(vkResetCommandBuffer(frame.tracyCmdBuffer, 0));
-            auto cmdBeginInfo = vkutil::init::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-            VK_CHECK(vkBeginCommandBuffer(frame.tracyCmdBuffer, &cmdBeginInfo));
-        }
-    }
+    //     VK_CHECK(vkWaitForFences(device, 1, &frame.tracyRenderFence, true, timeoutNs));
+    //     VK_CHECK(vkResetFences(device, 1, &frame.tracyRenderFence));
+    //     {
+    //         VK_CHECK(vkResetCommandBuffer(frame.tracyCmdBuffer, 0));
+    //         auto cmdBeginInfo = vkutil::init::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+    //         VK_CHECK(vkBeginCommandBuffer(frame.tracyCmdBuffer, &cmdBeginInfo));
+    //     }
+    // }
 
     {
-        ZoneScopedCpuGpuAuto("Record", currentFrame());
+        ZoneScopedCpuGpuAuto("Record", frame);
 
         VK_CHECK(vkResetCommandBuffer(cmd, 0));
         auto cmdBeginInfo = vkutil::init::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
         VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
         {
-            ZoneScopedCpuGpuAuto("Transition resources", currentFrame());
+            ZoneScopedCpuGpuAuto("Transition resources", frame);
 
             vkutil::image::transitionImage(
                 cmd, backbufferImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-            vkutil::image::transitionImage(
-                cmd, depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
             vkutil::image::transitionImage(
                 cmd, backbufferImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         }
@@ -498,7 +464,7 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
 
         // Update scene descriptor set
         {
-            ZoneScopedCpuGpuAuto("Memcpy SceneUniforms to GPU", currentFrame());
+            ZoneScopedCpuGpuAuto("Memcpy SceneUniforms to GPU", frame);
 
             sceneUniforms.view = scene.activeCamera->view();
             sceneUniforms.projection = scene.activeCamera->proj();
@@ -510,7 +476,7 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
         }
 
         {
-            ZoneScopedCpuGpuAuto("Render graph", currentFrame());
+            ZoneScopedCpuGpuAuto("Render graph", frame);
 
             for (CompiledRenderGraph::Node& node : graph.nodes)
             {
@@ -519,9 +485,18 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
                 ZoneScoped;
                 ZoneName(pass.debugName.c_str(), pass.debugName.size());
 
-                // TODO: transition resources here
+                VkDependencyInfo barriers = {
+                    .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                    .pNext = nullptr,
+                    .memoryBarrierCount = static_cast<uint32_t>(node.memoryBarriers.size()),
+                    .pMemoryBarriers = node.memoryBarriers.data(),
+                    .bufferMemoryBarrierCount = static_cast<uint32_t>(node.bufferBarriers.size()),
+                    .pBufferMemoryBarriers = node.bufferBarriers.data(),
+                    .imageMemoryBarrierCount = static_cast<uint32_t>(node.imageBarriers.size()),
+                    .pImageMemoryBarriers = node.imageBarriers.data(),
+                };
+                vkCmdPipelineBarrier2(cmd, &barriers);
 
-                // Get the attachments from rendergraph
                 if (pass.pipeline)
                 {
                     pass.beginRendering(cmd, graph);
@@ -548,7 +523,7 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
 
         VkExtent2D backbufferSize{backbufferImage.extent.width, backbufferImage.extent.height};
         {
-            ZoneScopedCpuGpuAuto("Blit to swapchain", currentFrame());
+            ZoneScopedCpuGpuAuto("Blit to swapchain", frame);
 
             vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
@@ -559,7 +534,7 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
         }
 
         {
-            ZoneScopedCpuGpuAuto("Render Imgui", currentFrame());
+            ZoneScopedCpuGpuAuto("Render Imgui", frame);
 
             ImGui::Render();
 
@@ -583,7 +558,7 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
     }
 
     {
-        ZoneScopedCpuGpuAuto("Submit", currentFrame());
+        ZoneScopedCpuGpuAuto("Submit", frame);
 
         auto cmdInfo = vkutil::init::commandBufferSubmitInfo(cmd);
         auto waitInfo = vkutil::init::semaphoreSubmitInfo(
@@ -595,24 +570,20 @@ void VulkanBackend::render(const Frame& fframe, CompiledRenderGraph& graph, Scen
     }
 
     {
-        ZoneScopedCpuGpuAuto("Present", currentFrame());
+        ZoneScopedCpuGpuAuto("Present", frame);
 
         auto presentInfo = vkutil::init::presentInfo(&swapchain, &frame.renderSem, &swapchainImageIndex);
         VK_CHECK(vkQueuePresentKHR(graphicsQueue, &presentInfo));
     }
 
-    {
-        ZoneScopedCpuGpuAuto("Tracy", currentFrame());
-        TracyVkCollect(frame.tracyCtx, frame.tracyCmdBuffer);
-        VK_CHECK(vkEndCommandBuffer(frame.tracyCmdBuffer));
-        auto cmdInfo = vkutil::init::commandBufferSubmitInfo(frame.tracyCmdBuffer);
-        auto submit = vkutil::init::submitInfo2(&cmdInfo, nullptr, nullptr);
-        VK_CHECK(vkQueueSubmit2(graphicsQueue, 1, &submit, frame.tracyRenderFence));
-    }
-
-    FrameMark;
-    currentFrameNumber++;
-    stats.finishedFrameCount++;
+    // {
+    //     ZoneScopedCpuGpuAuto("Tracy", frame);
+    //     TracyVkCollect(frame.tracyCtx, frame.tracyCmdBuffer);
+    //     VK_CHECK(vkEndCommandBuffer(frame.tracyCmdBuffer));
+    //     auto cmdInfo = vkutil::init::commandBufferSubmitInfo(frame.tracyCmdBuffer);
+    //     auto submit = vkutil::init::submitInfo2(&cmdInfo, nullptr, nullptr);
+    //     VK_CHECK(vkQueueSubmit2(graphicsQueue, 1, &submit, frame.tracyRenderFence));
+    // }
 }
 
 void VulkanBackend::immediateSubmit(std::function<void(VkCommandBuffer)>&& f)

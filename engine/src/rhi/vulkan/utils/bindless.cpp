@@ -4,6 +4,7 @@
 #include "rhi/vulkan/descriptors.h"
 #include "rhi/vulkan/utils/inits.h"
 #include "rhi/vulkan/utils/texture.h"
+#include "renderGraph.h"
 
 BindlessResources::BindlessResources(VulkanBackend& backend) : backend(&backend)
 {
@@ -75,7 +76,7 @@ BindlessTexture BindlessResources::addTexture(Texture texture)
     return index;
 }
 
-Texture BindlessResources::getTexture(BindlessTexture handle, BindlessTexture defaultTexture)
+const Texture& BindlessResources::getTexture(BindlessTexture handle, BindlessTexture defaultTexture)
 {
     if (handle < textures.size() && !freeIndices.contains(handle)) return textures[handle];
 
@@ -83,3 +84,42 @@ Texture BindlessResources::getTexture(BindlessTexture handle, BindlessTexture de
 }
 
 void BindlessResources::removeTexture(BindlessTexture handle) { assert(false); }
+
+template <>
+void addTransition<BindlessTexture>(VulkanBackend& backend, CompiledRenderGraph::Node& node, BindlessTexture* resource, Layout oldLayout, Layout newLayout)
+{
+    if (oldLayout == newLayout)
+    {
+        return;
+    }
+
+    VkImageMemoryBarrier2 imageBarrier = {};
+    imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    imageBarrier.pNext = nullptr;
+
+    // TODO: we can improve this
+    imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+    imageBarrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
+    imageBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+    imageBarrier.dstAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT;
+
+    imageBarrier.oldLayout = oldLayout;
+    imageBarrier.newLayout = newLayout;
+
+    const bool isDepth = newLayout == VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL ||
+        newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL ||
+        newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL ||
+        newLayout == VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL ||
+        newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL ||
+        newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL ||
+        newLayout == VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
+
+    VkImageAspectFlags aspectMask = isDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+    imageBarrier.subresourceRange = vkutil::init::imageSubresourceRange(aspectMask);
+
+    //const Texture& tex = graph.backend.bindlessResources->getTexture(*resource);
+    const Texture& tex = backend.bindlessResources->getTexture(*resource);
+    imageBarrier.image = tex.image.image;
+
+    node.imageBarriers.push_back(imageBarrier);
+}
