@@ -36,6 +36,7 @@ std::optional<TestRenderer> initTestRenderer(VulkanBackend& backend)
                                      .disableDepthTest()
                                      // .depthFormat(VK_FORMAT_D32_SFLOAT)
                                      // .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
+                                     .addViewportScissorDynamicStates()
                                      .build(backend.device, renderer.pipeline.pipelineLayout);
     renderer.pipeline.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 

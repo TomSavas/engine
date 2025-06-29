@@ -20,5 +20,7 @@ struct ShadowPassRenderGraphData
     RenderGraphResource<Buffer> cascadeData;
 };
 
-ShadowPassRenderGraphData csmPass(
-    std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend, RenderGraph& graph, int cascadeCount = 4);
+ShadowPassRenderGraphData simpleShadowPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend,
+    RenderGraph& graph);
+ShadowPassRenderGraphData csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend,
+    RenderGraph& graph, int cascadeCount = 4);

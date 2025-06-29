@@ -85,11 +85,13 @@ CullingPassRenderGraphData cpuFrustumCullingPass(
         {
             auto& mesh = scene.meshes[i];
             uint32_t instanceCount = insideCameraFrustum(mesh.aabbMin, mesh.aabbMax, frustumPlanes) ? 1 : 0;
-            VkDrawIndexedIndirectCommand command = {.indexCount = static_cast<uint32_t>(mesh.indexCount),
+            VkDrawIndexedIndirectCommand command = {
+                .indexCount = static_cast<uint32_t>(mesh.indexCount),
                 .instanceCount = instanceCount,
                 .firstIndex = static_cast<uint32_t>(mesh.indexOffset),
                 .vertexOffset = 0,
-                .firstInstance = i};
+                .firstInstance = i
+            };
             indirectCmds.push_back(command);
         }
 

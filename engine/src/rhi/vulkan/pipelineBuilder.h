@@ -15,6 +15,7 @@ struct PipelineBuilder
     VkPipelineDepthStencilStateCreateInfo depthStencil;
     VkPipelineRenderingCreateInfo renderInfo;
     std::vector<VkFormat> colorAttachments;
+    std::vector<VkDynamicState> dynamicStates;
 
     PipelineBuilder();
 
@@ -33,6 +34,9 @@ struct PipelineBuilder
     PipelineBuilder& enableDepthTest(bool depthWriteEnable, VkCompareOp compareOp);
     PipelineBuilder& disableDepthTest();
     PipelineBuilder& setDepthClamp(bool enable);
+    PipelineBuilder& addDynamicState(VkDynamicState state);
+    PipelineBuilder& addViewportScissorDynamicStates();
+    PipelineBuilder& enableDepthBias();
 
     VkPipeline build(VkDevice device, VkPipelineLayout layout);
 };

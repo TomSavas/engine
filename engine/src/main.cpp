@@ -68,6 +68,7 @@ struct WorldRenderer
 
         const auto [culledDraws] = cpuFrustumCullingPass(culling, backend, graph);
         const auto [depthMap] = zPrePass(prePass, backend, graph, culledDraws);
+        // const auto [shadowMap, cascadeData] = simpleShadowPass(shadows, backend, graph);
         const auto [shadowMap, cascadeData] = csmPass(shadows, backend, graph, 4);
         // auto lightCulling = tiledLightCullingPass(lightCulling, backend, graph);
         // auto planarReflections = planarReflectionPass(reflections, backend, graph);

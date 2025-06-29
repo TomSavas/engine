@@ -12,7 +12,7 @@ struct Camera
     float rotationSpeed = 0.002f;
 
     float nearClippingPlaneDist = 0.1f;
-    float farClippingPlaneDist = 10000.f;
+    float farClippingPlaneDist = 5000.f;
 
     float aspectRatio = 16.f / 9.f;
 

@@ -35,7 +35,7 @@ CompiledRenderGraph compile(VulkanBackend& backend, RenderGraph&& graph)
         {
             const Handle newReadHandle = read < node.reads.size() ? node.reads[read].newHandle : std::numeric_limits<uint32_t>::max();
             const Handle newWriteHandle = write < node.writes.size() ? node.writes[write].newHandle : std::numeric_limits<uint32_t>::max();
-            const RenderGraph::ResourceAccess& olderAccess = newReadHandle < newWriteHandle ? node.reads[read] : node.writes[write];
+            const auto& olderAccess = newReadHandle < newWriteHandle ? node.reads[read] : node.writes[write];
             (newReadHandle < newWriteHandle ? read : write) += 1;
 
             olderAccess.transition(backend, compiledNode, graph.resources[olderAccess.newHandle],

@@ -41,9 +41,7 @@ layout(push_constant) uniform Constants
 	ModelDataBuffer modelData;
 } constants;
 
-invariant gl_Position;
-
-void main() 
+void main()
 {	
 	Vertex vert = constants.vertexBuffer.vertices[gl_VertexIndex];
 	gl_Position = scene.proj * scene.view * vec4(vert.position.xyz, 1.f);

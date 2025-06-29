@@ -51,6 +51,7 @@ std::optional<ForwardOpaqueRenderer> initForwardOpaque(VulkanBackend& backend)
                                      .enableAlphaBlending()
                                      .colorAttachmentFormat(backend.backbufferImage.format)
                                      .depthFormat(VK_FORMAT_D32_SFLOAT) // TEMP: this should be taken from bindless
+                                     .addViewportScissorDynamicStates()
                                      .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
                                      .build(backend.device, renderer.pipeline.pipelineLayout);
     renderer.pipeline.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;

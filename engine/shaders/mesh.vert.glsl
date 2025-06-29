@@ -39,7 +39,7 @@ layout(buffer_reference, std430) readonly buffer ShadowPassData
 { 
 	mat4 lightViewProj[4];
 	mat4 invLightViewProj[4];
-	float cascadeDistances[4];
+	vec4 cascadeDistances[4];
 	int cascadeCount;
 };
 
@@ -59,9 +59,7 @@ layout (location = 5) out flat int index;
 layout (location = 6) out vec3 viewPos;
 layout (location = 7) out vec3 pos;
 
-invariant gl_Position;
-
-void main() 
+void main()
 {	
 	Vertex vert = constants.vertexBuffer.vertices[gl_VertexIndex];
 	gl_Position = scene.proj * scene.view * vec4(vert.position.xyz, 1.f);

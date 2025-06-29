@@ -18,7 +18,7 @@ layout(buffer_reference, std430) readonly buffer ShadowPassData
 { 
 	mat4 lightViewProj[4];
 	mat4 invLightViewProj[4];
-	float cascadeDistances[4];
+	vec4 cascadeDistances[4];
 	int cascadeCount;
 };
 
