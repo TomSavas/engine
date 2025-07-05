@@ -5,7 +5,10 @@
 #include "imgui_impl_vulkan.h"
 #include "passes/culling.h"
 #include "passes/forward.h"
+#include "passes/lightCulling.h"
 #include "passes/shadows.h"
+#include "passes/testPass.h"
+#include "passes/zPrePass.h"
 #include "renderGraph.h"
 #include "rhi/vulkan/backend.h"
 #include "scene.h"
@@ -24,8 +27,6 @@
 #include <optional>
 #include <print>
 
-#include "passes/testPass.h"
-#include "passes/zPrePass.h"
 #include "tiny_gltf.h"
 
 void* operator new(std::size_t size) noexcept(false)
@@ -51,6 +52,7 @@ struct WorldRenderer
     std::optional<ZPrePassRenderer> prePass;
     std::optional<ShadowRenderer> shadows;
     std::optional<ForwardOpaqueRenderer> opaque;
+    std::optional<LightCulling> lightCulling;
 
     std::optional<TestRenderer> test;
 
@@ -66,13 +68,17 @@ struct WorldRenderer
             .backend = backend
         };
 
+        // const auto [draws, lightList] = sceneUploadPass(sceneDataUploader, backend, graph);
         const auto [culledDraws] = cpuFrustumCullingPass(culling, backend, graph);
         const auto [depthMap] = zPrePass(prePass, backend, graph, culledDraws);
         // const auto [shadowMap, cascadeData] = simpleShadowPass(shadows, backend, graph);
         const auto [shadowMap, cascadeData] = csmPass(shadows, backend, graph, 4);
-        // auto lightCulling = tiledLightCullingPass(lightCulling, backend, graph);
+        auto [lightList, lightIndexList, lightGrid] = tiledLightCullingPass(lightCulling, backend, graph);
+        // auto [pointLightShadowAtlas] = pointLightShadowPass(pointLightShadows, backend, graph, lightList, lightIndexList, lightGrid);
+        // auto [lightList, culledLightData] = clusteredLightCullingPass(lightCulling, backend, graph);
         // auto planarReflections = planarReflectionPass(reflections, backend, graph);
         opaqueForwardPass(opaque, backend, graph, culledDraws, depthMap, cascadeData, shadowMap);
+        // skyPass(backend, graph);
         // bloomPass(backend, graph);
         // reinhardTonemapPass(backend, graph);
         // smaaPass(backend, graph);
@@ -118,7 +124,7 @@ int main()
     worldRenderer.compileRenderGraph();
 
     // TODO: Not ideal, would be better if we could pass a lambda here
-    Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf").value_or(emptyScene(*backend));
+    Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf", 64).value_or(emptyScene(*backend));
 
     FrameStats lastFrameStats = backend->endFrame(backend->newFrame());
     while (!lastFrameStats.shutdownRequested)

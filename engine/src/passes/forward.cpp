@@ -42,7 +42,7 @@ std::optional<ForwardOpaqueRenderer> initForwardOpaque(VulkanBackend& backend)
         descriptors, 2, &meshPushConstantRange, 1);
     VK_CHECK(vkCreatePipelineLayout(backend.device, &pipelineLayoutInfo, nullptr, &renderer.pipeline.pipelineLayout));
 
-    renderer.pipeline.pipeline = PipelineBuilder()
+    renderer.pipeline.pipeline = PipelineBuilder(backend)
                                      .shaders((*vertexShader)->module, (*fragmentShader)->module)
                                      .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
                                      .polyMode(VK_POLYGON_MODE_FILL)

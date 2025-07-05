@@ -25,7 +25,7 @@ std::optional<TestRenderer> initTestRenderer(VulkanBackend& backend)
     VK_CHECK(vkCreatePipelineLayout(backend.device, &pipelineLayoutInfo, nullptr, &renderer.pipeline.pipelineLayout));
 
     // TODO: convert into optional
-    renderer.pipeline.pipeline = PipelineBuilder()
+    renderer.pipeline.pipeline = PipelineBuilder(backend)
                                      .shaders((*vertexShader)->module, (*fragmentShader)->module)
                                      .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
                                      .polyMode(VK_POLYGON_MODE_FILL)

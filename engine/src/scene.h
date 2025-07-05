@@ -20,6 +20,14 @@ enum class assetError
 {
 };
 
+struct PointLight
+{
+    // TODO: pack
+    glm::vec4 pos;
+    glm::vec4 color;
+    glm::vec4 range;
+};
+
 struct Scene
 {
     std::string name;
@@ -28,7 +36,13 @@ struct Scene
     Camera mainCamera;
     Camera debugCamera;
 
+    // TEMP: this should live in some gameplay systems
+    std::vector<PointLight> pointLights;
+
     VulkanBackend& backend;
+
+    glm::vec3 aabbMin = glm::vec3(0.f);
+    glm::vec3 aabbMax = glm::vec3(0.f);
 
     std::vector<Mesh> meshes;
     std::vector<Vertex> vertexData;
@@ -54,6 +68,9 @@ struct Scene
         mainCamera = other.mainCamera;
         debugCamera = other.debugCamera;
         activeCamera = &mainCamera;
+        pointLights = other.pointLights;
+        aabbMin = other.aabbMin;
+        aabbMax = other.aabbMax;
         meshes = other.meshes;
         vertexData = other.vertexData;
         indices = other.indices;
@@ -72,6 +89,9 @@ struct Scene
         mainCamera = other.mainCamera;
         debugCamera = other.debugCamera;
         activeCamera = &mainCamera;
+        pointLights = other.pointLights;
+        aabbMin = other.aabbMin;
+        aabbMax = other.aabbMax;
         meshes = other.meshes;
         vertexData = other.vertexData;
         indices = other.indices;
@@ -91,6 +111,9 @@ struct Scene
         debugCamera = other.debugCamera;
         activeCamera = &mainCamera;
         meshes = other.meshes;
+        pointLights = other.pointLights;
+        aabbMin = other.aabbMin;
+        aabbMax = other.aabbMax;
         vertexData = other.vertexData;
         indices = other.indices;
         images = other.images;
@@ -110,6 +133,9 @@ struct Scene
         debugCamera = other.debugCamera;
         activeCamera = &mainCamera;
         meshes = other.meshes;
+        pointLights = other.pointLights;
+        aabbMin = other.aabbMin;
+        aabbMax = other.aabbMax;
         vertexData = other.vertexData;
         indices = other.indices;
         images = other.images;
@@ -128,5 +154,6 @@ struct Scene
     void createBuffers();
 };
 
-result::result<Scene, assetError> loadScene(VulkanBackend& backend, std::string name, std::string path);
+result::result<Scene, assetError> loadScene(VulkanBackend& backend, std::string name, std::string path,
+    uint lightCount);
 Scene emptyScene(VulkanBackend& backend);

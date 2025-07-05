@@ -1,7 +1,5 @@
 #include "scene.h"
 
-#include <algorithm>
-#include <atomic>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/transform.hpp>
@@ -11,6 +9,10 @@
 #include "rhi/vulkan/backend.h"
 #include "rhi/vulkan/utils/inits.h"
 #include "tracy/Tracy.hpp"
+
+#include <algorithm>
+#include <atomic>
+#include <random>
 
 glm::vec3 right(glm::mat4 mat) { return mat * glm::vec4(1.f, 0.f, 0.f, 0.f); }
 
@@ -102,6 +104,11 @@ void updateFreeCamera(float dt, GLFWwindow* window, Camera& camera)
     camera.position += dir * camera.moveSpeed * dt;
 }
 
+void updateLights(float dt, std::vector<PointLight>& pointLights)
+{
+
+}
+
 void Scene::update(float dt, float currentTimeMs, GLFWwindow* window)
 {
     static bool released = true;
@@ -123,6 +130,7 @@ void Scene::update(float dt, float currentTimeMs, GLFWwindow* window)
     }
 
     updateFreeCamera(dt, window, *activeCamera);
+    updateLights(dt, pointLights);
 }
 
 void Scene::load(const char* path)
@@ -219,6 +227,14 @@ void Scene::addMeshes(tinygltf::Model& model, glm::vec3 offset)
                 // vertexData.back().pos[2]);
                 vertexAttributeOffset += attributeCount;
             }
+
+            // Update scene AABB
+            aabbMin.x = std::min(aabbMin.x, m.aabbMin.x);
+            aabbMin.y = std::min(aabbMin.y, m.aabbMin.y);
+            aabbMin.z = std::min(aabbMin.z, m.aabbMin.z);
+            aabbMax.x = std::max(aabbMax.x, m.aabbMax.x);
+            aabbMax.y = std::max(aabbMax.y, m.aabbMax.y);
+            aabbMax.z = std::max(aabbMax.z, m.aabbMax.z);
 
             tinygltf::Accessor indexAccessor = model.accessors[primitive.indices];
             tinygltf::BufferView& indexBufferView = model.bufferViews[indexAccessor.bufferView];
@@ -351,7 +367,8 @@ void Scene::createBuffers()
         cmds.data(), sizeof(VkDrawIndexedIndirectCommand) * cmds.size(), indirectCommands.buffer);
 }
 
-result::result<Scene, assetError> loadScene(VulkanBackend& backend, std::string name, std::string path)
+result::result<Scene, assetError> loadScene(VulkanBackend& backend, std::string name, std::string path,
+    uint lightCount)
 {
     Scene scene = Scene(name, backend);
 
@@ -371,6 +388,29 @@ result::result<Scene, assetError> loadScene(VulkanBackend& backend, std::string 
     std::println("Successfully loaded {}", path);
     scene.addMeshes(model);
     scene.createBuffers();
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<> uniformDistribution(0, 1);
+    scene.pointLights.reserve(lightCount);
+    for (int i = 0; i < lightCount; ++i)
+    {
+        scene.pointLights.push_back(PointLight{
+            .pos = glm::vec4(
+                uniformDistribution(gen) * (scene.aabbMax - scene.aabbMin).x + scene.aabbMin.x,
+                uniformDistribution(gen) * (scene.aabbMax - scene.aabbMin).y + scene.aabbMin.y,
+                uniformDistribution(gen) * (scene.aabbMax - scene.aabbMin).z + scene.aabbMin.z,
+                1.f
+            ),
+            .color = glm::vec4(
+                uniformDistribution(gen) * 0.4 + 0.6,
+                uniformDistribution(gen) * 0.4 + 0.6,
+                uniformDistribution(gen) * 0.4 + 0.6,
+                1.f
+            ),
+            .range = glm::vec4(uniformDistribution(gen) * 180 + 20), // [20; 200]
+        });
+    }
 
     return scene;
 }
