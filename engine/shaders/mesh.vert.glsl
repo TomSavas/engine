@@ -5,6 +5,7 @@
 
 layout(set = 0, binding = 0) uniform SceneUniforms 
 {
+    vec4 cameraPos;
     mat4 view;
     mat4 proj;
 } scene;
@@ -52,36 +53,36 @@ layout(push_constant) uniform Constants
 } constants;
 
 layout (location = 1) out vec4 geomColor;
-layout (location = 2) out vec3 normal;
-layout (location = 3) out vec4 color;
+//layout (location = 2) out vec3 normal;
+//layout (location = 3) out vec4 color;
 layout (location = 4) out vec2 uv;
 layout (location = 5) out flat int index;
 layout (location = 6) out vec3 viewPos;
 layout (location = 7) out vec3 pos;
+layout (location = 8) out mat3 tbn;
+layout (location = 3) out vec3 tangentCameraPos;
+layout (location = 2) out vec3 tangentFragPos;
 
 void main()
 {	
 	Vertex vert = constants.vertexBuffer.vertices[gl_VertexIndex];
 	gl_Position = scene.proj * scene.view * vec4(vert.position.xyz, 1.f);
-	// gl_Position = constants.model * vec4(vert.position.xyz, 1.f);
-
-    // geomColor = constants.color;
-    // color = constants.color;
     geomColor = vec4(1.0, 0.0, 0.0, 1.0);
-    color = vec4(1.0, 0.0, 0.0, 1.0);
-
-    normal = vert.normal.xyz;
-
-    index = gl_BaseInstance;
+    //color = vec4(1.0, 0.0, 0.0, 1.0);
     index = gl_DrawID;
 
-    // uv = constants.modelData.data[gl_DrawID];
+    mat4 normalRecalculationMatrix = transpose(inverse(constants.modelData.data[gl_DrawID].model));
+
+    vec3 normal = normalize(vert.normal.xyz);
+    vec3 tangent = normalize(vert.tangent.xyz);
+    tangent = normalize(tangent - dot(tangent, normal) * normal);
+    vec3 bitangent = cross(normal, tangent) * vert.tangent.w;
+    tbn = mat3(tangent, bitangent, normal);
+
+    tangentCameraPos = transpose(tbn) * scene.cameraPos.xyz;
+    tangentFragPos = transpose(tbn) * vert.position.xyz;
+
     uv = vert.uv.xy;
-
     viewPos = (scene.view * vec4(vert.position.xyz, 1.f)).xyz;
-    // viewPos = (scene.proj * scene.view * constants.model * vec4(vert.position.xyz, 1.f)).xyz;
     pos = vert.position.xyz;
-
-	// color = vec4(1.0, 0.0, 0.0, 1.0);
-	// gl_Position = vec4(1.0, 2.0, 3.0, 1.0);
 }

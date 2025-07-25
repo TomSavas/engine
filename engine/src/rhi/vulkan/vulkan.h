@@ -8,6 +8,7 @@
     do                                     \
     {                                      \
         ZoneScopedN(name " CPU");          \
+        /*TracyVkZone(ctx, cmd, name " GPU")*/ \
     } while (0)
 
 #include <iostream>

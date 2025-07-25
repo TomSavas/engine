@@ -299,6 +299,7 @@ void VulkanBackend::initSyncStructs()
 // TODO(savas): REMOVE ME! Testing purposes only
 struct SceneUniforms
 {
+    glm::vec4 cameraPos;
     glm::mat4 view;
     glm::mat4 projection;
 };
@@ -324,7 +325,8 @@ void VulkanBackend::initDescriptors()
         builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
         // sceneDescriptorSetLayout = builder.build(device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
         sceneDescriptorSetLayout = builder.build(
-            device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
+            device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT |
+            VK_SHADER_STAGE_COMPUTE_BIT);
         sceneDescriptorSet = descriptorAllocator.allocate(device, sceneDescriptorSetLayout);
 
         VkDescriptorBufferInfo descriptorBufferInfo = vkutil::init::descriptorBufferInfo(
@@ -432,20 +434,20 @@ void VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
         VK_CHECK(vkResetFences(device, 1, &frameCtx.renderFence));
     }
 
-    // {
-    //     ZoneScopedN("Sync Tracy");
+    {
+        ZoneScopedN("Sync Tracy");
 
-    //     VK_CHECK(vkWaitForFences(device, 1, &frame.tracyRenderFence, true, timeoutNs));
-    //     VK_CHECK(vkResetFences(device, 1, &frame.tracyRenderFence));
-    //     {
-    //         VK_CHECK(vkResetCommandBuffer(frame.tracyCmdBuffer, 0));
-    //         auto cmdBeginInfo = vkutil::init::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-    //         VK_CHECK(vkBeginCommandBuffer(frame.tracyCmdBuffer, &cmdBeginInfo));
-    //     }
-    // }
+        VK_CHECK(vkWaitForFences(device, 1, &frameCtx.tracyRenderFence, true, timeoutNs));
+        VK_CHECK(vkResetFences(device, 1, &frameCtx.tracyRenderFence));
+        {
+            VK_CHECK(vkResetCommandBuffer(frameCtx.tracyCmdBuffer, 0));
+            auto cmdBeginInfo = vkutil::init::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+            VK_CHECK(vkBeginCommandBuffer(frameCtx.tracyCmdBuffer, &cmdBeginInfo));
+        }
+    }
 
     {
-        ZoneScopedCpuGpuAuto("Record", frame);
+        ZoneScopedCpuGpuAuto("Record", frameCtx);
 
         VK_CHECK(vkResetCommandBuffer(cmd, 0));
         auto cmdBeginInfo = vkutil::init::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
@@ -466,6 +468,7 @@ void VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
         {
             ZoneScopedCpuGpuAuto("Memcpy SceneUniforms to GPU", frameCtx);
 
+            sceneUniforms.cameraPos = glm::vec4(scene.activeCamera->position, 1.f);
             sceneUniforms.view = scene.activeCamera->view();
             sceneUniforms.projection = scene.activeCamera->proj();
 
@@ -485,37 +488,55 @@ void VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
                 ZoneScoped;
                 ZoneName(pass.debugName.c_str(), pass.debugName.size());
 
-                VkDependencyInfo barriers = {
-                    .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-                    .pNext = nullptr,
-                    .memoryBarrierCount = static_cast<uint32_t>(node.memoryBarriers.size()),
-                    .pMemoryBarriers = node.memoryBarriers.data(),
-                    .bufferMemoryBarrierCount = static_cast<uint32_t>(node.bufferBarriers.size()),
-                    .pBufferMemoryBarriers = node.bufferBarriers.data(),
-                    .imageMemoryBarrierCount = static_cast<uint32_t>(node.imageBarriers.size()),
-                    .pImageMemoryBarriers = node.imageBarriers.data(),
-                };
-                vkCmdPipelineBarrier2(cmd, &barriers);
+                {
+                    ZoneScopedN("Barriers");
+
+                    VkDependencyInfo barriers = {
+                        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                        .pNext = nullptr,
+                        .memoryBarrierCount = static_cast<uint32_t>(node.memoryBarriers.size()),
+                        .pMemoryBarriers = node.memoryBarriers.data(),
+                        .bufferMemoryBarrierCount = static_cast<uint32_t>(node.bufferBarriers.size()),
+                        .pBufferMemoryBarriers = node.bufferBarriers.data(),
+                        .imageMemoryBarrierCount = static_cast<uint32_t>(node.imageBarriers.size()),
+                        .pImageMemoryBarriers = node.imageBarriers.data(),
+                    };
+                    vkCmdPipelineBarrier2(cmd, &barriers);
+                }
 
                 if (pass.pipeline)
                 {
-                    pass.beginRendering(cmd, graph);
+                    if (pass.beginRendering)
+                    {
+                        (*pass.beginRendering)(cmd, graph);
+                    }
+
                     vkCmdBindPipeline(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipeline);
 
                     // TEMP: each renderpass should specify this themselves
+                    //if (node.pass.debugName != "CSM pass" && node.pass.debugName != "Tiled light culling pass")
                     if (node.pass.debugName != "CSM pass")
+                    {
                         vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 0,
                             1, &sceneDescriptorSet, 0, nullptr);
+                    }
 
                     vkCmdSetViewport(cmd, 0, 1, &viewport);
                     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-                    pass.draw(cmd, graph, pass, scene);
+                    {
+                        ZoneScopedN("Draw");
+                        pass.draw(cmd, graph, pass, scene);
+                    }
 
-                    vkCmdEndRendering(cmd);
+                    if (pass.beginRendering)
+                    {
+                        vkCmdEndRendering(cmd);
+                    }
                 }
                 else
                 {
+                    ZoneScopedN("Draw");
                     pass.draw(cmd, graph, pass, scene);
                 }
             }
@@ -576,14 +597,14 @@ void VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
         VK_CHECK(vkQueuePresentKHR(graphicsQueue, &presentInfo));
     }
 
-    // {
-    //     ZoneScopedCpuGpuAuto("Tracy", frameCtx);
-    //     TracyVkCollect(frameCtx.tracyCtx, frameCtx.tracyCmdBuffer);
-    //     VK_CHECK(vkEndCommandBuffer(frameCtx.tracyCmdBuffer));
-    //     auto cmdInfo = vkutil::init::commandBufferSubmitInfo(frameCtx.tracyCmdBuffer);
-    //     auto submit = vkutil::init::submitInfo2(&cmdInfo, nullptr, nullptr);
-    //     VK_CHECK(vkQueueSubmit2(graphicsQueue, 1, &submit, frameCtx.tracyRenderFence));
-    // }
+    {
+        ZoneScopedCpuGpuAuto("Tracy", frameCtx);
+        TracyVkCollect(frameCtx.tracyCtx, frameCtx.tracyCmdBuffer);
+        VK_CHECK(vkEndCommandBuffer(frameCtx.tracyCmdBuffer));
+        auto cmdInfo = vkutil::init::commandBufferSubmitInfo(frameCtx.tracyCmdBuffer);
+        auto submit = vkutil::init::submitInfo2(&cmdInfo, nullptr, nullptr);
+        VK_CHECK(vkQueueSubmit2(graphicsQueue, 1, &submit, frameCtx.tracyRenderFence));
+    }
 }
 
 void VulkanBackend::immediateSubmit(std::function<void(VkCommandBuffer)>&& f)

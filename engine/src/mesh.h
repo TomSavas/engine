@@ -36,4 +36,5 @@ struct Mesh
     // int materialIndex;
     int albedoTexture;
     int normalTexture;
+    int bumpTexture;
 };

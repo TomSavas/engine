@@ -18,6 +18,9 @@ struct PushConstants
     VkDeviceAddress vertexBufferAddr;
     VkDeviceAddress perModelDataBufferAddr;
     VkDeviceAddress shadowData;
+    VkDeviceAddress lightList;
+    VkDeviceAddress lightIndexList;
+    VkDeviceAddress lightGrid;
     uint32_t shadowMapIndex;
 };
 
@@ -61,7 +64,8 @@ std::optional<ForwardOpaqueRenderer> initForwardOpaque(VulkanBackend& backend)
 
 void opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRenderer, VulkanBackend& backend,
     RenderGraph& graph, RenderGraphResource<Buffer> culledDraws, RenderGraphResource<BindlessTexture> depthMap,
-    RenderGraphResource<Buffer> shadowData, RenderGraphResource<BindlessTexture> shadowMap)
+    RenderGraphResource<Buffer> shadowData, RenderGraphResource<BindlessTexture> shadowMap,
+    LightData lightData)
 {
     if (!forwardOpaqueRenderer)
     {
@@ -78,16 +82,21 @@ void opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
         RenderGraphResource<Buffer> shadowData;
         RenderGraphResource<BindlessTexture> shadowMap;
         RenderGraphResource<BindlessTexture> depthMap;
+        RenderGraphResource<Buffer> lightList;
+        RenderGraphResource<Buffer> lightIndexList;
+        RenderGraphResource<Buffer> lightGrid;
     } data = {
         .culledDraws = readResource<Buffer>(graph, pass, culledDraws),
         .shadowData = readResource<Buffer>(graph, pass, shadowData),
         .shadowMap = readResource<BindlessTexture>(graph, pass, shadowMap, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL),
-        .depthMap = readResource<BindlessTexture>(graph, pass, depthMap, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL)
+        .depthMap = readResource<BindlessTexture>(graph, pass, depthMap, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL),
+        .lightList = readResource<Buffer>(graph, pass, lightData.lightList),
+        .lightIndexList = readResource<Buffer>(graph, pass, lightData.lightIndexList),
+        .lightGrid = readResource<Buffer>(graph, pass, lightData.lightGrid)
     };
 
     pass.pass.beginRendering = [data, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph)
     {
-        // TODO: attach depth from Z prepass
         VkExtent2D swapchainSize = {
             static_cast<uint32_t>(backend.viewport.width),
             static_cast<uint32_t>(backend.viewport.height)
@@ -100,7 +109,8 @@ void opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
         VkRenderingAttachmentInfo depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(
             backend.bindlessResources->getTexture(
                 *getResource<BindlessTexture>(graph, data.depthMap)).view,
-                VK_ATTACHMENT_LOAD_OP_LOAD);
+                // TEMPORARY
+                VK_ATTACHMENT_LOAD_OP_CLEAR);
         VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(
             swapchainSize, &colorAttachmentInfo, 1, &depthAttachmentInfo);
         vkCmdBeginRendering(cmd, &renderingInfo);
@@ -114,6 +124,9 @@ void opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
             .vertexBufferAddr = backend.getBufferDeviceAddress(scene.vertexBuffer.buffer),
             .perModelDataBufferAddr = backend.getBufferDeviceAddress(scene.perModelBuffer.buffer),
             .shadowData = backend.getBufferDeviceAddress(*getResource<Buffer>(graph, data.shadowData)),
+            .lightList = backend.getBufferDeviceAddress(*getResource<Buffer>(graph, data.lightList)),
+            .lightIndexList = backend.getBufferDeviceAddress(*getResource<Buffer>(graph, data.lightIndexList)),
+            .lightGrid = backend.getBufferDeviceAddress(*getResource<Buffer>(graph, data.lightGrid)),
             .shadowMapIndex = *getResource<BindlessTexture>(graph, data.shadowMap)
         };
         vkCmdPushConstants(

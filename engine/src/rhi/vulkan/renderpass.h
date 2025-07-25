@@ -22,7 +22,7 @@ struct RenderPass
     std::optional<Pipeline> pipeline;
     // VkRenderingInfo renderingInfo;
 
-    std::function<void(VkCommandBuffer cmd, CompiledRenderGraph&)> beginRendering;
+    std::optional<std::function<void(VkCommandBuffer cmd, CompiledRenderGraph&)>> beginRendering = std::nullopt;
     std::function<void(VkCommandBuffer cmd, CompiledRenderGraph&, RenderPass&, Scene&)> draw;
 
     // virtual void draw(VkCommandBuffer cmd);

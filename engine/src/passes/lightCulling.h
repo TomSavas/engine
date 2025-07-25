@@ -11,15 +11,21 @@ struct LightCulling
     AllocatedBuffer lightList;
     AllocatedBuffer lightIndexList;
     AllocatedBuffer lightGrid;
+    // TEMP:
+    AllocatedBuffer lightCount;
 };
 
 struct LightData
 {
+    RenderGraphResource<BindlessTexture> depthMap;
     RenderGraphResource<Buffer> lightList;
     RenderGraphResource<Buffer> lightIndexList;
     RenderGraphResource<Buffer> lightGrid; // Might be 2d or 3d depending on culling algorithm
+    // TEMP:
+    RenderGraphResource<Buffer> lightCount;
 };
 
-LightData tiledLightCullingPass(std::optional<LightCulling>& lightCulling, VulkanBackend& backend, RenderGraph& graph);
+LightData tiledLightCullingPass(std::optional<LightCulling>& lightCulling, VulkanBackend& backend, RenderGraph& graph,
+    Scene& scene, RenderGraphResource<BindlessTexture> depthMap, float tileSizeAsPercentageOfScreen);
 LightData clusteredLightCullingPass(std::optional<LightCulling>& lightCulling, VulkanBackend& backend,
-    RenderGraph& graph);
+    RenderGraph& graph, RenderGraphResource<BindlessTexture> depthMap, Scene& scene);

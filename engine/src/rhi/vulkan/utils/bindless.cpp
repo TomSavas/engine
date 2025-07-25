@@ -106,20 +106,22 @@ void addTransition<BindlessTexture>(VulkanBackend& backend, CompiledRenderGraph:
     imageBarrier.oldLayout = oldLayout;
     imageBarrier.newLayout = newLayout;
 
-    const bool isDepth = newLayout == VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL ||
-        newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL ||
-        newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL ||
-        newLayout == VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL ||
-        newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL ||
-        newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL ||
-        newLayout == VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
-
-    VkImageAspectFlags aspectMask = isDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
-    imageBarrier.subresourceRange = vkutil::init::imageSubresourceRange(aspectMask);
+    //const bool isDepth = newLayout == VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL ||
+    //    newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL ||
+    //    newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL ||
+    //    newLayout == VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL ||
+    //    newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL ||
+    //    newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL ||
+    //    newLayout == VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
 
     //const Texture& tex = graph.backend.bindlessResources->getTexture(*resource);
     const Texture& tex = backend.bindlessResources->getTexture(*resource);
     imageBarrier.image = tex.image.image;
+
+    const bool isDepth = tex.image.format == VK_FORMAT_D32_SFLOAT;
+
+    VkImageAspectFlags aspectMask = isDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+    imageBarrier.subresourceRange = vkutil::init::imageSubresourceRange(aspectMask);
 
     node.imageBarriers.push_back(imageBarrier);
 }

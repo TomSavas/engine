@@ -58,7 +58,7 @@ struct WorldRenderer
 
     explicit WorldRenderer(VulkanBackend& backend) : backend(backend) {}
 
-    void compileRenderGraph()
+    void compileRenderGraph(Scene& scene)
     {
         // NOTE: Instead of the usual per-frame recompilation of render graph,
         // it's enough to make it once and reuse the cached compiled render
@@ -71,13 +71,14 @@ struct WorldRenderer
         // const auto [draws, lightList] = sceneUploadPass(sceneDataUploader, backend, graph);
         const auto [culledDraws] = cpuFrustumCullingPass(culling, backend, graph);
         const auto [depthMap] = zPrePass(prePass, backend, graph, culledDraws);
-        // const auto [shadowMap, cascadeData] = simpleShadowPass(shadows, backend, graph);
+        // const auto [shadowMap, cascadeData] = simpleShadowPass(shadows, backend, graphi)
         const auto [shadowMap, cascadeData] = csmPass(shadows, backend, graph, 4);
-        auto [lightList, lightIndexList, lightGrid] = tiledLightCullingPass(lightCulling, backend, graph);
+        auto lightData = tiledLightCullingPass(lightCulling, backend, graph, scene, depthMap,
+            1.f / 20.f);
         // auto [pointLightShadowAtlas] = pointLightShadowPass(pointLightShadows, backend, graph, lightList, lightIndexList, lightGrid);
         // auto [lightList, culledLightData] = clusteredLightCullingPass(lightCulling, backend, graph);
         // auto planarReflections = planarReflectionPass(reflections, backend, graph);
-        opaqueForwardPass(opaque, backend, graph, culledDraws, depthMap, cascadeData, shadowMap);
+        opaqueForwardPass(opaque, backend, graph, culledDraws, depthMap, cascadeData, shadowMap, lightData);
         // skyPass(backend, graph);
         // bloomPass(backend, graph);
         // reinhardTonemapPass(backend, graph);
@@ -120,11 +121,12 @@ int main()
     // NOTE: extract VulkanBackend as interface when implementing other backends
     VulkanBackend* backend = initVulkanBackend().expect("Failed initialising Vulkan backend");
 
-    WorldRenderer worldRenderer(*backend);
-    worldRenderer.compileRenderGraph();
-
     // TODO: Not ideal, would be better if we could pass a lambda here
-    Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf", 64).value_or(emptyScene(*backend));
+    //Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf", 8196 * 2 - 1).value_or(emptyScene(*backend));
+    Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf", 8196).value_or(emptyScene(*backend));
+
+    WorldRenderer worldRenderer(*backend);
+    worldRenderer.compileRenderGraph(scene);
 
     FrameStats lastFrameStats = backend->endFrame(backend->newFrame());
     while (!lastFrameStats.shutdownRequested)

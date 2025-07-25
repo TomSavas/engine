@@ -5,6 +5,7 @@
 
 layout(set = 0, binding = 0) uniform SceneUniforms 
 {
+    vec4 cameraPos;
     mat4 view;
     mat4 proj;
 } scene;
@@ -45,5 +46,5 @@ void main()
 {	
 	Vertex vert = constants.vertexBuffer.vertices[gl_VertexIndex];
 	gl_Position = scene.proj * scene.view * vec4(vert.position.xyz, 1.f);
-	gl_Position.z += 0.1; // Additional bias to remove z-fighting
+	//gl_Position.z += 0.1; // Additional bias to remove z-fighting
 }

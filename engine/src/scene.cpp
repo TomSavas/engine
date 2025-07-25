@@ -1,18 +1,20 @@
 #include "scene.h"
 
+#include <algorithm>
+#include <atomic>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/transform.hpp>
 #include <print>
+#include <random>
 
 #include "GLFW/glfw3.h"
+#include "imageProcessing/displacement.h"
 #include "rhi/vulkan/backend.h"
 #include "rhi/vulkan/utils/inits.h"
+#include "stb_image.h"
+#include "stb_image_write.h"
 #include "tracy/Tracy.hpp"
-
-#include <algorithm>
-#include <atomic>
-#include <random>
 
 glm::vec3 right(glm::mat4 mat) { return mat * glm::vec4(1.f, 0.f, 0.f, 0.f); }
 
@@ -106,7 +108,19 @@ void updateFreeCamera(float dt, GLFWwindow* window, Camera& camera)
 
 void updateLights(float dt, std::vector<PointLight>& pointLights)
 {
+    static double time = 0.f;
+    //static glm::vec3 initial = pointLights[0].pos;
+    //static float dist = glm::length(glm::vec2(initial));
+    time += dt;
 
+    for (auto& light : pointLights)
+    {
+        float dist = glm::length(glm::vec2(light.pos.x, light.pos.z));
+        float angle = atan2(light.pos.x, light.pos.z);
+
+        light.pos.x = sin(angle + dt * 4.f) * dist;
+        light.pos.z = cos(angle + dt * 4.f) * dist;
+    }
 }
 
 void Scene::update(float dt, float currentTimeMs, GLFWwindow* window)
@@ -131,6 +145,24 @@ void Scene::update(float dt, float currentTimeMs, GLFWwindow* window)
 
     updateFreeCamera(dt, window, *activeCamera);
     updateLights(dt, pointLights);
+
+    //glm::mat4 invProj = glm::inverse(activeCamera->proj());
+    //glm::vec4 a = invProj * glm::vec4(0.f, 0.f, -1.f, 1.f);
+    //a /= a.w;
+    //std::println("-1.0 in VS: {} {} {} {}", a.x, a.y, a.z, a.w);
+    //a = invProj * glm::vec4(0.f, 0.f, 0.f, 1.f);
+    //a /= a.w;
+    //std::println(" 0.0 in VS: {} {} {} {}", a.x, a.y, a.z, a.w);
+    //a = invProj * glm::vec4(0.f, 0.f, 0.5f, 1.f);
+    //a /= a.w;
+    //std::println(" 0.5 in VS: {} {} {} {}", a.x, a.y, a.z, a.w);
+    //a = invProj * glm::vec4(0.f, 0.f, 1.f, 1.f);
+    //a /= a.w;
+    //std::println(" 1.0 in VS: {} {} {} {}", a.x, a.y, a.z, a.w);
+
+    //a = activeCamera->view() * glm::vec4(0.f, 0.f, 0.f, 1.f);
+    //a /= a.w;
+    //std::println("!0.0 in VS: {} {} {} {}", a.x, a.y, a.z, a.w);
 }
 
 void Scene::load(const char* path)
@@ -271,7 +303,7 @@ void Scene::addMeshes(tinygltf::Model& model, glm::vec3 offset)
 
                 // TODO: remove above
                 auto maybeTexture = backend.textures->loadRaw(albedoImg.image.data(), albedoImg.image.size(),
-                    albedoImg.width, albedoImg.height, true, false, albedoImg.name);
+                    albedoImg.width, albedoImg.height, true, false, albedoImg.uri);
                 bindlessImages.push_back(backend.bindlessResources->addTexture(std::get<0>(*maybeTexture)));
                 m.albedoTexture = bindlessImages.back();
             }
@@ -286,11 +318,43 @@ void Scene::addMeshes(tinygltf::Model& model, glm::vec3 offset)
                 m.normalTexture = images.size();
                 images.push_back(normalImg);
 
+                // std::println("Normal texture components {} with {}b per component", normalImg.component, normalImg.bits);
+
                 // TODO: remove above
                 auto maybeTexture = backend.textures->loadRaw(normalImg.image.data(), normalImg.image.size(),
-                    normalImg.width, normalImg.height, true, false, normalImg.name);
+                    normalImg.width, normalImg.height, true, true, normalImg.uri);
                 bindlessImages.push_back(backend.bindlessResources->addTexture(std::get<0>(*maybeTexture)));
                 m.normalTexture = bindlessImages.back();
+
+                std::string bumpFilename = "generatedBump_" + normalImg.uri + ".png";
+                // TODO: allow specifying format
+
+                int bumpWidth = normalImg.width;
+                int bumpHeight = normalImg.height;
+                int components;
+                uint8_t* loadRes = stbi_load(bumpFilename.c_str(), &bumpWidth, &bumpHeight, &components, STBI_rgb_alpha);
+                if (loadRes == nullptr)
+                {
+                    bumpWidth = normalImg.width;
+                    bumpHeight = normalImg.height;
+
+                    std::print("Generating bump map: {}... ", bumpFilename);
+                    std::vector<uint8_t> bumpMapData = tangentNormalMapToBumpMap(normalImg.image.data(), normalImg.width,
+                        normalImg.height);
+                    std::println("done");
+
+                    stbi_write_png(bumpFilename.c_str(), bumpHeight, bumpWidth, 4, bumpMapData.data(), 0);
+                    maybeTexture = backend.textures->loadRaw(bumpMapData.data(), bumpMapData.size(), bumpWidth,
+                        bumpHeight, true, true, bumpFilename);
+                }
+                else
+                {
+                    maybeTexture = backend.textures->loadRaw(loadRes, bumpWidth * bumpHeight * 4 * 1, bumpWidth,
+                        bumpHeight, true, true, bumpFilename);
+                }
+
+                bindlessImages.push_back(backend.bindlessResources->addTexture(std::get<0>(*maybeTexture)));
+                m.bumpTexture = bindlessImages.back();
             }
         }
     }
@@ -332,7 +396,7 @@ void Scene::createBuffers()
         ModelData data;
         // data.albedoTex = mesh.albedoTexture;
         // data.normalTex = mesh.normalTexture;
-        data.textures = glm::vec4(mesh.albedoTexture, mesh.normalTexture, 0.f, 0.f);
+        data.textures = glm::vec4(mesh.albedoTexture, mesh.normalTexture, mesh.bumpTexture, 0.f);
         data.model = glm::mat4(1.f);
         modelData.push_back(data);
     }
@@ -391,24 +455,57 @@ result::result<Scene, assetError> loadScene(VulkanBackend& backend, std::string 
 
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_real_distribution<> uniformDistribution(0, 1);
+    std::uniform_real_distribution<float> uniformDistribution(0, 1);
     scene.pointLights.reserve(lightCount);
-    for (int i = 0; i < lightCount; ++i)
+
+    scene.pointLights.push_back(PointLight {
+        //.pos = glm::vec4(0, 30, 0, 1.f),
+        //.color = glm::vec4(1.f, 0.6f, 0.2f, 1.f),
+        //.range = glm::vec4(50.f),
+        .pos = glm::vec4(22.7, 98.65, 115.17, 1.f),
+        .color = glm::vec4(1.f, 0.95f, 0.8f, 1.f),
+        .range = glm::vec4(150.f),
+    });
+
+    glm::vec3 exclusionAabb[2] = {
+        glm::vec3(-900.f, 80.f, -200.f),
+        glm::vec3(750.f, 1300.f, 120.f)
+    };
+
+    auto diff = scene.aabbMax - scene.aabbMin;
+    auto offsetMin = scene.aabbMin + diff * 0.15f;
+    offsetMin.x -= diff.y * 0.05f;
+    offsetMin.y -= diff.y * 0.1f;
+    for (int i = 0; i < lightCount - 1; ++i)
     {
+        auto insideExclusion = [&](glm::vec3 pos)
+        {
+            return exclusionAabb[0].x < pos.x && pos.x < exclusionAabb[1].x &&
+                exclusionAabb[0].y < pos.y && pos.y < exclusionAabb[1].y &&
+                exclusionAabb[0].z < pos.z && pos.z < exclusionAabb[1].z;
+        };
+
+        glm::vec3 pos;
+        do
+        {
+            //std::println("Regening {} {} {}", pos.x, pos.y, pos.z);
+            pos = glm::vec3(
+                uniformDistribution(gen) * 0.75 * diff.x + offsetMin.x,
+                uniformDistribution(gen) * 0.6 * diff.y + offsetMin.y,
+                uniformDistribution(gen) * 0.65 * diff.z + offsetMin.z
+            );
+        } while (insideExclusion(pos));
+        //std::println("\t OK {} {} {}", pos.x, pos.y, pos.z);
+
         scene.pointLights.push_back(PointLight{
-            .pos = glm::vec4(
-                uniformDistribution(gen) * (scene.aabbMax - scene.aabbMin).x + scene.aabbMin.x,
-                uniformDistribution(gen) * (scene.aabbMax - scene.aabbMin).y + scene.aabbMin.y,
-                uniformDistribution(gen) * (scene.aabbMax - scene.aabbMin).z + scene.aabbMin.z,
-                1.f
-            ),
+            .pos = glm::vec4(pos, 1.f),
             .color = glm::vec4(
-                uniformDistribution(gen) * 0.4 + 0.6,
-                uniformDistribution(gen) * 0.4 + 0.6,
-                uniformDistribution(gen) * 0.4 + 0.6,
+                uniformDistribution(gen) * 0.6 + 0.4,
+                uniformDistribution(gen) * 0.6 + 0.4,
+                uniformDistribution(gen) * 0.6 + 0.4,
                 1.f
             ),
-            .range = glm::vec4(uniformDistribution(gen) * 180 + 20), // [20; 200]
+            .range = glm::vec4(uniformDistribution(gen) * 40 + 20), // [20; 200]
         });
     }
 

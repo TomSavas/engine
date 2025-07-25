@@ -73,17 +73,21 @@ foreach(GLSL ${GLSL_SOURCE_FILES})
     get_filename_component(FILE_NAME ${GLSL} NAME)
     set(SPIRV "${SPV_MAKE_DIRECTORY}/${FILE_NAME}.spv")
 
+    #if (MATCHES "\\.[^\.]*\\.glsl")
     string(REGEX MATCH "\\.[^\.]*\\.glsl" SHADER_STAGE ${GLSL})
-    string(REGEX REPLACE "\\.glsl" "" SHADER_STAGE ${SHADER_STAGE})
-    string(REGEX REPLACE "\\." "" SHADER_STAGE ${SHADER_STAGE})
+    string(COMPARE NOTEQUAL "${SHADER_STAGE}" "" CONTAINS_STAGE)
+    if (${CONTAINS_STAGE})
+        string(REGEX REPLACE "\\.glsl" "" SHADER_STAGE ${SHADER_STAGE})
+        string(REGEX REPLACE "\\." "" SHADER_STAGE ${SHADER_STAGE})
 
-    add_custom_command(
-        OUTPUT ${SPIRV}
-        COMMAND ${GLSLC} -g -I${SHADER_SRC_DIRECTORY} -fshader-stage=${SHADER_STAGE} ${GLSL} -o ${SPIRV}
-        DEPENDS ${GLSL}
-        COMMENT "Compiling ${GLSL} for stage: ${SHADER_STAGE}"
-    )
-    list(APPEND SPIRV_BINARY_FILES ${SPIRV})
+        add_custom_command(
+            OUTPUT ${SPIRV}
+            COMMAND ${GLSLC} -g -I${SHADER_SRC_DIRECTORY} -fshader-stage=${SHADER_STAGE} ${GLSL} -o ${SPIRV}
+            DEPENDS ${GLSL}
+            COMMENT "Compiling ${GLSL} for stage: ${SHADER_STAGE}"
+        )
+        list(APPEND SPIRV_BINARY_FILES ${SPIRV})
+    endif ()
 endforeach(GLSL)
 
 add_custom_target(

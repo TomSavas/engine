@@ -59,9 +59,13 @@ CullingPassRenderGraphData cpuFrustumCullingPass(
 
     CullingPassRenderGraphData data = {};
     data.culledDraws = importResource<Buffer>(graph, pass, &geometryCulling->culledDraws.buffer);
+    static bool once = false;
 
     pass.pass.draw = [data, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass&, Scene& scene)
     {
+        if (once) return;
+        once = true;
+
         const glm::mat4 view = glm::inverse(
             glm::translate(glm::mat4(1.f), scene.mainCamera.position) * scene.mainCamera.rotation);
         const glm::mat4 projection = glm::perspectiveFov<float>(scene.mainCamera.verticalFov,

@@ -36,7 +36,8 @@ Texture createTexture(
     VulkanBackend& backend, void* data, uint32_t size, uint32_t width, uint32_t height, bool generateMips)
 {
     const VkDeviceSize imageSize = size;
-    const VkFormat imageFormat = VK_FORMAT_R8G8B8A8_SRGB;
+    //const VkFormat imageFormat = VK_FORMAT_R8G8B8A8_SRGB;
+    const VkFormat imageFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
     // NOTE: we can probably refactor this and avoid the vkCmdCopyBufferToImage call altogether by allocating a texture
     // here.
@@ -133,7 +134,7 @@ Texture createTexture(
     vmaDestroyBuffer(backend.allocator, cpuImageBuffer.buffer, cpuImageBuffer.allocation);
 
     VkImageViewCreateInfo imageViewInfo = vkutil::init::imageViewCreateInfo(
-        VK_FORMAT_R8G8B8A8_SRGB, texture.image.image, VK_IMAGE_ASPECT_COLOR_BIT, texture.mipCount);
+        VK_FORMAT_R8G8B8A8_UNORM, texture.image.image, VK_IMAGE_ASPECT_COLOR_BIT, texture.mipCount);
     vkCreateImageView(backend.device, &imageViewInfo, nullptr, &texture.view);
 
     return texture;
