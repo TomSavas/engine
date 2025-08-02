@@ -169,6 +169,9 @@ void VulkanBackend::initVulkan()
     graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
     graphicsQueueFamily = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
 
+    computeQueue = vkbDevice.get_queue(vkb::QueueType::compute).value();
+    computeQueueFamily = vkbDevice.get_queue_index(vkb::QueueType::compute).value();
+
     VmaAllocatorCreateInfo allocatorInfo = {};
     allocatorInfo.physicalDevice = gpu;
     allocatorInfo.device = device;
@@ -228,8 +231,18 @@ void VulkanBackend::initSwapchain()
 void VulkanBackend::initCommandBuffers()
 {
     auto commandPoolInfo = vkutil::init::commandPoolCreateInfo(
-        graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+        computeQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
     auto cmdAllocInfo = vkutil::init::commandBufferAllocateInfo(1, VK_COMMAND_BUFFER_LEVEL_PRIMARY, VK_NULL_HANDLE);
+    for (int i = 0; i < MaxFramesInFlight; i++)
+    {
+        VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &frames[i].cmdComputePool));
+        cmdAllocInfo.commandPool = frames[i].cmdComputePool;
+        VK_CHECK(vkAllocateCommandBuffers(device, &cmdAllocInfo, &frames[i].cmdComputeBuffer));
+    }
+
+    commandPoolInfo = vkutil::init::commandPoolCreateInfo(
+        graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+    cmdAllocInfo = vkutil::init::commandBufferAllocateInfo(1, VK_COMMAND_BUFFER_LEVEL_PRIMARY, VK_NULL_HANDLE);
     for (int i = 0; i < MaxFramesInFlight; i++)
     {
         VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &frames[i].cmdPool));
@@ -420,6 +433,7 @@ void VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
 
     FrameCtx& frameCtx = frame.ctx;
     auto cmd = frameCtx.cmdBuffer;
+    auto computeCmd = frameCtx.cmdComputeBuffer;
 
     uint32_t swapchainImageIndex;
     {
@@ -506,8 +520,10 @@ void VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
 
                 if (pass.pipeline)
                 {
+                    ZoneScopedN("Render using pipeline");
                     if (pass.beginRendering)
                     {
+                        ZoneScopedN("Begin rendering");
                         (*pass.beginRendering)(cmd, graph);
                     }
 
@@ -531,12 +547,13 @@ void VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
 
                     if (pass.beginRendering)
                     {
+                        ZoneScopedN("End rendering");
                         vkCmdEndRendering(cmd);
                     }
                 }
                 else
                 {
-                    ZoneScopedN("Draw");
+                    ZoneScopedN("Draw without pipeline");
                     pass.draw(cmd, graph, pass, scene);
                 }
             }
@@ -579,7 +596,7 @@ void VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
     }
 
     {
-        ZoneScopedCpuGpuAuto("Submit", frameCtx);
+        ZoneScopedCpuGpuAuto("Submit Graphics", frameCtx);
 
         auto cmdInfo = vkutil::init::commandBufferSubmitInfo(cmd);
         auto waitInfo = vkutil::init::semaphoreSubmitInfo(

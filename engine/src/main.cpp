@@ -97,7 +97,7 @@ struct WorldRenderer
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        scene.update(0.0016f, 0.f, backend.window);
+        scene.update(dt, 0.f, backend.window);
 
         drawDebugUI(backend, scene, dt);
 
@@ -122,8 +122,9 @@ int main()
     VulkanBackend* backend = initVulkanBackend().expect("Failed initialising Vulkan backend");
 
     // TODO: Not ideal, would be better if we could pass a lambda here
-    //Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf", 8196 * 2 - 1).value_or(emptyScene(*backend));
-    Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf", 8196).value_or(emptyScene(*backend));
+    //Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf", 1).value_or(emptyScene(*backend));
+    Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf", 1024 * 2 - 1).value_or(emptyScene(*backend));
+    //Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf", 8196).value_or(emptyScene(*backend));
 
     WorldRenderer worldRenderer(*backend);
     worldRenderer.compileRenderGraph(scene);

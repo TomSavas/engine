@@ -76,6 +76,8 @@ layout (location = 2) in vec3 tangentFragPos;
 
 layout (location = 0) out vec4 outColor;
 
+#include "parallax.glsl"
+
 const mat4 biasMat = mat4( 
 	0.5, 0.0, 0.0, 0.0,
 	0.0, 0.5, 0.0, 0.0,
@@ -85,7 +87,8 @@ const mat4 biasMat = mat4(
 
 #define PCF_TAPS_PER_AXIS 15
 
-float shadowIntensity(mat4 viewProj, uint cascadeIndex, float cascadeCount) {
+float shadowIntensity(mat4 viewProj, uint cascadeIndex, float cascadeCount)
+{
     vec4 lightSpacePos = viewProj * vec4(pos, 1.f);
     lightSpacePos = lightSpacePos / lightSpacePos.w;
     vec2 lightSpacePosNDC = lightSpacePos.xy * 0.5f + 0.5f;
@@ -128,118 +131,6 @@ vec3 calculateSpecular(vec3 color, vec3 normal, vec3 lightDir, vec3 cameraDir, f
     return color * specularIntensity;
 }
 
-vec2 parallaxMap(vec2 vertUv, int bumpMapIndex)
-{
-	const float heightScale = 0.01f;
-	 
-	//return vertUv;
-
-    //vec3 tangentCameraPos = tbn * scene.cameraPos.xyz;
-    //vec3 tangentFragPos = tbn * pos;
-	vec3 viewDir = normalize(tangentCameraPos - tangentFragPos);
-	
-    float height = 1.f - texture(textures[bumpMapIndex], vertUv).r;    
-    vec2 p = viewDir.xy / viewDir.z * (height * heightScale);
-    return vertUv - p;    
-}
-
-vec2 steepParallaxMap(vec2 vertUv, int bumpMapIndex)
-{
-	const float heightScale = 0.1f;
-	 
-	//return vertUv;
-
-    //vec3 tangentCameraPos = tbn * scene.cameraPos.xyz;
-    //vec3 tangentFragPos = tbn * pos;
-	vec3 viewDir = normalize(tangentCameraPos - tangentFragPos);
-	
-    // number of depth layers
-    const float numLayers = 100;
-    // calculate the size of each layer
-    float layerDepth = 1.0 / numLayers;
-    // depth of current layer
-    float currentLayerDepth = 0.0;
-    // the amount to shift the texture coordinates per layer (from vector P)
-    vec2 P = viewDir.xy * heightScale; 
-    vec2 deltaTexCoords = P / numLayers;	
-
-    // get initial values
-	vec2 uv = vertUv;
-    float currentDepthMapValue = 1.f - texture(textures[bumpMapIndex], uv).r;    
-  
-	while(currentLayerDepth < currentDepthMapValue)
-	{
-	    // shift texture coordinates along direction of P
-	    uv -= deltaTexCoords;
-	    // get depthmap value at current texture coordinates
-	    //currentDepthMapValue = texture(depthMap, currentTexCoords).r;  
-	    currentDepthMapValue = 1.f - texture(textures[bumpMapIndex], uv).r;    
-	    // get depth of next layer
-	    currentLayerDepth += layerDepth;  
-	}
-
-	return uv;
-}
-
-vec2 parallaxOcclussionMap(vec2 vertUv, int bumpMapIndex)
-{
-	const float heightScale = 0.025f;
-
-    //vec3 tangentCameraPos = tbn * scene.cameraPos.xyz;
-    //vec3 tangentFragPos = tbn * pos;
-	vec3 viewDir = tangentCameraPos - tangentFragPos;
-
-	float viewDirLen = length(viewDir);
-    const float minDist = 0;
-    const float maxDist = 150;
-    float distLayerMultiplier = clamp(remap(viewDirLen, minDist, maxDist, 0, 1), 0.f, 1.f);
-    distLayerMultiplier = 1.f - distLayerMultiplier;
-
-	viewDir = normalize(viewDir);
-
-    const float minLayers = 2;
-    const float maxLayers = 256;
-    //float numLayers = mix(maxLayers, minLayers, abs(dot(vec3(0.0, 0.0, 1.0), viewDir)) * distLayerMultiplier);
-    float numLayers = mix(maxLayers, minLayers, abs(dot(vec3(0.0, 0.0, 1.0), viewDir)));
-
-    // number of depth layers
-    //const float numLayers = 200;
-    // calculate the size of each layer
-    float layerDepth = 1.0 / numLayers;
-    // depth of current layer
-    float currentLayerDepth = 0.0;
-    // the amount to shift the texture coordinates per layer (from vector P)
-    vec2 P = viewDir.xy * heightScale; 
-    vec2 deltaTexCoords = P / numLayers;	
-
-    // get initial values
-	vec2 uv = vertUv;
-    float currentDepthMapValue = 1.f - texture(textures[bumpMapIndex], uv).r;    
-  
-	while(currentLayerDepth < currentDepthMapValue)
-	{
-	    // shift texture coordinates along direction of P
-	    uv -= deltaTexCoords;
-	    // get depthmap value at current texture coordinates
-	    //currentDepthMapValue = texture(depthMap, currentTexCoords).r;  
-	    currentDepthMapValue = 1.f - texture(textures[bumpMapIndex], uv).r;    
-	    // get depth of next layer
-	    currentLayerDepth += layerDepth;  
-	}
-
-	vec2 prevTexCoords = uv + deltaTexCoords;
-
-	// get depth after and before collision for linear interpolation
-	float afterDepth  = currentDepthMapValue - currentLayerDepth;
-	float beforeDepth = (1.f - texture(textures[bumpMapIndex], uv).r) - currentLayerDepth + layerDepth;
- 
-	// interpolation of texture coordinates
-	float weight = afterDepth / (afterDepth - beforeDepth);
-	vec2 finalTexCoords = prevTexCoords * weight + uv * (1.0 - weight);
-
-	return finalTexCoords; 
-}
-
 float linearizeDepth(float depth, float near, float far)
 {
     //depth = 2.f * depth - 1.f;
@@ -261,16 +152,7 @@ void main()
 {
     const vec4 textureIndices = constants.modelData.data[index].textures;
     const int index = int(textureIndices.x);
-
-    //vec2 uv = parallaxMap(vert_uv, int(textureIndices.z));
-    //vec2 uv = steepParallaxMap(vert_uv, int(textureIndices.z));
-    //vec2 uv = parallaxOcclussionMap(vert_uv, int(textureIndices.z));
-    vec2 uv = vert_uv;
-
-	// if(uv.x > 1.0 || uv.y > 1.0 || uv.x < 0.0 || uv.y < 0.0)
-	// {
-	//     discard;
-	// }
+    vec2 uv = parallaxOcclussionMapBinarySearch(vert_uv, int(textureIndices.z));
 
 	uint cascadeIndex = 0;
 	for(uint i = 0; i < constants.shadowData.cascadeCount - 1; ++i) {

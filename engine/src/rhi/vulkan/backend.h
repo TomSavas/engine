@@ -37,6 +37,9 @@ struct FrameCtx
 
     VkCommandPool cmdPool;
     VkCommandBuffer cmdBuffer;
+
+    VkCommandPool cmdComputePool;
+    VkCommandBuffer cmdComputeBuffer;
 };
 
 class GLFWwindow;
@@ -87,6 +90,9 @@ struct VulkanBackend
 
     VkQueue graphicsQueue;
     uint32_t graphicsQueueFamily;
+
+    VkQueue computeQueue;
+    uint32_t computeQueueFamily;
 
     VkViewport viewport;
     VkRect2D scissor;
