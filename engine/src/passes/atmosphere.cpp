@@ -13,7 +13,24 @@ struct PushConstants
 {
     glm::vec4 depth;
     glm::vec4 sunDir;
+    glm::vec4 scatteringCoeffs; // Rayleigh xyz, Mie w
 };
+
+glm::vec3 rayleighScatteringCoefficients(float wavelenghts[3])
+{
+    constexpr float n = 1.00027717f; // Air refractive index
+    constexpr float n2 = n * n;
+    constexpr float N = 2.504e25; // Molecular density of atmosphere -- molecules / m3
+    constexpr float pi3 = std::pow(glm::pi<float>(), 3.f);
+
+    const float factor = 8.f * pi3 * std::pow(n2 - 1, 2.f) / 3.f *
+            (1.f / N);
+    return glm::vec3(
+        factor * (1.f / std::pow(wavelenghts[0], 4.f)),
+        factor * (1.f / std::pow(wavelenghts[1], 4.f)),
+        factor * (1.f / std::pow(wavelenghts[2], 4.f))
+    );
+}
 
 std::optional<AtmosphereRenderer> initAtmosphere(VulkanBackend& backend)
 {
@@ -78,14 +95,28 @@ void atmospherePass(std::optional<AtmosphereRenderer>& atmosphere, VulkanBackend
         static bool moveSun = false;
         static float speed = 0.0008f;
         static float sign = 1.f;
-        //time += 0.005f;
-        //time += std::max(pow(cos(time), 4) * 0.25, 0.0001);
+        static float sunIntensity = 10.f;
+
+        static float rayleighScatteringWavelengths[3] = {680e-9, 550e-9, 440e-9};
+        glm::vec3 rayleighCoeffs = rayleighScatteringCoefficients(rayleighScatteringWavelengths);
+        const float mieBaseCoeff = 21e-6;
+        static float mieFactor = 1.f;
+        float mieCoeff = mieBaseCoeff * mieFactor;
 
         if (ImGui::Begin("Atmosphere"))
         {
             ImGui::SliderFloat("Time", &time, 0, 2 * glm::pi<float>());
             ImGui::Checkbox("Sun movement", &moveSun);
-            ImGui::SliderFloat("Speed", &speed, 0.0001f, 0.001f);
+            ImGui::SliderFloat("Speed", &speed, 0.00001f, 0.01f, "%.5f");
+
+            ImGui::Separator();
+
+            ImGui::SliderFloat("Sun Intensity", &sunIntensity, 0.f, 100.f);
+            ImGui::SliderFloat3("Rayleigh scattering wavelengths", rayleighScatteringWavelengths,
+                380e-9, 700e-9, "%.8f");
+            ImGui::Text("\t%.1e, %.1e, %.1e", rayleighCoeffs.x, rayleighCoeffs.y, rayleighCoeffs.z);
+            ImGui::SliderFloat("Mie scattering factor", &mieFactor, 0.01f, 1000.f);
+            ImGui::Text("\t%.1e", mieCoeff);
         }
         ImGui::End();
 
@@ -102,7 +133,8 @@ void atmospherePass(std::optional<AtmosphereRenderer>& atmosphere, VulkanBackend
         ZoneScopedCpuGpuAuto("Atmosphere pass", backend.currentFrame());
         PushConstants pushConstants = {
             .depth = glm::vec4(1.f),
-            .sunDir = glm::vec4(-scene.lightDir.x, -scene.lightDir.y, scene.lightDir.z, 0.f),
+            .sunDir = glm::vec4(-scene.lightDir.x, -scene.lightDir.y, scene.lightDir.z, sunIntensity),
+            .scatteringCoeffs = glm::vec4(rayleighCoeffs, mieCoeff)
         };
         vkCmdPushConstants(
             cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(PushConstants), &pushConstants);

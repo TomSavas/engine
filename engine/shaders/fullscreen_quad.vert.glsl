@@ -4,8 +4,9 @@ layout(push_constant) uniform Constants
 {
     // TODO: convert to specialisation constant
     vec4 depth;
-    vec4 sunDir;
-} constants;
+    vec4 sunDirAndIntensity;
+    vec4 scatteringCoeffs;
+};
 
 layout (location = 0) out vec2 uv;
 
@@ -22,6 +23,6 @@ void main()
 		vec2(0.f, 2.f)
 	);
 
-	gl_Position = vec4(positions[gl_VertexIndex], constants.depth.x, 1.0f);
+	gl_Position = vec4(positions[gl_VertexIndex], depth.x, 1.0f);
 	uv = uvs[gl_VertexIndex];
 }
