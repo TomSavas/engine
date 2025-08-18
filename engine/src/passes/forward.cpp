@@ -111,6 +111,7 @@ void opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
                 *getResource<BindlessTexture>(graph, data.depthMap)).view,
                 // TEMPORARY
                 VK_ATTACHMENT_LOAD_OP_CLEAR);
+                //VK_ATTACHMENT_LOAD_OP_LOAD);
         VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(
             swapchainSize, &colorAttachmentInfo, 1, &depthAttachmentInfo);
         vkCmdBeginRendering(cmd, &renderingInfo);

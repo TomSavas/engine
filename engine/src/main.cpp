@@ -3,6 +3,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
+#include "passes/atmosphere.h"
 #include "passes/culling.h"
 #include "passes/forward.h"
 #include "passes/lightCulling.h"
@@ -54,6 +55,8 @@ struct WorldRenderer
     std::optional<ForwardOpaqueRenderer> opaque;
     std::optional<LightCulling> lightCulling;
 
+    std::optional<AtmosphereRenderer> atmosphere;
+
     std::optional<TestRenderer> test;
 
     explicit WorldRenderer(VulkanBackend& backend) : backend(backend) {}
@@ -83,6 +86,7 @@ struct WorldRenderer
         // bloomPass(backend, graph);
         // reinhardTonemapPass(backend, graph);
         // smaaPass(backend, graph);
+        atmospherePass(atmosphere, backend, graph, depthMap);
 
         testPass(test, backend, graph);
 

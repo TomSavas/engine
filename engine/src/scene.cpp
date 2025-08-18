@@ -111,15 +111,50 @@ void updateLights(float dt, std::vector<PointLight>& pointLights)
     static double time = 0.f;
     //static glm::vec3 initial = pointLights[0].pos;
     //static float dist = glm::length(glm::vec2(initial));
+    //time += dt * 0.2f;
     time += dt;
+
+    // Ignoring y component
+    glm::vec2 ellipseFocals[] = {
+        glm::vec2(490.f, 0.f),
+        glm::vec2(-612.f, 0.f),
+    };
+    float focalDist = glm::distance(ellipseFocals[0], ellipseFocals[1]);
 
     for (auto& light : pointLights)
     {
+        // //dists[0] = glm::distance(ellipseFocals[0], glm::vec2(pointLights[0].pos.x, pointLights[0].pos.z));
+        // float dists[] = {
+        //     glm::distance(ellipseFocals[0], glm::vec2(pointLights[0].pos.x, pointLights[0].pos.z)),
+        //     glm::distance(ellipseFocals[1], glm::vec2(pointLights[0].pos.x, pointLights[0].pos.z)),
+        // };
+
+        // float k = dists[0] + dists[1];
+        // float a = sqrt(k * k - focalDist * focalDist) / 2.f;
+        // //float b = k - dists[1] - glm::length(ellipseFocals[0]);
+        // //float b = k - dists[1] - focalDist / 2.f;
+        // //float b = k - glm::length(ellipseFocals[0]) - glm::length(ellspseFocals[1]) / 2.f;
+        // //float b = (k - focalDist - glm::length(ellipseFocals[0]) * 2.f) / 2.f;
+        // float b = (k - 2 * focalDist) / 2.f;
+
+        // //float dist = glm::length(glm::vec2(light.pos.x, light.pos.z));
+        // //float angle = atan2(ellipseFocals[1].x - light.pos.x, ellipseFocals[1].y - light.pos.z);
+
+        // //light.pos.x = sin(angle + dt * 4.f) * a;
+        // //light.pos.z = cos(angle + dt * 4.f) * b;
+
+        // light.pos.x = cos(time) * b;
+        // light.pos.z = sin(time) * a;
+
+        // std::println("a={} b={} k={}", a, b, k);
+        // //std::println("{} {}", light.pos.x, light.pos.z);
+
+
         float dist = glm::length(glm::vec2(light.pos.x, light.pos.z));
         float angle = atan2(light.pos.x, light.pos.z);
 
-        light.pos.x = sin(angle + dt * 4.f) * dist;
-        light.pos.z = cos(angle + dt * 4.f) * dist;
+        light.pos.x = sin(angle + dt) * dist;
+        light.pos.z = cos(angle + dt) * dist;
     }
 }
 
@@ -463,8 +498,10 @@ result::result<Scene, assetError> loadScene(VulkanBackend& backend, std::string 
         //.color = glm::vec4(1.f, 0.6f, 0.2f, 1.f),
         //.range = glm::vec4(50.f),
         .pos = glm::vec4(22.7, 98.65, 115.17, 1.f),
+        //.pos = glm::vec4(520.f, 40.f, 0.f, 1.f),
         .color = glm::vec4(1.f, 0.95f, 0.8f, 1.f),
-        .range = glm::vec4(150.f),
+        //.range = glm::vec4(150.f),
+        .range = glm::vec4(50.f),
     });
 
     glm::vec3 exclusionAabb[2] = {

@@ -9,4 +9,4 @@ struct TestRenderer
     RenderPass::Pipeline pipeline;
 };
 
-void testPass(std::optional<TestRenderer> renderer, VulkanBackend& backend, RenderGraph& graph);
+void testPass(std::optional<TestRenderer>& renderer, VulkanBackend& backend, RenderGraph& graph);
