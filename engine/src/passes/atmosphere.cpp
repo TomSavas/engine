@@ -9,7 +9,7 @@
 #include "scene.h"
 #include "tracy/Tracy.hpp"
 
-struct PushConstants
+struct AtmospherePushConstants
 {
     glm::vec4 depth;
     glm::vec4 sunDir;
@@ -33,30 +33,6 @@ auto rayleighScatteringCoefficients(float wavelenghts[3]) -> glm::vec3
 
 std::optional<AtmosphereRenderer> initAtmosphere(VulkanBackend& backend)
 {
-    //AtmosphereRenderer renderer;
-
-    //VkDescriptorSetLayout descriptors[] = {backend.sceneDescriptorSetLayout};
-    //VkPushConstantRange pushConstants = vkutil::init::pushConstantRange(VK_SHADER_STAGE_ALL, sizeof(PushConstants));
-    //VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkutil::init::layoutCreateInfo(descriptors, 1, &pushConstants, 1);
-    //VK_CHECK(vkCreatePipelineLayout(backend.device, &pipelineLayoutInfo, nullptr, &renderer.pipeline.pipelineLayout));
-
-    //renderer.pipeline.pipeline = PipelineBuilder(backend)
-    //    .addShader(SHADER_PATH("fullscreen_quad.vert.glsl"), VK_SHADER_STAGE_VERTEX_BIT)
-    //    .addShader(SHADER_PATH("atmosphere.frag.glsl"), VK_SHADER_STAGE_FRAGMENT_BIT)
-    //    .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-    //    .polyMode(VK_POLYGON_MODE_FILL)
-    //    .cullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE)
-    //    .disableMultisampling()
-    //    .enableAlphaBlending()
-    //    .colorAttachmentFormat(backend.backbufferImage.format)
-    //    .depthFormat(VK_FORMAT_D32_SFLOAT)
-    //    .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
-    //    .addViewportScissorDynamicStates()
-    //    .build(backend.device, renderer.pipeline.pipelineLayout);
-    //renderer.pipeline.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-
-    //return renderer;
-
     return AtmosphereRenderer{
         .pipeline = PipelineBuilder(backend)
             .addDescriptorLayouts({
@@ -66,7 +42,7 @@ std::optional<AtmosphereRenderer> initAtmosphere(VulkanBackend& backend)
                 VkPushConstantRange{
                     .stageFlags = VK_SHADER_STAGE_ALL,
                     .offset = 0,
-                    .size = sizeof(PushConstants)
+                    .size = sizeof(AtmospherePushConstants)
                 }
             })
             .addShader(SHADER_PATH("fullscreen_quad.vert.glsl"), VK_SHADER_STAGE_VERTEX_BIT)
@@ -159,7 +135,7 @@ auto atmospherePass(std::optional<AtmosphereRenderer>& atmosphere, VulkanBackend
         scene.lightDir = glm::normalize(glm::vec3(-sin(time), -cos(time), 0.f));
 
         ZoneScopedCpuGpuAuto("Atmosphere pass", backend.currentFrame());
-        const PushConstants pushConstants = {
+        const AtmospherePushConstants pushConstants = {
             .depth = glm::vec4(1.f),
             .sunDir = glm::vec4(-scene.lightDir.x, -scene.lightDir.y, scene.lightDir.z, sunIntensity),
             .scatteringCoeffs = glm::vec4(rayleighCoeffs, mieCoeff)

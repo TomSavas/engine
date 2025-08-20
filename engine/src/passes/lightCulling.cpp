@@ -6,7 +6,7 @@
 #include "rhi/vulkan/utils/inits.h"
 #include "scene.h"
 
-struct PushConstants
+struct LightCullingPushConstants
 {
     u32 depthMap;
     VkDeviceAddress lightList;
@@ -34,7 +34,7 @@ auto initLightCulling(VulkanBackend& backend, Scene& scene, const u16 tileCount[
                 VkPushConstantRange {
                     .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
                     .offset = 0,
-                    .size = sizeof(PushConstants)
+                    .size = sizeof(LightCullingPushConstants)
                 }
             })
             .addShader(SHADER_PATH("tiledLightCulling.comp.glsl"), VK_SHADER_STAGE_COMPUTE_BIT)
@@ -110,7 +110,7 @@ LightData tiledLightCullingPass(std::optional<LightCulling>& lightCulling, Vulka
         count = 0;
         backend.copyBufferWithStaging(&count, sizeof(count), *getResource<Buffer>(graph, data.lightCount));
 
-        const PushConstants pushConstants = {
+        const LightCullingPushConstants pushConstants = {
             .depthMap = *getResource<BindlessTexture>(graph, data.depthMap),
             .lightList = backend.getBufferDeviceAddress(*getResource<Buffer>(graph, data.lightList)),
             .lightIndexList = backend.getBufferDeviceAddress(*getResource<Buffer>(graph, data.lightIndexList)),
@@ -119,7 +119,7 @@ LightData tiledLightCullingPass(std::optional<LightCulling>& lightCulling, Vulka
             .lightCount = backend.getBufferDeviceAddress(*getResource<Buffer>(graph, data.lightCount)),
         };
 
-        vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstants),
+        vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushConstants),
             &pushConstants);
         vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1,
             &backend.bindlessResources->bindlessTexDesc, 0, nullptr);

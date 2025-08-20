@@ -5,7 +5,7 @@
 #include "rhi/vulkan/utils/inits.h"
 #include "scene.h"
 
-struct PushConstants
+struct ZPrePassPushConstants
 {
     VkDeviceAddress vertexBufferAddr;
     VkDeviceAddress perModelDataBufferAddr;
@@ -28,7 +28,7 @@ auto initZPrePass(VulkanBackend& backend) -> std::optional<ZPrePassRenderer>
                 VkPushConstantRange{
                     .stageFlags = VK_SHADER_STAGE_ALL,
                     .offset = 0,
-                    .size = sizeof(PushConstants)
+                    .size = sizeof(ZPrePassPushConstants)
                 }
             })
             .addShader(SHADER_PATH("zPrePass.vert.glsl"), VK_SHADER_STAGE_VERTEX_BIT)
@@ -89,7 +89,7 @@ auto zPrePass(std::optional<ZPrePassRenderer>& renderer, VulkanBackend& backend,
     {
         ZoneScopedCpuGpuAuto("Z Pre pass", backend.currentFrame());
 
-        const PushConstants pushConstants = {
+        const ZPrePassPushConstants pushConstants = {
             .vertexBufferAddr = backend.getBufferDeviceAddress(scene.vertexBuffer.buffer),
             .perModelDataBufferAddr = backend.getBufferDeviceAddress(scene.perModelBuffer.buffer),
         };

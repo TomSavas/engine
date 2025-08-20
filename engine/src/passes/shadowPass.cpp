@@ -141,7 +141,7 @@ auto csmCascadeParams(u32 cascadeCount, Camera& camera, glm::vec3 lightDir, f32 
     return cascadeData;
 }
 
-struct PushConstants
+struct ShadowPushConstants
 {
     VkDeviceAddress vertexBufferAddr;
     VkDeviceAddress cascadeDataAddr;
@@ -171,7 +171,7 @@ auto initCsm(VulkanBackend& backend, u32 cascadeCount) -> std::optional<ShadowRe
                 VkPushConstantRange{
                     .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
                     .offset = 0,
-                    .size = sizeof(PushConstants)
+                    .size = sizeof(ShadowPushConstants)
                 }
             })
             .addShader(SHADER_PATH("cascaded_shadows.vert.glsl"), VK_SHADER_STAGE_VERTEX_BIT)
@@ -245,7 +245,7 @@ auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backe
         auto cascadeParamBuffer = *getResource<Buffer>(graph, data.cascadeParams);
         backend.copyBufferWithStaging(&cascadeParams, sizeof(cascadeParams), cascadeParamBuffer);
 
-        PushConstants pushConstants{
+        ShadowPushConstants pushConstants{
             .vertexBufferAddr = backend.getBufferDeviceAddress(scene.vertexBuffer.buffer),
             .cascadeDataAddr = backend.getBufferDeviceAddress(cascadeParamBuffer),
         };

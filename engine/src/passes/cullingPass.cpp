@@ -5,7 +5,6 @@
 #include "passes/culling.h"
 #include "rhi/renderpass.h"
 #include "rhi/vulkan/backend.h"
-#include "rhi/vulkan/pipelineBuilder.h"
 #include "rhi/vulkan/utils/buffer.h"
 #include "rhi/vulkan/utils/inits.h"
 #include "scene.h"

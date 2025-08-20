@@ -15,7 +15,7 @@
 
 #include <vulkan/vulkan_core.h>
 
-struct PushConstants
+struct ForwardPushConstants
 {
     VkDeviceAddress vertexBufferAddr;
     VkDeviceAddress perModelDataBufferAddr;
@@ -38,7 +38,7 @@ auto initForwardOpaque(VulkanBackend& backend) -> std::optional<ForwardOpaqueRen
                 VkPushConstantRange{
                     .stageFlags = VK_SHADER_STAGE_ALL,
                     .offset = 0,
-                    .size = sizeof(PushConstants)
+                    .size = sizeof(ForwardPushConstants)
                 }
             })
             .addShader(SHADER_PATH("mesh.vert.glsl"), VK_SHADER_STAGE_VERTEX_BIT)
@@ -115,7 +115,7 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
     {
         ZoneScopedCpuGpuAuto("Forward opaque pass", backend.currentFrame());
 
-        const PushConstants pushConstants = {
+        const ForwardPushConstants pushConstants = {
             .vertexBufferAddr = backend.getBufferDeviceAddress(scene.vertexBuffer.buffer),
             .perModelDataBufferAddr = backend.getBufferDeviceAddress(scene.perModelBuffer.buffer),
             .shadowData = backend.getBufferDeviceAddress(*getResource<Buffer>(graph, data.shadowData)),
