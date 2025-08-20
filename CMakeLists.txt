@@ -19,6 +19,8 @@ file(GLOB EXTERNAL_SOURCES
 list(APPEND SOURCES ${EXTERNAL_SOURCES})
 
 add_executable(${EXEC} ${SOURCES})
+set_target_properties(${PROJECT} PROPERTIES UNITY_BUILD ON UNITY_BUILD_MODE BATCH)
+
 target_include_directories(${PROJECT} PRIVATE engine/src/)
 target_include_directories(${PROJECT} PRIVATE engine/include/)
 
