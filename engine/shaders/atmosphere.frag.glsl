@@ -3,7 +3,7 @@
 layout(push_constant) uniform Constants
 {
     // TODO: convert to specialisation constant
-    vec4 depth;
+    vec4 fullscreenQuadDepth;
     vec4 sunDirAndIntensity;
     vec4 scatteringCoeffs;
 };
@@ -76,11 +76,19 @@ void main()
     const vec3 up = vec3(0.f, 1.f, 0.f);
     const vec3 planetCenter = -eR * up;
 
-    Hit hit = raySphereIntersection(scene.cameraPos.xyz, rayDir, planetCenter, aR);
-    if (!hit.hit)
+    Hit atmosphereHit = raySphereIntersection(scene.cameraPos.xyz, rayDir, planetCenter, aR);
+    if (!atmosphereHit.hit || atmosphereHit.t1 < 0.f)
     {
-        color = vec4(1.f, 0.f, 1.f, 1.f);
+        color = vec4(0.f, 0.f, 0.f, 1.f);
         return;
+    }
+
+    Hit earthHit = raySphereIntersection(scene.cameraPos.xyz, rayDir, planetCenter, eR);
+    if (earthHit.hit && earthHit.t0 > 0.f)
+    {
+        // Limit raymarching until the surface of the earth.
+        // We could replace this with the value from depth buffer to apply atmospheric haze to the entire scene.
+        atmosphereHit.t1 = min(earthHit.t0, atmosphereHit.t1);
     }
 
     vec3 rSum = vec3(0.f);
@@ -89,8 +97,8 @@ void main()
     float rOpticalDepth = 0.f;
     float mOpticalDepth = 0.f;
 
-    const float stepLength = hit.t / float(SAMPLE_ITERATIONS);
-    vec3 samplePoint = scene.cameraPos.xyz;
+    const float stepLength = (atmosphereHit.t1 - max(0.f, atmosphereHit.t0)) / float(SAMPLE_ITERATIONS);
+    vec3 samplePoint = scene.cameraPos.xyz + rayDir * max(0.f, atmosphereHit.t0);
     for (int i = 0; i < SAMPLE_ITERATIONS; i++)
     {
         const float rOpticalDepthAtSample = opticalDepth(samplePoint, planetCenter, eR, rHeightScale) * stepLength;
@@ -98,7 +106,7 @@ void main()
         rOpticalDepth += rOpticalDepthAtSample;
         mOpticalDepth += mOpticalDepthAtSample;
 
-        const float sampleToAtmosphereLen = raySphereIntersection(samplePoint, sunDirAndIntensity.xyz, planetCenter, aR).t;
+        const float sampleToAtmosphereLen = raySphereIntersection(samplePoint, sunDirAndIntensity.xyz, planetCenter, aR).t1;
         const vec2 opticalDepthTowardsSun = opticalDepthTowards(samplePoint, sunDirAndIntensity.xyz, sampleToAtmosphereLen, planetCenter);
         const float rOpticalDepthTowardsSun = opticalDepthTowardsSun.x;
         const float mOpticalDepthTowardsSun = opticalDepthTowardsSun.y;

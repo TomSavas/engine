@@ -33,14 +33,15 @@ Plane planeFromPoints(vec3 a, vec3 b, vec3 c)
     return p;
 }
 
+// Collisions
+
 struct Hit
 {
     bool hit;
-    float t;
-    vec3 point;
+    float t0;
+    float t1;
 };
 
-// Collisions
 Hit raySphereIntersection(vec3 point, vec3 rayDir, vec3 sphereCenter, float radius)
 {
     vec3 toSphereOrigin = point - sphereCenter;
@@ -50,16 +51,12 @@ Hit raySphereIntersection(vec3 point, vec3 rayDir, vec3 sphereCenter, float radi
 
     float discriminant = b * b - 4.f * a * c;
     if (discriminant < 0.f)
-        return Hit(false, 0.f, vec3(0.f));
+        return Hit(false, 0.f, 0.f);
 
     float t0 = (-b + sqrt(discriminant)) / (2.f * a);
     float t1 = (-b - sqrt(discriminant)) / (2.f * a);
 
-    if (t0 > t1)
-    {
-        return Hit(true, t0, point + t0 * rayDir);
-    }
-    return Hit(true, t1, point + t1 * rayDir);
+    return Hit(true, min(t0, t1), max(t0, t1));
 }
 
 

@@ -82,10 +82,6 @@ void main()
         frustumPlanes[1] = planeFromPoints(frustumCorners[3], frustumCorners[1], frustumCorners[5]); // right
         frustumPlanes[2] = planeFromPoints(frustumCorners[1], frustumCorners[0], frustumCorners[4]); // top
         frustumPlanes[3] = planeFromPoints(frustumCorners[2], frustumCorners[3], frustumCorners[6]); // bottom
-
-        // wtf these are flipped in terms of normals
-        //frustumPlanes[4] = planeFromPoints(frustumCorners[1], frustumCorners[0], frustumCorners[3]); // near
-        //frustumPlanes[5] = planeFromPoints(frustumCorners[4], frustumCorners[5], frustumCorners[6]); // far
     }
     barrier();
 
