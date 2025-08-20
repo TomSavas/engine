@@ -1,14 +1,12 @@
 #pragma once
 
-#include <vulkan/vulkan.h>
+#include "rhi/vulkan/utils/image.h"
 
 #include <optional>
 #include <string>
 #include <unordered_map>
 
-#include "rhi/vulkan/utils/image.h"
-
-struct VulkanBackend;
+class VulkanBackend;
 
 // FIXME: remove this, and move mipCount to allocated Image
 struct Texture

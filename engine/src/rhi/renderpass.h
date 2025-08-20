@@ -8,7 +8,7 @@
 #include <optional>
 #include <string>
 
-class CompiledRenderGraph;
+struct CompiledRenderGraph;
 class Scene;
 
 struct RenderPass

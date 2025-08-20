@@ -1,17 +1,19 @@
 #pragma once
 
-#include <stdint.h>
+#include "engine.h"
+
+#include "rhi/vulkan/descriptors.h"
+#include "rhi/vulkan/utils/texture.h"
+
 #include <vulkan/vulkan.h>
 
 #include <unordered_set>
 #include <vector>
 
-#include "rhi/vulkan/descriptors.h"
-#include "rhi/vulkan/utils/texture.h"
 
-using BindlessTexture = uint32_t;
+using BindlessTexture = u32;
 
-struct VulkanBackend;
+class VulkanBackend;
 
 struct BindlessResources
 {

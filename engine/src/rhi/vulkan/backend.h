@@ -44,8 +44,8 @@ struct FrameCtx
 
 class GLFWwindow;
 class Scene;
-class Mesh;
-class CompiledRenderGraph;
+struct Mesh;
+struct CompiledRenderGraph;
 
 class VulkanBackend;
 enum class backendError {};
