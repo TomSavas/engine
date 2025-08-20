@@ -7,7 +7,6 @@
 #include "rhi/vulkan/utils/inits.h"
 #include "rhi/vulkan/vulkan.h"
 #include "scene.h"
-#include "tracy/Tracy.hpp"
 
 struct AtmospherePushConstants
 {
@@ -31,7 +30,7 @@ auto rayleighScatteringCoefficients(float wavelenghts[3]) -> glm::vec3
     );
 }
 
-std::optional<AtmosphereRenderer> initAtmosphere(VulkanBackend& backend)
+auto initAtmosphere(VulkanBackend& backend) -> std::optional<AtmosphereRenderer>
 {
     return AtmosphereRenderer{
         .pipeline = PipelineBuilder(backend)

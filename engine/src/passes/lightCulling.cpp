@@ -60,8 +60,9 @@ auto initLightCulling(VulkanBackend& backend, Scene& scene, const u16 tileCount[
     };
 }
 
-LightData tiledLightCullingPass(std::optional<LightCulling>& lightCulling, VulkanBackend& backend, RenderGraph& graph,
+auto tiledLightCullingPass(std::optional<LightCulling>& lightCulling, VulkanBackend& backend, RenderGraph& graph,
     Scene& scene, RenderGraphResource<BindlessTexture> depthMap, float tileSizeAsPercentageOfScreen)
+    -> LightData
 {
     // TODO: This should inspect some GPU capabilities
     const u16 tileCount[2] = {
@@ -129,8 +130,9 @@ LightData tiledLightCullingPass(std::optional<LightCulling>& lightCulling, Vulka
     return data;
 }
 
-LightData clusteredLightCullingPass(std::optional<LightCulling>& lightCulling, VulkanBackend& backend,
+auto clusteredLightCullingPass(std::optional<LightCulling>& lightCulling, VulkanBackend& backend,
     RenderGraph& graph, RenderGraphResource<BindlessTexture> depthMap, Scene& scene)
+    -> LightData
 {
     return tiledLightCullingPass(lightCulling, backend, graph, scene, depthMap, 1.f / 32.f);
 }
