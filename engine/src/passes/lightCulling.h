@@ -1,12 +1,15 @@
 #pragma once
+
+#include "engine.h"
+
 #include "renderGraph.h"
-#include "rhi/vulkan/renderpass.h"
+#include "rhi/renderpass.h"
 #include "rhi/vulkan/utils/bindless.h"
 #include "rhi/vulkan/utils/buffer.h"
 
 struct LightCulling
 {
-    RenderPass::Pipeline pipeline;
+    Pipeline pipeline;
 
     AllocatedBuffer lightList;
     AllocatedBuffer lightIndexList;
@@ -25,7 +28,11 @@ struct LightData
     RenderGraphResource<Buffer> lightCount;
 };
 
-LightData tiledLightCullingPass(std::optional<LightCulling>& lightCulling, VulkanBackend& backend, RenderGraph& graph,
-    Scene& scene, RenderGraphResource<BindlessTexture> depthMap, float tileSizeAsPercentageOfScreen);
-LightData clusteredLightCullingPass(std::optional<LightCulling>& lightCulling, VulkanBackend& backend,
-    RenderGraph& graph, RenderGraphResource<BindlessTexture> depthMap, Scene& scene);
+[[nodiscard]]
+auto tiledLightCullingPass(std::optional<LightCulling>& lightCulling, VulkanBackend& backend, RenderGraph& graph,
+    Scene& scene, RenderGraphResource<BindlessTexture> depthMap, f32 tileSizeAsPercentageOfScreen)
+    -> LightData;
+[[nodiscard]]
+auto clusteredLightCullingPass(std::optional<LightCulling>& lightCulling, VulkanBackend& backend,
+    RenderGraph& graph, RenderGraphResource<BindlessTexture> depthMap, Scene& scene)
+    -> LightData;

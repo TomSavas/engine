@@ -1,62 +1,64 @@
 #pragma once
 
-int idx(int x, int y, int w, int h, int componentCount, int component)
+#include "engine.h"
+
+auto idx(u16 x, u16 y, u16 w, u16 h, u16 componentCount, u16 component) -> u32
 {
     x = (x + w) % w;
     y = (y + h) % h;
     return componentCount * y * w + (componentCount * x + component);
 }
 
-std::vector<uint8_t> tangentNormalMapToBumpMap(uint8_t* normal, uint32_t width, uint32_t height)
+auto tangentNormalMapToBumpMap(u8* normal, u16 width, u16 height) -> std::vector<u8>
 {
     // TODO: this could be done in a compute shader much faster
 
     // Assumes data is RGBA, 1B per channel. For the time being this also outputs RGBA
-    std::vector<uint8_t> bumpMap;
+    std::vector<u8> bumpMap;
     bumpMap.resize(width * height * 4 * 1);
 
-    float* laplacian = new float[width * height];
-    for (int i = 0; i < height; ++i)
+    f32* laplacian = new f32[width * height];
+    for (u16 i = 0; i < height; ++i)
     {
-        for (int j = 0; j < width; ++j)
+        for (u16 j = 0; j < width; ++j)
         {
-            float ddx = (float)normal[idx(j + 1, i, width, height, 4, 0)] / 255.f - (float)normal[idx(j - 1, i, width, height, 4, 0)] / 255.f;
-            float ddy = (float)normal[idx(j, i + 1, width, height, 4, 1)] / 255.f - (float)normal[idx(j, i - 1, width, height, 4, 1)] / 255.f;
+            f32 ddx = (f32)normal[idx(j + 1, i, width, height, 4, 0)] / 255.f - (f32)normal[idx(j - 1, i, width, height, 4, 0)] / 255.f;
+            f32 ddy = (f32)normal[idx(j, i + 1, width, height, 4, 1)] / 255.f - (f32)normal[idx(j, i - 1, width, height, 4, 1)] / 255.f;
 
             laplacian[idx(j, i, width, height, 1, 0)] = (ddx + ddy) / 2.f;
         }
     }
 
     // Ping-pong buffers
-    float* src = new float[width * height];
-    float* dst = new float[width * height];
+    f32* src = new f32[width * height];
+    f32* dst = new f32[width * height];
 
-    for (int i = 0; i < height; ++i)
+    for (u16 i = 0; i < height; ++i)
     {
-        for (int j = 0; j < width; ++j)
+        for (u16 j = 0; j < width; ++j)
         {
             dst[idx(j, i, width, height, 1, 0)] = 0.5f;
         }
     }
 
-    float lo = INFINITY;
-    float hi = -INFINITY;
+    f32 lo = INFINITY;
+    f32 hi = -INFINITY;
 
     // Number of Poisson iterations
-    constexpr int N = 500;
-    for (int t = 0; t < N; ++t) {
+    constexpr u16 N = 500;
+    for (u16 t = 0; t < N; ++t) {
         // Swap buffers
-        float* tmp = src;
+        f32* tmp = src;
         src = dst;
         dst = tmp;
 
-        for (int i = 0; i < height; ++i)
+        for (u16 i = 0; i < height; ++i)
         {
-            for (int j = 0; j < width; ++j)
+            for (u16 j = 0; j < width; ++j)
             {
-                float value = src[idx(j - 1, i, width, height, 1, 0)] + src[idx(j, i - 1, width, height, 1, 0)] +
-                              src[idx(j + 1, i, width, height, 1, 0)] + src[idx(j, i + 1, width, height, 1, 0)] +
-                              laplacian[idx(j, i, width, height, 1, 0)];
+                f32 value = src[idx(j - 1, i, width, height, 1, 0)] + src[idx(j, i - 1, width, height, 1, 0)] +
+                            src[idx(j + 1, i, width, height, 1, 0)] + src[idx(j, i + 1, width, height, 1, 0)] +
+                            laplacian[idx(j, i, width, height, 1, 0)];
                 value *= 1.f / 4.f;
                 dst[idx(j, i, width, height, 1, 0)] = value;
 
@@ -66,21 +68,21 @@ std::vector<uint8_t> tangentNormalMapToBumpMap(uint8_t* normal, uint32_t width, 
         }
     }
 
-    for (int i = 0; i < height; ++i)
+    for (u16 i = 0; i < height; ++i)
     {
-        for (int j = 0; j < width; ++j)
+        for (u16 j = 0; j < width; ++j)
         {
-            float value = dst[idx(j, i, width, height, 1, 0)];
+            f32 value = dst[idx(j, i, width, height, 1, 0)];
             value = (value - lo) / (hi - lo);
             dst[idx(j, i, width, height, 1, 0)] = value;
         }
     }
 
-    for (int i = 0; i < height; ++i)
+    for (u16 i = 0; i < height; ++i)
     {
-        for (int j = 0; j < width; ++j)
+        for (u16 j = 0; j < width; ++j)
         {
-            float value = dst[idx(j, i, width, height, 1, 0)];
+            f32 value = dst[idx(j, i, width, height, 1, 0)];
             value = (value - lo) / (hi - lo);
             value *= 255.f;
 

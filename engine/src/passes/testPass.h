@@ -1,12 +1,12 @@
 #pragma once
-#include "rhi/vulkan/renderpass.h"
+#include "rhi/renderpass.h"
 
 class VulkanBackend;
 class RenderGraph;
 
 struct TestRenderer
 {
-    RenderPass::Pipeline pipeline;
+    Pipeline pipeline;
 };
 
-void testPass(std::optional<TestRenderer>& renderer, VulkanBackend& backend, RenderGraph& graph);
+auto testPass(std::optional<TestRenderer>& renderer, VulkanBackend& backend, RenderGraph& graph) -> void;

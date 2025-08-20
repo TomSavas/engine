@@ -83,7 +83,7 @@ void main()
         return;
     }
 
-    Hit earthHit = raySphereIntersection(scene.cameraPos.xyz, rayDir, planetCenter, eR);
+    const Hit earthHit = raySphereIntersection(scene.cameraPos.xyz, rayDir, planetCenter, eR);
     if (earthHit.hit && earthHit.t0 > 0.f)
     {
         // Limit raymarching until the surface of the earth.

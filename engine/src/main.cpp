@@ -13,36 +13,15 @@
 #include "renderGraph.h"
 #include "rhi/vulkan/backend.h"
 #include "scene.h"
-
-// #define TINYOBJLOADER_IMPLEMENTATION
-// #include "tiny_obj_loader.h"
-
-#include "tracy/Tracy.hpp"
+#include "debugUI.h"
 
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-// #define TINYGLTF_NOEXCEPTION // optional. disable exception handling.
 #include <chrono>
-#include <cmath>
 #include <optional>
-#include <print>
 
 #include "tiny_gltf.h"
-
-void* operator new(std::size_t size) noexcept(false)
-{
-    void* ptr = std::malloc(size);
-    TracyAlloc(ptr, size);
-
-    return ptr;
-}
-
-void operator delete(void* ptr)
-{
-    TracyFree(ptr);
-    std::free(ptr);
-}
 
 struct WorldRenderer
 {
@@ -74,7 +53,6 @@ struct WorldRenderer
         // const auto [draws, lightList] = sceneUploadPass(sceneDataUploader, backend, graph);
         const auto [culledDraws] = cpuFrustumCullingPass(culling, backend, graph);
         const auto [depthMap] = zPrePass(prePass, backend, graph, culledDraws);
-        // const auto [shadowMap, cascadeData] = simpleShadowPass(shadows, backend, graphi)
         const auto [shadowMap, cascadeData] = csmPass(shadows, backend, graph, 4);
         auto lightData = tiledLightCullingPass(lightCulling, backend, graph, scene, depthMap,
             1.f / 20.f);
@@ -108,7 +86,7 @@ struct WorldRenderer
         // NOTE: for now let's just directly pass in the graph and let the
         // backend figure out what it wants to do. Generally we should transform
         // compiledRenderGraph into a command buffer or a list of secondary
-        // command buffers. backend.recordCommandBuffer(compiledRenderGraph);
+        // command buffers. I.e.: cmds = backend.recordCommandBuffers(compiledRenderGraph); backend.submit(cmds);
         if (compiledRenderGraph)
         {
             backend.render(frame, *compiledRenderGraph, scene);
@@ -118,17 +96,10 @@ struct WorldRenderer
 
 int main()
 {
-    // TODO: add an allocator here
-    // TODO: add multithreading solution: Main thread, GPU thread and worker
-    // threads.
-
-    // NOTE: extract VulkanBackend as interface when implementing other backends
     VulkanBackend* backend = initVulkanBackend().expect("Failed initialising Vulkan backend");
 
-    // TODO: Not ideal, would be better if we could pass a lambda here
-    //Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf", 1).value_or(emptyScene(*backend));
-    Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf", 1024 * 2 - 1).value_or(emptyScene(*backend));
-    //Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf", 8196).value_or(emptyScene(*backend));
+    Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf", 4096 - 1)
+        .value_or(emptyScene(*backend));
 
     WorldRenderer worldRenderer(*backend);
     worldRenderer.compileRenderGraph(scene);

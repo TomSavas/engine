@@ -1,5 +1,7 @@
 #pragma once
 
+#include "engine.h"
+
 #include <glm/glm.hpp>
 #include <string>
 
@@ -9,32 +11,31 @@ struct Vertex
     {
         struct
         {
-            float pos[4];
-            float uv[4];
-            float normal[4];
-            float tangent[4];
+            f32 pos[4];
+            f32 uv[4];
+            f32 normal[4];
+            f32 tangent[4];
         };
-        float raw[4 * 4];
+        f32 raw[4 * 4];
     };
 };
 
-struct Texture;
 struct Mesh
 {
     std::string debugName;
 
-    int vertexOffset;
-    int vertexCount;
+    i32 vertexOffset;
+    i32 vertexCount;
 
-    int indexOffset;
-    int indexCount;
+    i32 indexOffset;
+    i32 indexCount;
 
     glm::vec3 aabbMin;
     glm::vec3 aabbMax;
 
-    // Move out this to a standalone material
+    // TODO: Move out this to a standalone material
     // int materialIndex;
-    int albedoTexture;
-    int normalTexture;
-    int bumpTexture;
+    i16 albedoTexture;
+    i16 normalTexture;
+    i16 bumpTexture;
 };

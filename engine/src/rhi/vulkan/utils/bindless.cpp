@@ -106,15 +106,6 @@ void addTransition<BindlessTexture>(VulkanBackend& backend, CompiledRenderGraph:
     imageBarrier.oldLayout = oldLayout;
     imageBarrier.newLayout = newLayout;
 
-    //const bool isDepth = newLayout == VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL ||
-    //    newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL ||
-    //    newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL ||
-    //    newLayout == VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL ||
-    //    newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL ||
-    //    newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL ||
-    //    newLayout == VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
-
-    //const Texture& tex = graph.backend.bindlessResources->getTexture(*resource);
     const Texture& tex = backend.bindlessResources->getTexture(*resource);
     imageBarrier.image = tex.image.image;
 

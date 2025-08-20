@@ -16,15 +16,14 @@ struct PushConstants
     glm::vec4 scatteringCoeffs; // Rayleigh xyz, Mie w
 };
 
-glm::vec3 rayleighScatteringCoefficients(float wavelenghts[3])
+auto rayleighScatteringCoefficients(float wavelenghts[3]) -> glm::vec3
 {
-    constexpr float n = 1.00027717f; // Air refractive index
-    constexpr float n2 = n * n;
-    constexpr float N = 2.504e25; // Molecular density of atmosphere -- molecules / m3
-    constexpr float pi3 = std::pow(glm::pi<float>(), 3.f);
+    constexpr f32 n = 1.00027717f; // Air refractive index
+    constexpr f32 n2 = n * n;
+    constexpr f32 N = 2.504e25; // Molecular density of atmosphere -- molecules / m3
+    constexpr f32 pi3 = std::pow(glm::pi<f32>(), 3.f);
 
-    const float factor = 8.f * pi3 * std::pow(n2 - 1, 2.f) / 3.f *
-            (1.f / N);
+    const f32 factor = 8.f * pi3 * std::pow(n2 - 1, 2.f) / 3.f * (1.f / N);
     return glm::vec3(
         factor * (1.f / std::pow(wavelenghts[0], 4.f)),
         factor * (1.f / std::pow(wavelenghts[1], 4.f)),
@@ -34,39 +33,67 @@ glm::vec3 rayleighScatteringCoefficients(float wavelenghts[3])
 
 std::optional<AtmosphereRenderer> initAtmosphere(VulkanBackend& backend)
 {
-    AtmosphereRenderer renderer;
+    //AtmosphereRenderer renderer;
 
-    VkDescriptorSetLayout descriptors[] = {backend.sceneDescriptorSetLayout};
-    VkPushConstantRange pushConstants = vkutil::init::pushConstantRange(VK_SHADER_STAGE_ALL, sizeof(PushConstants));
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkutil::init::layoutCreateInfo(descriptors, 1, &pushConstants, 1);
-    VK_CHECK(vkCreatePipelineLayout(backend.device, &pipelineLayoutInfo, nullptr, &renderer.pipeline.pipelineLayout));
+    //VkDescriptorSetLayout descriptors[] = {backend.sceneDescriptorSetLayout};
+    //VkPushConstantRange pushConstants = vkutil::init::pushConstantRange(VK_SHADER_STAGE_ALL, sizeof(PushConstants));
+    //VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkutil::init::layoutCreateInfo(descriptors, 1, &pushConstants, 1);
+    //VK_CHECK(vkCreatePipelineLayout(backend.device, &pipelineLayoutInfo, nullptr, &renderer.pipeline.pipelineLayout));
 
-    renderer.pipeline.pipeline = PipelineBuilder(backend)
-                                     .addShader(SHADER_PATH("fullscreen_quad.vert.glsl"), VK_SHADER_STAGE_VERTEX_BIT)
-                                     .addShader(SHADER_PATH("atmosphere.frag.glsl"), VK_SHADER_STAGE_FRAGMENT_BIT)
-                                     .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-                                     .polyMode(VK_POLYGON_MODE_FILL)
-                                     .cullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE)
-                                     .disableMultisampling()
-                                     .enableAlphaBlending()
-                                     .colorAttachmentFormat(backend.backbufferImage.format)
-                                     .depthFormat(VK_FORMAT_D32_SFLOAT)
-                                     .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
-                                     .addViewportScissorDynamicStates()
-                                     .build(backend.device, renderer.pipeline.pipelineLayout);
-    renderer.pipeline.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    //renderer.pipeline.pipeline = PipelineBuilder(backend)
+    //    .addShader(SHADER_PATH("fullscreen_quad.vert.glsl"), VK_SHADER_STAGE_VERTEX_BIT)
+    //    .addShader(SHADER_PATH("atmosphere.frag.glsl"), VK_SHADER_STAGE_FRAGMENT_BIT)
+    //    .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+    //    .polyMode(VK_POLYGON_MODE_FILL)
+    //    .cullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE)
+    //    .disableMultisampling()
+    //    .enableAlphaBlending()
+    //    .colorAttachmentFormat(backend.backbufferImage.format)
+    //    .depthFormat(VK_FORMAT_D32_SFLOAT)
+    //    .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
+    //    .addViewportScissorDynamicStates()
+    //    .build(backend.device, renderer.pipeline.pipelineLayout);
+    //renderer.pipeline.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
-    return renderer;
+    //return renderer;
+
+    return AtmosphereRenderer{
+        .pipeline = PipelineBuilder(backend)
+            .addDescriptorLayouts({
+                backend.sceneDescriptorSetLayout,
+            })
+            .addPushConstants({
+                VkPushConstantRange{
+                    .stageFlags = VK_SHADER_STAGE_ALL,
+                    .offset = 0,
+                    .size = sizeof(PushConstants)
+                }
+            })
+            .addShader(SHADER_PATH("fullscreen_quad.vert.glsl"), VK_SHADER_STAGE_VERTEX_BIT)
+            .addShader(SHADER_PATH("atmosphere.frag.glsl"), VK_SHADER_STAGE_FRAGMENT_BIT)
+            .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+            .polyMode(VK_POLYGON_MODE_FILL)
+            .cullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE)
+            .disableMultisampling()
+            .enableAlphaBlending()
+            .colorAttachmentFormat(backend.backbufferImage.format)
+            .depthFormat(VK_FORMAT_D32_SFLOAT)
+            .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
+            .addViewportScissorDynamicStates()
+            .build(),
+    };
 }
 
-void atmospherePass(std::optional<AtmosphereRenderer>& atmosphere, VulkanBackend& backend, RenderGraph& graph, RenderGraphResource<BindlessTexture> depthMap)
+auto atmospherePass(std::optional<AtmosphereRenderer>& atmosphere, VulkanBackend& backend, RenderGraph& graph,
+    RenderGraphResource<BindlessTexture> depthMap)
+    -> void
 {
     if (!atmosphere)
     {
         atmosphere = initAtmosphere(backend);
     }
 
-    RenderGraph::Node& pass = createPass(graph);
+    auto& pass = createPass(graph);
     pass.pass.debugName = "Atmosphere pass";
     pass.pass.pipeline = atmosphere->pipeline;
 
@@ -75,37 +102,38 @@ void atmospherePass(std::optional<AtmosphereRenderer>& atmosphere, VulkanBackend
     pass.pass.beginRendering = [depthMap, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph)
     {
         VkExtent2D swapchainSize = {
-            static_cast<uint32_t>(backend.viewport.width),
-            static_cast<uint32_t>(backend.viewport.height)
+            static_cast<u32>(backend.viewport.width),
+            static_cast<u32>(backend.viewport.height)
         };
-        VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(
-            backend.backbufferImage.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        VkRenderingAttachmentInfo depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(
+        auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backend.backbufferImage.view, nullptr,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        auto depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(
             backend.bindlessResources->getTexture(
-                *getResource<BindlessTexture>(graph, depthMap)).view,
-                VK_ATTACHMENT_LOAD_OP_LOAD);
-        VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(
-            swapchainSize, &colorAttachmentInfo, 1, &depthAttachmentInfo);
+                *getResource<BindlessTexture>(graph, depthMap)
+            ).view,
+            VK_ATTACHMENT_LOAD_OP_LOAD);
+        const auto renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, 1,
+            &depthAttachmentInfo);
         vkCmdBeginRendering(cmd, &renderingInfo);
     };
 
     pass.pass.draw = [&backend](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass& pass, Scene& scene)
     {
-        static float time = 0.f;
+        static f32 time = 0.f;
         static bool moveSun = false;
-        static float speed = 0.0008f;
-        static float sign = 1.f;
-        static float sunIntensity = 10.f;
+        static f32 speed = 0.0008f;
+        static f32 sign = 1.f;
+        static f32 sunIntensity = 10.f;
 
-        static float rayleighScatteringWavelengths[3] = {680e-9, 550e-9, 440e-9};
+        static f32 rayleighScatteringWavelengths[3] = {680e-9, 550e-9, 440e-9};
         glm::vec3 rayleighCoeffs = rayleighScatteringCoefficients(rayleighScatteringWavelengths);
-        const float mieBaseCoeff = 21e-6;
-        static float mieFactor = 1.f;
-        float mieCoeff = mieBaseCoeff * mieFactor;
+        const f32 mieBaseCoeff = 21e-6;
+        static f32 mieFactor = 1.f;
+        f32 mieCoeff = mieBaseCoeff * mieFactor;
 
         if (ImGui::Begin("Atmosphere"))
         {
-            ImGui::SliderFloat("Time", &time, 0, 2 * glm::pi<float>());
+            ImGui::SliderFloat("Time", &time, 0, 2 * glm::pi<f32>());
             ImGui::Checkbox("Sun movement", &moveSun);
             ImGui::SliderFloat("Speed", &speed, 0.00001f, 0.01f, "%.5f");
 
@@ -122,7 +150,7 @@ void atmospherePass(std::optional<AtmosphereRenderer>& atmosphere, VulkanBackend
 
         if (moveSun)
         {
-            if (time > glm::pi<float>() / 2.f + 0.2f || time < 0.f)
+            if (time > glm::pi<f32>() / 2.f + 0.2f || time < 0.f)
             {
                 sign *= -1.f;
             }
@@ -131,13 +159,13 @@ void atmospherePass(std::optional<AtmosphereRenderer>& atmosphere, VulkanBackend
         scene.lightDir = glm::normalize(glm::vec3(-sin(time), -cos(time), 0.f));
 
         ZoneScopedCpuGpuAuto("Atmosphere pass", backend.currentFrame());
-        PushConstants pushConstants = {
+        const PushConstants pushConstants = {
             .depth = glm::vec4(1.f),
             .sunDir = glm::vec4(-scene.lightDir.x, -scene.lightDir.y, scene.lightDir.z, sunIntensity),
             .scatteringCoeffs = glm::vec4(rayleighCoeffs, mieCoeff)
         };
-        vkCmdPushConstants(
-            cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(PushConstants), &pushConstants);
+        vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(pushConstants),
+            &pushConstants);
 
         vkCmdDraw(cmd, 3, 1, 0, 0);
     };

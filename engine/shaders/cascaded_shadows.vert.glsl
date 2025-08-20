@@ -31,8 +31,6 @@ layout(push_constant) uniform Constants
 
 void main() 
 {	
-	// Vertex vert = constants.vertexBuffer.vertices[gl_VertexIndex];
- //    gl_Position = constants.lightViewProj * vec4(vert.position.xyz, 1.f);        
 	Vertex vert = constants.vertexBuffer.vertices[gl_VertexIndex];
     gl_Position = constants.shadowPassData.lightViewProj[constants.cascade] * vec4(vert.position.xyz, 1.f);        
 }

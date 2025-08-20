@@ -1,21 +1,27 @@
-#include <vulkan/vulkan.h>
-
-#include <glm/glm.hpp>
-#include <glm/gtx/transform.hpp>
-#include <optional>
+#include "passes/shadows.h"
 
 #include "imgui.h"
-#include "passes/shadows.h"
+#include "rhi/renderpass.h"
 #include "rhi/vulkan/backend.h"
 #include "rhi/vulkan/pipelineBuilder.h"
-#include "rhi/vulkan/renderpass.h"
 #include "rhi/vulkan/utils/buffer.h"
 #include "rhi/vulkan/utils/inits.h"
 #include "scene.h"
 
-std::array<glm::vec3, 8> frustumCornersInWorldSpace(glm::mat4 invViewProj)
+#include <glm/glm.hpp>
+#include <optional>
+
+struct CascadeParams
 {
-    std::array<glm::vec3, 8> frustumCorners = {
+    glm::mat4 lightViewProjMatrices[4];
+    glm::mat4 invLightViewProjMatrices[4];
+    glm::vec4 cascadeDistances[4];
+    u32 cascadeCount;
+};
+
+auto frustumCornersInWorldSpace(glm::mat4 invViewProj) -> std::array<glm::vec3, 8>
+{
+    std::array frustumCorners = {
         glm::vec3(-1.0f, 1.0f, 0.0f),
         glm::vec3(1.0f, 1.0f, 0.0f),
         glm::vec3(1.0f, -1.0f, 0.0f),
@@ -26,9 +32,9 @@ std::array<glm::vec3, 8> frustumCornersInWorldSpace(glm::mat4 invViewProj)
         glm::vec3(-1.0f, -1.0f, 1.0f),
     };
 
-    for (uint32_t i = 0; i < 8; i++)
+    for (u32 i = 0; i < 8; i++)
     {
-        glm::vec4 invCorner = invViewProj * glm::vec4(frustumCorners[i], 1.0f);
+        const auto invCorner = invViewProj * glm::vec4(frustumCorners[i], 1.0f);
         frustumCorners[i] = invCorner / invCorner.w;
     }
 
@@ -36,38 +42,38 @@ std::array<glm::vec3, 8> frustumCornersInWorldSpace(glm::mat4 invViewProj)
 }
 
 void csmLightViewProjMats(glm::mat4* viewProjMats, glm::vec4* cascadeDistances, int cascadeCount, glm::mat4 view,
-    glm::mat4 proj, glm::vec3 lightDirr, float nearClip, float farClip, float cascadeSplitLambda, float resolution)
+    glm::mat4 proj, glm::vec3 lightDirr, f32 nearClip, f32 farClip, f32 cascadeSplitLambda, f32 resolution)
 {
-    // float cascadeSplitLambda = 0.8f;
-    float cascadeSplits[cascadeCount];
+    // f32 cascadeSplitLambda = 0.8f;
+    f32 cascadeSplits[cascadeCount];
 
-    float clipRange = farClip - nearClip;
+    f32 clipRange = farClip - nearClip;
 
-    float minZ = nearClip;
-    float maxZ = nearClip + clipRange;
+    f32 minZ = nearClip;
+    f32 maxZ = nearClip + clipRange;
 
-    float range = maxZ - minZ;
-    float ratio = maxZ / minZ;
+    f32 range = maxZ - minZ;
+    f32 ratio = maxZ / minZ;
 
     // Calculate split depths based on view camera frustum
     // Based on method presented in https://developer.nvidia.com/gpugems/GPUGems3/gpugems3_ch10.html
     for (uint32_t i = 0; i < cascadeCount; i++)
     {
-        float p = (i + 1) / static_cast<float>(cascadeCount);
-        float log = minZ * std::pow(ratio, p);
-        float uniform = minZ + range * p;
-        float d = cascadeSplitLambda * (log - uniform) + uniform;
+        f32 p = (i + 1) / static_cast<f32>(cascadeCount);
+        f32 log = minZ * std::pow(ratio, p);
+        f32 uniform = minZ + range * p;
+        f32 d = cascadeSplitLambda * (log - uniform) + uniform;
         // cascadeDistances[i] = (d - nearClip) / clipRange;
         cascadeSplits[i] = (d - nearClip) / clipRange;
     }
 
-    float lastSplitDist = 0.f;
+    f32 lastSplitDist = 0.f;
     glm::mat4 invViewProj = glm::inverse(proj * view);
     for (int i = 0; i < cascadeCount; i++)
     {
         std::array<glm::vec3, 8> frustumCorners = frustumCornersInWorldSpace(invViewProj);
 
-        float splitDist = cascadeSplits[i];
+        f32 splitDist = cascadeSplits[i];
         for (uint32_t j = 0; j < 4; j++)
         {
             glm::vec3 dist = frustumCorners[j + 4] - frustumCorners[j];
@@ -83,10 +89,10 @@ void csmLightViewProjMats(glm::mat4* viewProjMats, glm::vec4* cascadeDistances, 
         }
         frustumCenter /= 8.0f;
 
-        float radius = 0.0f;
+        f32 radius = 0.0f;
         for (uint32_t j = 0; j < 8; j++)
         {
-            float distance = glm::length(frustumCorners[j] - frustumCenter);
+            f32 distance = glm::length(frustumCorners[j] - frustumCenter);
             radius = glm::max(radius, distance);
         }
         radius = std::ceil(radius / 512.0f) * 512.0f;
@@ -117,144 +123,138 @@ void csmLightViewProjMats(glm::mat4* viewProjMats, glm::vec4* cascadeDistances, 
     }
 }
 
+auto csmCascadeParams(u32 cascadeCount, Camera& camera, glm::vec3 lightDir, f32 cascadeSplitLambda, f32 resolution)
+    -> CascadeParams
+{
+    CascadeParams cascadeData = {
+        .cascadeCount = cascadeCount,
+    };
+
+    csmLightViewProjMats(cascadeData.lightViewProjMatrices, cascadeData.cascadeDistances, cascadeCount,
+        camera.view(), camera.proj(), lightDir, camera.nearClippingPlaneDist,
+        camera.farClippingPlaneDist, 0.5, resolution);
+    for (u32 i = 0; i < cascadeCount; ++i)
+    {
+        cascadeData.invLightViewProjMatrices[i] = glm::inverse(cascadeData.lightViewProjMatrices[i]);
+    }
+
+    return cascadeData;
+}
+
 struct PushConstants
 {
     VkDeviceAddress vertexBufferAddr;
     VkDeviceAddress cascadeDataAddr;
-    int cascade;
+    u32 cascade;
 };
 
-struct ShadowCascadeData
+auto initCsm(VulkanBackend& backend, u32 cascadeCount) -> std::optional<ShadowRenderer>
 {
-    glm::mat4 lightViewProjMatrices[4];
-    glm::mat4 invLightViewProjMatrices[4];
-    glm::vec4 cascadeDistances[4];
-    int cascadeCount;
-};
-
-std::optional<ShadowRenderer> initCsm(VulkanBackend& backend, uint32_t cascadeCount)
-{
-    ShadowRenderer renderer;
-
-    // Persistent data
-    auto info = vkutil::init::bufferCreateInfo(
-        sizeof(ShadowCascadeData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+    const auto info = vkutil::init::bufferCreateInfo(
+        sizeof(CascadeParams), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                                        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-    renderer.shadowMapData = backend.allocateBuffer(info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+    const auto cascadeParams = backend.allocateBuffer(info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    constexpr int shadowMapSize = 4096;
-    AllocatedImage shadowMapImage = backend.allocateImage(
+    constexpr u32 shadowMapSize = 4096;
+    const auto shadowMapImage = backend.allocateImage(
         vkutil::init::imageCreateInfo(VK_FORMAT_D32_SFLOAT,
             VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             {cascadeCount * shadowMapSize, shadowMapSize, 1}),
         VMA_MEMORY_USAGE_GPU_ONLY,
         0,  // NOTE: this might cause issues
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
-    Texture shadowMap = {
-        .image = shadowMapImage,
-        .view = shadowMapImage.view,
-        .mipCount = 1,
+
+    return ShadowRenderer{
+        .pipeline = PipelineBuilder(backend)
+            .addPushConstants({
+                VkPushConstantRange{
+                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                    .offset = 0,
+                    .size = sizeof(PushConstants)
+                }
+            })
+            .addShader(SHADER_PATH("cascaded_shadows.vert.glsl"), VK_SHADER_STAGE_VERTEX_BIT)
+            .addShader(SHADER_PATH("empty.frag.glsl"), VK_SHADER_STAGE_FRAGMENT_BIT)
+            .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+            .polyMode(VK_POLYGON_MODE_FILL)
+            .cullMode(VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE)  // Front face!
+            .disableMultisampling()
+            .disableBlending()
+            .depthFormat(shadowMapImage.format)
+            .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
+            .setDepthClamp(true)
+            .addViewportScissorDynamicStates()
+            .build(),
+        .cascadeParams = cascadeParams,
+        .shadowMap = backend.bindlessResources->addTexture(
+            Texture{
+                .image = shadowMapImage,
+                .view = shadowMapImage.view,
+                .mipCount = 1,
+            }
+        ),
     };
-    renderer.shadowMap = backend.bindlessResources->addTexture(shadowMap);
-
-    std::optional<ShaderModule*> vertexShader = backend.shaderModuleCache.loadModule(
-        backend.device, SHADER_PATH("cascaded_shadows.vert.glsl"));
-    std::optional<ShaderModule*> fragmentShader = backend.shaderModuleCache.loadModule(
-        backend.device, SHADER_PATH("empty.frag.glsl"));
-    if (!vertexShader || !fragmentShader)
-    {
-        return std::nullopt;
-    }
-
-    VkPushConstantRange meshPushConstantRange = vkutil::init::pushConstantRange(
-        VK_SHADER_STAGE_VERTEX_BIT, sizeof(PushConstants));
-    // VkDescriptorSetLayout descriptors[] = {backend.sceneDescriptorSetLayout, backend.bindlessTexDescLayout};
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkutil::init::layoutCreateInfo(
-        nullptr, 0, &meshPushConstantRange, 1);
-    VK_CHECK(vkCreatePipelineLayout(backend.device, &pipelineLayoutInfo, nullptr, &renderer.pipeline.pipelineLayout));
-
-    // TODO: convert into optional
-    renderer.pipeline.pipeline = PipelineBuilder(backend)
-                                     .shaders((*vertexShader)->module, (*fragmentShader)->module)
-                                     .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-                                     .polyMode(VK_POLYGON_MODE_FILL)
-                                     .cullMode(VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE)  // Front face!
-                                     .disableMultisampling()
-                                     .disableBlending()
-                                     .depthFormat(shadowMapImage.format)
-                                     .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
-                                     .setDepthClamp(true)
-                                     .addViewportScissorDynamicStates()
-                                     .build(backend.device, renderer.pipeline.pipelineLayout);
-    renderer.pipeline.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-
-    return renderer;
 }
 
-ShadowPassRenderGraphData csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend,
-    RenderGraph& graph, int cascadeCount)
+auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend,
+    RenderGraph& graph, u8 cascadeCount)
+    ->ShadowPassRenderGraphData
 {
     if (!shadowRenderer)
     {
         shadowRenderer = initCsm(backend, cascadeCount);
     }
 
-    RenderGraph::Node& pass = createPass(graph);
+    auto& pass = createPass(graph);
     pass.pass.debugName = "CSM pass";
     pass.pass.pipeline = shadowRenderer->pipeline;
 
     ShadowPassRenderGraphData data = {
         .shadowMap = writeResource<BindlessTexture>(graph, pass,
-            importResource<BindlessTexture>(graph, pass, &shadowRenderer->shadowMap),
-            VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL),
-        .cascadeData = writeResource<Buffer>(graph, pass,
-            importResource<Buffer>(graph, pass, &shadowRenderer->shadowMapData.buffer))
+            importResource(graph, pass, &shadowRenderer->shadowMap), VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL),
+        .cascadeParams = writeResource<Buffer>(graph, pass,
+            importResource(graph, pass, &shadowRenderer->cascadeParams.buffer))
     };
 
     pass.pass.beginRendering = [data, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph)
     {
-        const Texture shadowMap = backend.bindlessResources->getTexture(
+        const auto shadowMap = backend.bindlessResources->getTexture(
             *getResource<BindlessTexture>(graph, data.shadowMap));
-        const VkExtent2D size = {shadowMap.image.extent.width, shadowMap.image.extent.height};
+        const VkExtent2D size = {
+            .width = shadowMap.image.extent.width,
+            .height = shadowMap.image.extent.height
+        };
 
-        VkRenderingAttachmentInfo depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(shadowMap.view);
-        VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(size, nullptr, 0, &depthAttachmentInfo);
+        auto depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(shadowMap.view);
+        auto renderingInfo = vkutil::init::renderingInfo(size, nullptr, 0, &depthAttachmentInfo);
         vkCmdBeginRendering(cmd, &renderingInfo);
     };
 
-    pass.pass.draw = [data, cascadeCount, &backend](
-                         VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass& pass, Scene& scene)
+    pass.pass.draw = [data, cascadeCount, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass& pass,
+        Scene& scene)
     {
         ZoneScopedCpuGpuAuto("CSM pass", backend.currentFrame());
 
-        const Texture shadowMap = backend.bindlessResources->getTexture(
+        const auto shadowMap = backend.bindlessResources->getTexture(
             *getResource<BindlessTexture>(graph, data.shadowMap));
-        const uint32_t singleCascadeSize = shadowMap.image.extent.height;
+        const auto singleCascadeSize = shadowMap.image.extent.height;
 
-        ShadowCascadeData cascadeData = {};
-        cascadeData.cascadeCount = cascadeCount;
-        csmLightViewProjMats(cascadeData.lightViewProjMatrices, cascadeData.cascadeDistances, cascadeCount,
-            scene.mainCamera.view(), scene.mainCamera.proj(), scene.lightDir, scene.mainCamera.nearClippingPlaneDist,
-            scene.mainCamera.farClippingPlaneDist, 0.5,
-            static_cast<float>(singleCascadeSize));
-        for (int i = 0; i < cascadeCount; ++i)
-        {
-            cascadeData.invLightViewProjMatrices[i] = glm::inverse(cascadeData.lightViewProjMatrices[i]);
-        }
-        VkBuffer cascadeDataBuffer = *getResource<Buffer>(graph, data.cascadeData);
-        backend.copyBufferWithStaging(&cascadeData, sizeof(ShadowCascadeData), cascadeDataBuffer);
+        auto cascadeParams = csmCascadeParams(cascadeCount, scene.mainCamera, scene.lightDir, 0.5,
+            static_cast<f32>(singleCascadeSize));
+        auto cascadeParamBuffer = *getResource<Buffer>(graph, data.cascadeParams);
+        backend.copyBufferWithStaging(&cascadeParams, sizeof(cascadeParams), cascadeParamBuffer);
 
         PushConstants pushConstants{
             .vertexBufferAddr = backend.getBufferDeviceAddress(scene.vertexBuffer.buffer),
-            .cascadeDataAddr = backend.getBufferDeviceAddress(cascadeDataBuffer),
+            .cascadeDataAddr = backend.getBufferDeviceAddress(cascadeParamBuffer),
         };
 
         VkViewport viewport = {
             .x = 0,
             .y = 0,
-            .width = static_cast<float>(singleCascadeSize),
-            .height = static_cast<float>(singleCascadeSize),
+            .width = static_cast<f32>(singleCascadeSize),
+            .height = static_cast<f32>(singleCascadeSize),
             .maxDepth = 1.f
         };
         VkRect2D scissor = {
@@ -263,13 +263,13 @@ ShadowPassRenderGraphData csmPass(std::optional<ShadowRenderer>& shadowRenderer,
         };
 
         vkCmdBindIndexBuffer(cmd, scene.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-        for (int i = 0; i < cascadeCount; ++i)
+        for (u32 i = 0; i < cascadeCount; ++i)
         {
             pushConstants.cascade = i;
-            vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants),
+            vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushConstants),
                 &pushConstants);
 
-            viewport.x = static_cast<float>(i) * static_cast<float>(singleCascadeSize);
+            viewport.x = static_cast<f32>(i) * static_cast<f32>(singleCascadeSize);
             scissor.offset.x = viewport.x;
             vkCmdSetViewport(cmd, 0, 1, &viewport);
             vkCmdSetScissor(cmd, 0, 1, &scissor);
@@ -282,7 +282,8 @@ ShadowPassRenderGraphData csmPass(std::optional<ShadowRenderer>& shadowRenderer,
     return data;
 }
 
-ShadowCascadeData simpleLightViewProj(glm::mat4 view, glm::mat4 proj, glm::vec3 lightDir, float resolution)
+/*
+auto simpleLightViewProj(glm::mat4 view, glm::mat4 proj, glm::vec3 lightDir, f32 resolution) -> ShadowCascadeData
 {
     const glm::mat4 invViewProj = glm::inverse(proj * view);
     const std::array<glm::vec3, 8> frustumCorners = frustumCornersInWorldSpace(invViewProj);
@@ -293,10 +294,10 @@ ShadowCascadeData simpleLightViewProj(glm::mat4 view, glm::mat4 proj, glm::vec3 
     }
     frustumCenter /= 8.0f;
 
-    float radius = 0.0f;
+    f32 radius = 0.0f;
     for (uint32_t j = 0; j < 8; j++)
     {
-        float distance = glm::length(frustumCorners[j] - glm::vec3(frustumCenter));
+        f32 distance = glm::length(frustumCorners[j] - glm::vec3(frustumCenter));
         radius = glm::max(radius, distance);
     }
     radius = std::ceil(radius / 64.f) * 64.0f;
@@ -331,7 +332,7 @@ ShadowCascadeData simpleLightViewProj(glm::mat4 view, glm::mat4 proj, glm::vec3 
     };
 }
 
-std::optional<ShadowRenderer> initSimpleShadow(VulkanBackend& backend)
+auto initSimpleShadow(VulkanBackend& backend) -> std::optional<ShadowRenderer>
 {
     ShadowRenderer renderer;
 
@@ -431,7 +432,7 @@ ShadowPassRenderGraphData simpleShadowPass(std::optional<ShadowRenderer>& shadow
         const uint32_t shadowMapSize = shadowMap.image.extent.height;
 
         ShadowCascadeData cascadeData = simpleLightViewProj(scene.mainCamera.view(), scene.mainCamera.proj(),
-            scene.lightDir, static_cast<float>(shadowMapSize));
+            scene.lightDir, static_cast<f32>(shadowMapSize));
         VkBuffer cascadeDataBuffer = *getResource<Buffer>(graph, data.cascadeData);
         backend.copyBufferWithStaging(&cascadeData, sizeof(ShadowCascadeData), cascadeDataBuffer);
 
@@ -444,8 +445,8 @@ ShadowPassRenderGraphData simpleShadowPass(std::optional<ShadowRenderer>& shadow
         VkViewport viewport = {
             .x = 0,
             .y = 0,
-            .width = static_cast<float>(shadowMapSize),
-            .height = static_cast<float>(shadowMapSize),
+            .width = static_cast<f32>(shadowMapSize),
+            .height = static_cast<f32>(shadowMapSize),
             .maxDepth = 1.f
         };
         VkRect2D scissor = {
@@ -465,3 +466,4 @@ ShadowPassRenderGraphData simpleShadowPass(std::optional<ShadowRenderer>& shadow
 
     return data;
 }
+*/

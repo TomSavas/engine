@@ -1,5 +1,7 @@
 #pragma once
 
+#include "vulkan/pipelineBuilder.h"
+
 #include <vulkan/vulkan_core.h>
 
 #include <functional>
@@ -13,22 +15,8 @@ struct RenderPass
 {
     std::string debugName;
 
-    struct Pipeline
-    {
-        VkPipelineBindPoint pipelineBindPoint;
-        VkPipelineLayout pipelineLayout;
-        VkPipeline pipeline;
-    };
     std::optional<Pipeline> pipeline;
-    // VkRenderingInfo renderingInfo;
 
     std::optional<std::function<void(VkCommandBuffer cmd, CompiledRenderGraph&)>> beginRendering = std::nullopt;
     std::function<void(VkCommandBuffer cmd, CompiledRenderGraph&, RenderPass&, Scene&)> draw;
-
-    // virtual void draw(VkCommandBuffer cmd);
-    // virtual VkRenderingInfo renderingInfo();
 };
-
-// struct RenderGraph {
-//     std::vector<RenderPass> renderpasses;
-// };

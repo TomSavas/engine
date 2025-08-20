@@ -1,25 +1,31 @@
 #pragma once
 
+#include "engine.h"
+#include "rhi/renderpass.h"
+
 #include <vulkan/vulkan_core.h>
 
-#include "rhi/vulkan/renderpass.h"
-
-#include <vector>
 #include <functional>
+#include <vector>
 
 class VulkanBackend;
 
-using Handle = uint32_t;
+using Handle = u32;
+// TODO: Make this non VK specific
 using Layout = VkImageLayout;
+
+// TODO: Make these non VK specific
+using ImageBarrier = VkImageMemoryBarrier2;
+using BufferBarrier = VkBufferMemoryBarrier2;
+using MemoryBarrier = VkMemoryBarrier2;
 
 struct CompiledRenderGraph
 {
     struct Node
     {
-        // Make these non VK specific
-        std::vector<VkImageMemoryBarrier2> imageBarriers;
-        std::vector<VkBufferMemoryBarrier2> bufferBarriers;
-        std::vector<VkMemoryBarrier2> memoryBarriers;
+        std::vector<ImageBarrier> imageBarriers;
+        std::vector<BufferBarrier> bufferBarriers;
+        std::vector<MemoryBarrier> memoryBarriers;
         RenderPass pass;
     };
 
@@ -50,34 +56,37 @@ struct RenderGraph
     std::vector<Layout> layouts;
 };
 
-Handle getHandle(RenderGraph& graph);
+auto getHandle(RenderGraph& graph) -> Handle;
 
 // TODO: implement
-// template<typename T>
-// T createResource(RenderGraph& graph, RenderGraph::Node& node, typename T::Data* data)
-// {
-//     static_assert(false);
-//     return T{};
-// }
+//template<typename T>
+//[[nodiscard]]
+//auto createResource(RenderGraph& graph, RenderGraph::Node& node, typename T::Data* data) -> T
+//{
+//    static_assert(false);
+//    return T{};
+//}
 
 template <typename T>
 using RenderGraphResource = Handle;
 
 template <typename T>
-RenderGraphResource<T> importResource(RenderGraph& graph, RenderGraph::Node& node, T* data,
-    Layout layout = VK_IMAGE_LAYOUT_UNDEFINED)
+[[nodiscard]]
+auto importResource(RenderGraph& graph, RenderGraph::Node& node, T* data, Layout layout = VK_IMAGE_LAYOUT_UNDEFINED)
+    -> RenderGraphResource<T>
 {
-    Handle handle = getHandle(graph);
+    auto handle = getHandle(graph);
     graph.resources[handle] = data;
     graph.layouts[handle] = layout;
     return handle;
 }
 
 template <typename T>
-RenderGraphResource<T> readResource(RenderGraph& graph, RenderGraph::Node& node, RenderGraphResource<T> handle,
+auto readResource(RenderGraph& graph, RenderGraph::Node& node, RenderGraphResource<T> handle,
     Layout layout = VK_IMAGE_LAYOUT_UNDEFINED)
+    -> RenderGraphResource<T>
 {
-    Handle newHandle = getHandle(graph);
+    auto newHandle = getHandle(graph);
     graph.resources[newHandle] = graph.resources[handle];
     graph.layouts[newHandle] = layout;
 
@@ -95,10 +104,11 @@ RenderGraphResource<T> readResource(RenderGraph& graph, RenderGraph::Node& node,
 }
 
 template <typename T>
-RenderGraphResource<T> writeResource(RenderGraph& graph, RenderGraph::Node& node, RenderGraphResource<T> handle,
+auto writeResource(RenderGraph& graph, RenderGraph::Node& node, RenderGraphResource<T> handle,
     Layout layout = VK_IMAGE_LAYOUT_UNDEFINED)
+    -> RenderGraphResource<T>
 {
-    Handle newHandle = getHandle(graph);
+    auto newHandle = getHandle(graph);
     graph.resources[newHandle] = graph.resources[handle];
     graph.layouts[newHandle] = layout;
 
@@ -116,17 +126,21 @@ RenderGraphResource<T> writeResource(RenderGraph& graph, RenderGraph::Node& node
 }
 
 template <typename T>
-void addTransition(VulkanBackend& backend, CompiledRenderGraph::Node& compiledNode, T* resource, Layout oldLayout,
+auto addTransition(VulkanBackend& backend, CompiledRenderGraph::Node& compiledNode, T* resource, Layout oldLayout,
     Layout newLayout)
+    -> void
 {
 }
 
 template <typename T>
-T* getResource(CompiledRenderGraph& graph, RenderGraphResource<T> handle)
+[[nodiscard]]
+auto getResource(CompiledRenderGraph& graph, RenderGraphResource<T> handle) -> T*
 {
     // TODO: would be nice to implement some sort of ensurance that this casting is valid
     return static_cast<T*>(graph.resources[handle]);
 }
 
-RenderGraph::Node& createPass(RenderGraph& graph);
-CompiledRenderGraph compile(VulkanBackend& backend, RenderGraph&& graph);
+[[nodiscard]]
+auto createPass(RenderGraph& graph) -> RenderGraph::Node&;
+[[nodiscard]]
+auto compile(VulkanBackend& backend, RenderGraph&& graph) -> CompiledRenderGraph;

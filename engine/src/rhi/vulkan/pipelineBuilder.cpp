@@ -164,10 +164,10 @@ VkPipeline PipelineBuilder::buildComputePipeline(VkPipelineLayout layout)
     return pipeline;
 }
 
-RenderPass::Pipeline PipelineBuilder::build()
+Pipeline PipelineBuilder::build()
 {
     VkPipelineLayout layout = buildLayout();
-    return RenderPass::Pipeline {
+    return Pipeline {
         .pipelineBindPoint = determinedBindPoint,
         .pipelineLayout = layout,
         .pipeline = determinedBindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS

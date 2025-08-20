@@ -1,26 +1,29 @@
 #pragma once
 
 #include "renderGraph.h"
-#include "rhi/vulkan/pipelineBuilder.h"
+
 #include "rhi/vulkan/utils/bindless.h"
 #include "rhi/vulkan/utils/buffer.h"
 
-struct VulkanBackend;
+class VulkanBackend;
 
 struct ShadowRenderer
 {
-    RenderPass::Pipeline pipeline;
-    AllocatedBuffer shadowMapData;
+    Pipeline pipeline;
+    AllocatedBuffer cascadeParams;
     BindlessTexture shadowMap;
 };
 
 struct ShadowPassRenderGraphData
 {
     RenderGraphResource<BindlessTexture> shadowMap;
-    RenderGraphResource<Buffer> cascadeData;
+    RenderGraphResource<Buffer> cascadeParams;
 };
 
-ShadowPassRenderGraphData simpleShadowPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend,
-    RenderGraph& graph);
-ShadowPassRenderGraphData csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend,
-    RenderGraph& graph, int cascadeCount = 4);
+//auto simpleShadowPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend,
+//    RenderGraph& graph)
+//    -> ShadowPassRenderGraphData;
+[[nodiscard]]
+auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend,
+    RenderGraph& graph, u8 cascadeCount = 4)
+    -> ShadowPassRenderGraphData;

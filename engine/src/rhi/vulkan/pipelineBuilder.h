@@ -1,58 +1,20 @@
 #pragma once
 
+#include "rhi/vulkan/shader.h"
+
 #include <vulkan/vulkan.h>
 
 #include <optional>
-#include <string>
 #include <vector>
 
-#include "renderpass.h"
-#include "rhi/vulkan/shader.h"
-
-// struct PipelineBuilder
-// {
-//     std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
-//     VkPipelineInputAssemblyStateCreateInfo inputAssembly;
-//     VkPipelineRasterizationStateCreateInfo rasterizer;
-//     VkPipelineColorBlendAttachmentState colorBlendAttachment;
-//     VkPipelineMultisampleStateCreateInfo multisampling;
-//     // VkPipelineLayout pipelineLayout;
-//     VkPipelineDepthStencilStateCreateInfo depthStencil;
-//     VkPipelineRenderingCreateInfo renderInfo;
-//     std::vector<VkFormat> colorAttachments;
-//     std::vector<VkDynamicState> dynamicStates;
-//
-//     PipelineBuilder();
-//
-//     void reset();
-//
-//     PipelineBuilder& shaders(VkShaderModule vertexShader, VkShaderModule fragmentShader);
-//     PipelineBuilder& shaders(VkShaderModule vertexShader, VkShaderModule geometryShader, VkShaderModule fragmentShader);
-//     PipelineBuilder& topology(VkPrimitiveTopology topology);
-//     PipelineBuilder& polyMode(VkPolygonMode polyMode);
-//     PipelineBuilder& cullMode(VkCullModeFlags cullMode, VkFrontFace frontFace);
-//     PipelineBuilder& disableMultisampling();
-//     PipelineBuilder& disableBlending();
-//     PipelineBuilder& enableAlphaBlending();
-//     PipelineBuilder& colorAttachmentFormat(VkFormat format);
-//     PipelineBuilder& depthFormat(VkFormat format);
-//     PipelineBuilder& enableDepthTest(bool depthWriteEnable, VkCompareOp compareOp);
-//     PipelineBuilder& disableDepthTest();
-//     PipelineBuilder& setDepthClamp(bool enable);
-//     PipelineBuilder& addDynamicState(VkDynamicState state);
-//     PipelineBuilder& addViewportScissorDynamicStates();
-//     PipelineBuilder& enableDepthBias();
-//
-//     VkPipeline build(VkDevice device, VkPipelineLayout layout);
-// };
 class VulkanBackend;
 
-// struct Pipeline
-// {
-//     VkPipelineBindPoint pipelineBindPoint;
-//     VkPipelineLayout pipelineLayout;
-//     VkPipeline pipeline;
-// };
+struct Pipeline
+{
+    VkPipelineBindPoint pipelineBindPoint;
+    VkPipelineLayout pipelineLayout;
+    VkPipeline pipeline;
+};
 
 enum class PipelineError
 {
@@ -78,13 +40,12 @@ struct PipelineBuilder
     VkPipelineLayout buildLayout();
     VkPipeline buildGraphicsPipeline(VkPipelineLayout layout);
     VkPipeline buildComputePipeline(VkPipelineLayout layout);
-    RenderPass::Pipeline build();
+    Pipeline build();
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly;
     VkPipelineRasterizationStateCreateInfo rasterizer;
     VkPipelineColorBlendAttachmentState colorBlendAttachment;
     VkPipelineMultisampleStateCreateInfo multisampling;
-    // VkPipelineLayout pipelineLayout;
     VkPipelineDepthStencilStateCreateInfo depthStencil;
     VkPipelineRenderingCreateInfo renderInfo;
     std::vector<VkFormat> colorAttachments;

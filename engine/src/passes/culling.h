@@ -1,12 +1,12 @@
 #pragma once
 
-#include <optional>
-
 #include "renderGraph.h"
 #include "rhi/vulkan/utils/buffer.h"
 
-struct VulkanBackend;
-class RenderGraph;
+#include <optional>
+
+class VulkanBackend;
+struct RenderGraph;
 
 struct GeometryCulling
 {
@@ -18,5 +18,5 @@ struct CullingPassRenderGraphData
     RenderGraphResource<Buffer> culledDraws;
 };
 
-CullingPassRenderGraphData cpuFrustumCullingPass(
-    std::optional<GeometryCulling>& geometryCulling, VulkanBackend& backend, RenderGraph& graph);
+auto cpuFrustumCullingPass(std::optional<GeometryCulling>& geometryCulling, VulkanBackend& backend, RenderGraph& graph)
+    -> CullingPassRenderGraphData;
