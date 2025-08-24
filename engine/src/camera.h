@@ -9,15 +9,15 @@ struct Camera
 {
     f32 verticalFov = M_PI / 4;
 
-    f32 moveSpeed = 700.f;
+    f32 moveSpeed = 7.f;
     f32 rotationSpeed = 0.002f;
 
-    f32 nearClippingPlaneDist = 10.f;
-    f32 farClippingPlaneDist = 5000.f;
+    f32 nearClippingPlaneDist = 0.1f;
+    f32 farClippingPlaneDist = 100.f;
 
     f32 aspectRatio = 16.f / 9.f;
 
-    glm::vec3 position = glm::vec3(0.f, 2.5f, 15.f);
+    glm::vec3 position = glm::vec3(0.f, 0.f, 0.f);
     glm::mat4 rotation = glm::mat4(1.f);
 
     [[nodiscard]]

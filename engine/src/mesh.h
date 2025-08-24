@@ -20,6 +20,13 @@ struct Vertex
     };
 };
 
+struct Instance
+{
+    glm::mat4 modelTransform;
+    glm::vec3 aabbMin;
+    glm::vec3 aabbMax;
+};
+
 struct Mesh
 {
     std::string debugName;
@@ -33,9 +40,12 @@ struct Mesh
     glm::vec3 aabbMin;
     glm::vec3 aabbMax;
 
+    std::vector<Instance> instances;
+
     // TODO: Move out this to a standalone material
     // i32 materialIndex;
     i16 albedoTexture;
+    i16 metallicRoughnessTexture;
     i16 normalTexture;
     i16 bumpTexture;
 };

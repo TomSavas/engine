@@ -95,7 +95,8 @@ void csmLightViewProjMats(glm::mat4* viewProjMats, glm::vec4* cascadeDistances, 
             f32 distance = glm::length(frustumCorners[j] - frustumCenter);
             radius = glm::max(radius, distance);
         }
-        radius = std::ceil(radius / 512.0f) * 512.0f;
+        //radius = std::ceil(radius / 2.0f) * 2.0f;
+        radius = std::ceil(radius * 16.0f) / 16.0f;
 
         glm::vec3 lightDir = normalize(lightDirr); // NOTE: convert lightDir into light pos
 
@@ -145,6 +146,7 @@ struct ShadowPushConstants
 {
     VkDeviceAddress vertexBufferAddr;
     VkDeviceAddress cascadeDataAddr;
+    VkDeviceAddress perModelDataBufferAddr;
     u32 cascade;
 };
 
@@ -248,6 +250,7 @@ auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backe
         ShadowPushConstants pushConstants{
             .vertexBufferAddr = backend.getBufferDeviceAddress(scene.vertexBuffer.buffer),
             .cascadeDataAddr = backend.getBufferDeviceAddress(cascadeParamBuffer),
+            .perModelDataBufferAddr = backend.getBufferDeviceAddress(scene.perModelBuffer.buffer),
         };
 
         VkViewport viewport = {

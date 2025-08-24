@@ -9,7 +9,7 @@
 #include <string>
 
 struct CompiledRenderGraph;
-class Scene;
+struct Scene;
 
 struct RenderPass
 {

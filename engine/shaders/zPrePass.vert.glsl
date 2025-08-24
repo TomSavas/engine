@@ -44,7 +44,9 @@ layout(push_constant) uniform Constants
 
 void main()
 {	
+    mat4 model = constants.modelData.data[gl_DrawID].model;
+
 	Vertex vert = constants.vertexBuffer.vertices[gl_VertexIndex];
-	gl_Position = scene.proj * scene.view * vec4(vert.position.xyz, 1.f);
+	gl_Position = scene.proj * scene.view * model * vec4(vert.position.xyz, 1.f);
 	//gl_Position.z += 0.1; // Additional bias to remove z-fighting
 }

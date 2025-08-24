@@ -6,15 +6,10 @@
 #include "debug_utils.glsl"
 #include "lights.glsl"
 #include "utils.glsl"
+#include "pbr.glsl"
+#include "scene.glsl"
 
 layout(origin_upper_left) in vec4 gl_FragCoord;
-
-layout(set = 0, binding = 0) uniform SceneUniforms 
-{
-    vec4 cameraPos;
-    mat4 view;
-    mat4 proj;
-} scene;
 
 layout(set = 1, binding = 0) uniform sampler2D textures[];
 
@@ -64,8 +59,6 @@ layout(push_constant) uniform Constants
 } constants;
 
 
-//layout (location = 2) in vec3 normal;
-//layout (location = 3) in vec4 color;
 layout (location = 4) in vec2 vert_uv;
 layout (location = 5) in flat int index;
 layout (location = 6) in vec3 viewPos;
@@ -131,28 +124,17 @@ vec3 calculateSpecular(vec3 color, vec3 normal, vec3 lightDir, vec3 cameraDir, f
     return color * specularIntensity;
 }
 
-float linearizeDepth(float depth, float near, float far)
-{
-    //depth = 2.f * depth - 1.f;
-    //return 2.f * near * far / (far + near - depth * (far - near));
-
-
-    //return near * far / (far + depth * (far - near));
-    //return near * far / (far + near - depth * (far - near));
-    return near * far / (far - depth * (far - near));
-}
-
-float linearizeDepthFromCameraParams(float depth)
-{
-    //return linearizeDepth(depth, nearFarPlanes.x, nearFarPlanes.y);
-    return linearizeDepth(depth, 0.1f, 5000.f);
-}
-
 void main()
 {
     const vec4 textureIndices = constants.modelData.data[index].textures;
-    const int index = int(textureIndices.x);
     vec2 uv = parallaxOcclussionMapBinarySearch(vert_uv, int(textureIndices.z));
+
+    vec3 albedo = texture(textures[int(textureIndices.x)], uv).rgb;
+    vec3 texNormal = texture(textures[int(textureIndices.y)], uv).rgb;
+    vec2 metallicRoughness = texture(textures[int(textureIndices.w)], uv).rg;
+
+    vec3 f0 = vec3(0.04);
+    f0 = mix(f0, albedo, metallicRoughness.r);
 
 	uint cascadeIndex = 0;
 	for(uint i = 0; i < constants.shadowData.cascadeCount - 1; ++i) {
@@ -163,12 +145,9 @@ void main()
 
 	float shadow = shadowIntensity(constants.shadowData.lightViewProj[cascadeIndex], cascadeIndex, float(constants.shadowData.cascadeCount));
 
-    vec3 texNormal = texture(textures[int(textureIndices.y)], uv).rgb;
 	vec3 n = normalize(tbn * (texNormal * vec3(2.f) - vec3(1.f)));
 
     vec3 cameraDir = normalize(scene.cameraPos.xyz - pos);
-    vec3 diffuse = vec3(0.f);
-    vec3 specular = vec3(0.f);
 
     // Look up light tile
     vec2 fragmentPos = gl_FragCoord.xy / vec2(1920.f, 1080.f);
@@ -177,6 +156,7 @@ void main()
     uint lightCount = constants.lightTiles.tiles[tileIndex].count;
     uint lightOffset = constants.lightTiles.tiles[tileIndex].offset;
 
+    vec3 Lo = vec3(0.0);
     for (uint i = 0; i < lightCount; i++)
     {
         uint lightIndex = constants.lightIds.ids[i + lightOffset];
@@ -189,51 +169,57 @@ void main()
         float normalizedDist = (radius - dist) / radius;
         float strength = pow(max(normalizedDist, 0.f), 2.f);
 
-        float cosTheta = max(0.f, dot(normLightDir, n));
+        vec3 L = normLightDir;
+        vec3 H = normalize(cameraDir + L);
+        //float attenuation = 1.0 / (dist);
+        float attenuation = strength;
+        vec3 radiance     = light.color.rgb * attenuation;
 
-        diffuse += calculateDiffuse(light.color.rgb, n, normLightDir, cosTheta) * strength * 7.f;
-        specular += calculateSpecular(light.color.rgb, n, normLightDir, cameraDir, cosTheta, 8.f) * strength * 7.f;
+        // cook-torrance brdf
+        float NDF = trowbridgeReitzGgx(n, H, metallicRoughness.y);
+        float G   = smithGeometry(n, cameraDir, L, metallicRoughness.y);
+        vec3 F    = fresnelSchlick(max(dot(H, cameraDir), 0.0), f0);
+
+        vec3 kS = F;
+        vec3 kD = vec3(1.0) - kS;
+        kD *= 1.0 - metallicRoughness.x;
+
+        vec3 numerator    = NDF * G * F;
+        float denominator = 4.0 * max(dot(n, cameraDir), 0.0) * max(dot(n, L), 0.0) + 0.0001;
+        vec3 specular     = numerator / denominator;
+
+        // add to outgoing radiance Lo
+        float NdotL = max(dot(n, L), 0.0);
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
     }
 
-    vec3 c = texture(textures[index], uv).rgb;
+    // Global directional light
+    {
+        vec3 L = vec3(-scene.lightDir.x, -scene.lightDir.y, scene.lightDir.z);
+        vec3 H = normalize(cameraDir + L);
+        vec3 radiance     = vec3(1.f - shadow);
 
-    const vec3 lightDir = normalize(vec3(0.6f, -1.0f, 0.1f));
-    const float ambient = 0.02f;
-    const float dirIntensity = 1.f;
+        // cook-torrance brdf
+        float NDF = trowbridgeReitzGgx(n, H, metallicRoughness.y);
+        float G   = smithGeometry(n, cameraDir, L, metallicRoughness.y);
+        vec3 F    = fresnelSchlick(max(dot(H, cameraDir), 0.0), f0);
 
-    float unshadowedLevel = 1.f - shadow;
-    //float unshadowedLevel = 1.f;
-    diffuse += max(0.f, dot(-lightDir, n)) * dirIntensity * unshadowedLevel;
+        vec3 kS = F;
+        vec3 kD = vec3(1.0) - kS;
+        kD *= 1.0 - metallicRoughness.x;
 
-    // Add tonemapping later, clamp for now
-    //vec3 light = clamp(vec3(0.f), vec3(1.f), diffuse + specular + vec3(ambient));
-    //vec3 light = max(vec3(0.f), diffuse + specular + vec3(ambient));
-    //vec3 light = max(vec3(0.f), diffuse + specular + vec3(ambient));
-    //vec3 light = max(vec3(0.f), diffuse + vec3(ambient));
-    vec3 light = max(vec3(0.f), diffuse + specular + vec3(ambient));
-    //light = vec3(1.f);
-    //outColor = vec4(c * light * heatmapGradient(0.f), 1.f);
+        vec3 numerator    = NDF * G * F;
+        float denominator = 4.0 * max(dot(n, cameraDir), 0.0) * max(dot(n, L), 0.0) + 0.0001;
+        vec3 specular     = numerator / denominator;
 
-    //outColor = vec4(fragmentPos.xy, 0.f, 1.f);
-    //outColor = vec4(lightTileId, 0.f, 1.f);
-    //outColor = vec4(vec3(float(lightCount) / 60.f), 1.f);
+        // add to outgoing radiance Lo
+        float NdotL = max(dot(n, L), 0.0);
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+    }
 
-    outColor = vec4(c * light, 1.f);
-    //outColor = vec4(c * light * heatmapGradient(float(lightCount) / 32.f), 1.f);
+    vec3 ambient = vec3(0.02) * albedo;
+    vec3 color = ambient + Lo;
 
-	//switch(cascadeIndex)
-	//{
-	//	case 0 :
-	//		outColor.rgb *= vec3(1.0f, 0.25f, 0.25f);
-	//		break;
-	//	case 1 :
-	//		outColor.rgb *= vec3(0.25f, 1.0f, 0.25f);
-	//		break;
-	//	case 2 :
-	//		outColor.rgb *= vec3(0.25f, 0.25f, 1.0f);
-	//		break;
-	//	case 3 :
-	//		outColor.rgb *= vec3(1.0f, 1.0f, 0.25f);
-	//		break;
-	//}
+    //outColor = vec4(color * heatmapGradient(float(lightCount) / 32.f), 1.f);
+    outColor = vec4(color, 1.f);
 }

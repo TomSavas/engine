@@ -58,14 +58,9 @@ auto cpuFrustumCullingPass(std::optional<GeometryCulling>& geometryCulling, Vulk
     CullingPassRenderGraphData data = {};
     data.culledDraws = importResource<Buffer>(graph, pass, &geometryCulling->culledDraws.buffer);
 
-    static bool once = false;
-
     pass.pass.draw = [data, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass&, Scene& scene)
     {
         ZoneScopedN("culling");
-        if (once)
-            return;
-        once = true;
 
         {
             ZoneScopedN("Real culling");
@@ -88,20 +83,40 @@ auto cpuFrustumCullingPass(std::optional<GeometryCulling>& geometryCulling, Vulk
         };
 
         // TODO: shouldn't recalculate this unecessarily
+        //std::vector<VkDrawIndexedIndirectCommand> indirectCmds;
+        //indirectCmds.reserve(scene.meshes.size());
+        //for (u32 i = 0; i < scene.meshes.size(); ++i)
+        //{
+        //    const auto& mesh = scene.meshes[i];
+        //    const u32 instanceCount = insideCameraFrustum(mesh.aabbMin, mesh.aabbMax, frustumPlanes) ? 1 : 0;
+        //    VkDrawIndexedIndirectCommand command = {
+        //        .indexCount = static_cast<u32>(mesh.indexCount),
+        //        .instanceCount = instanceCount,
+        //        .firstIndex = static_cast<u32>(mesh.indexOffset),
+        //        .vertexOffset = 0,
+        //        .firstInstance = i
+        //    };
+        //    indirectCmds.push_back(command);
+        //}
+
         std::vector<VkDrawIndexedIndirectCommand> indirectCmds;
-        indirectCmds.reserve(scene.meshes.size());
-        for (u32 i = 0; i < scene.meshes.size(); ++i)
+        indirectCmds.reserve(scene.meshCount);
+        u32 i = 0;
+        for (auto& mesh : scene.meshes)
         {
-            const auto& mesh = scene.meshes[i];
-            const u32 instanceCount = insideCameraFrustum(mesh.aabbMin, mesh.aabbMax, frustumPlanes) ? 1 : 0;
-            VkDrawIndexedIndirectCommand command = {
-                .indexCount = static_cast<u32>(mesh.indexCount),
-                .instanceCount = instanceCount,
-                .firstIndex = static_cast<u32>(mesh.indexOffset),
-                .vertexOffset = 0,
-                .firstInstance = i
-            };
-            indirectCmds.push_back(command);
+            for (auto& instance : mesh.second.instances)
+            {
+                //const u32 instanceCount = insideCameraFrustum(instance.aabbMin, instance.aabbMax, frustumPlanes) ? 1 : 0;
+                const u32 instanceCount = 1;
+                VkDrawIndexedIndirectCommand command = {
+                    .indexCount = static_cast<u32>(mesh.second.indexCount),
+                    .instanceCount = instanceCount,
+                    .firstIndex = static_cast<u32>(mesh.second.indexOffset),
+                    .vertexOffset = 0,
+                    .firstInstance = i++
+                };
+                indirectCmds.push_back(command);
+            }
         }
 
         backend.copyBufferWithStaging(indirectCmds.data(), sizeof(VkDrawIndexedIndirectCommand) * indirectCmds.size(),

@@ -196,23 +196,31 @@ Texture errorTexture(VulkanBackend& backend, u32 dimension)
 std::optional<std::tuple<Texture, std::string>> Textures::loadRaw(
     void* data, u32 size, u32 width, u32 height, bool generateMips, bool cache, std::string name)
 {
+    if (name.empty())
+    {
+        static i32 genTextureNameCounter = 0;
+        name = std::format("texture_{}", genTextureNameCounter);
+        genTextureNameCounter += 1;
+        std::println("Naming raw texture: {}", name);
+    }
+
+    //std::print("Loading raw texture {}... ", name);
+
+    if (const auto tex = textureCache.find(name); tex != textureCache.end())
+    {
+        //std::println("Found in cache!");
+        return std::make_tuple(tex->second, name);
+    }
+
+    //std::println("Not in cache, loading...");
     Texture texture = createTexture(*backend, data, size, width, height, generateMips);
 
     if (cache)
     {
-        if (name.empty())
-        {
-            static i32 genTextureNameCounter = 0;
-            name = std::format("texture_{}", genTextureNameCounter);
-            genTextureNameCounter += 1;
-
-            std::println("Naming raw texture: {}", name);
-        }
-
         textureCache[name] = texture;
     }
 
-    return make_tuple(texture, name);
+    return std::make_tuple(texture, name);
 }
 
 void Textures::unload(std::string name)

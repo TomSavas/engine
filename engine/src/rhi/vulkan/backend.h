@@ -43,7 +43,7 @@ struct FrameCtx
 };
 
 class GLFWwindow;
-class Scene;
+struct Scene;
 struct Mesh;
 struct CompiledRenderGraph;
 

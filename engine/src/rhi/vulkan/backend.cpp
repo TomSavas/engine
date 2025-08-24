@@ -315,6 +315,7 @@ struct SceneUniforms
     glm::vec4 cameraPos;
     glm::mat4 view;
     glm::mat4 projection;
+    glm::vec4 lightDir;
 };
 static SceneUniforms sceneUniforms;
 static AllocatedBuffer sceneUniformBuffer;
@@ -485,6 +486,7 @@ void VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
             sceneUniforms.cameraPos = glm::vec4(scene.activeCamera->position, 1.f);
             sceneUniforms.view = scene.activeCamera->view();
             sceneUniforms.projection = scene.activeCamera->proj();
+            sceneUniforms.lightDir = glm::vec4(scene.lightDir, 0.f);
 
             u8* dataOnGpu;
             vmaMapMemory(allocator, sceneUniformBuffer.allocation, (void**)&dataOnGpu);

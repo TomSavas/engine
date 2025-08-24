@@ -66,7 +66,7 @@ struct WorldRenderer
         // smaaPass(backend, graph);
         atmospherePass(atmosphere, backend, graph, depthMap);
 
-        testPass(test, backend, graph);
+        //testPass(test, backend, graph);
 
         compiledRenderGraph = compile(backend, std::move(graph));
     }
@@ -98,7 +98,10 @@ i32 main()
 {
     VulkanBackend* backend = initVulkanBackend().expect("Failed initialising Vulkan backend");
 
-    Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf", 4096 - 1)
+    //Scene scene = loadScene(*backend, "Sponza", "../assets/Suzanne/Suzanne.gltf", 1)
+    Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf", 1024 - 1)
+    //Scene scene = loadScene(*backend, "Sponza", "../assets/VC/VC.gltf", 1024 - 1)
+    // Scene scene = loadScene(*backend, "Sponza", "../assets/intelsponza/sponza.gltf", 1)
         .value_or(emptyScene(*backend));
 
     WorldRenderer worldRenderer(*backend);

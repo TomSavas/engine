@@ -14,7 +14,7 @@
 #include "tiny_gltf.h"
 
 class GLFWwindow;
-struct VulkanBackend;
+class VulkanBackend;
 
 enum class assetError
 {
@@ -44,7 +44,8 @@ struct Scene
     glm::vec3 aabbMin = glm::vec3(0.f);
     glm::vec3 aabbMax = glm::vec3(0.f);
 
-    std::vector<Mesh> meshes;
+    //std::vector<Mesh> meshes;
+    std::unordered_map<std::string, Mesh> meshes;
     std::vector<Vertex> vertexData;
     std::vector<u32> indices;
 
@@ -58,9 +59,12 @@ struct Scene
     AllocatedBuffer perModelBuffer;
     AllocatedBuffer indirectCommands;
 
+    // TEMP:
+    u32 meshCount;
+
     bool worldPaused = true;
 
-    Scene(std::string name, VulkanBackend& backend) : name(name), activeCamera(&mainCamera), backend(backend) {}
+    Scene(std::string name, VulkanBackend& backend) : name(name), activeCamera(&mainCamera), backend(backend), meshCount(0) {}
 
     Scene(Scene& other) : Scene(other.name, other.backend)
     {
@@ -81,6 +85,7 @@ struct Scene
         indexBuffer = other.indexBuffer;
         perModelBuffer = other.perModelBuffer;
         indirectCommands = other.indirectCommands;
+        meshCount = other.meshCount;
     }
 
     Scene(Scene&& other) : Scene(other.name, other.backend)
@@ -102,6 +107,7 @@ struct Scene
         indexBuffer = other.indexBuffer;
         perModelBuffer = other.perModelBuffer;
         indirectCommands = other.indirectCommands;
+        meshCount = other.meshCount;
     }
 
     Scene& operator=(Scene& other)
@@ -123,6 +129,7 @@ struct Scene
         indexBuffer = other.indexBuffer;
         perModelBuffer = other.perModelBuffer;
         indirectCommands = other.indirectCommands;
+        meshCount = other.meshCount;
         return *this;
     }
 
@@ -145,12 +152,15 @@ struct Scene
         indexBuffer = other.indexBuffer;
         perModelBuffer = other.perModelBuffer;
         indirectCommands = other.indirectCommands;
+        meshCount = other.meshCount;
         return *this;
     }
 
     void update(f32 dt, f32 currentTimeMs, GLFWwindow* window);
     void load(const char* path);
-    void addMeshes(tinygltf::Model& model, glm::vec3 offset = glm::vec3(0.f));
+    void addModel(tinygltf::Model& model, glm::mat4 transform = glm::mat4(1.f));
+    void addNodes(tinygltf::Model& model, tinygltf::Node& node, glm::mat4 transform);
+    void addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 transform);
     void createBuffers();
 };
 

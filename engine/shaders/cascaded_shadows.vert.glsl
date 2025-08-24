@@ -22,15 +22,29 @@ layout(buffer_reference, std430) readonly buffer ShadowPassData
 	int cascadeCount;
 };
 
+struct ModelData
+{
+	vec4 textures;
+	mat4 model;
+};
+
+layout(buffer_reference, std430) readonly buffer ModelDataBuffer
+{
+	ModelData data[];
+};
+
 layout(push_constant) uniform Constants
 {	
 	VertexBuffer vertexBuffer;
 	ShadowPassData shadowPassData;
+	ModelDataBuffer modelData;
 	int cascade;
 } constants;
 
 void main() 
 {	
+    mat4 model = constants.modelData.data[gl_DrawID].model;
+
 	Vertex vert = constants.vertexBuffer.vertices[gl_VertexIndex];
-    gl_Position = constants.shadowPassData.lightViewProj[constants.cascade] * vec4(vert.position.xyz, 1.f);        
+    gl_Position = constants.shadowPassData.lightViewProj[constants.cascade] * model * vec4(vert.position.xyz, 1.f);
 }
