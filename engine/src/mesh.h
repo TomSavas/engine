@@ -34,7 +34,7 @@ struct Mesh
     glm::vec3 aabbMax;
 
     // TODO: Move out this to a standalone material
-    // int materialIndex;
+    // i32 materialIndex;
     i16 albedoTexture;
     i16 normalTexture;
     i16 bumpTexture;

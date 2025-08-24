@@ -61,7 +61,7 @@ auto initLightCulling(VulkanBackend& backend, Scene& scene, const u16 tileCount[
 }
 
 auto tiledLightCullingPass(std::optional<LightCulling>& lightCulling, VulkanBackend& backend, RenderGraph& graph,
-    Scene& scene, RenderGraphResource<BindlessTexture> depthMap, float tileSizeAsPercentageOfScreen)
+    Scene& scene, RenderGraphResource<BindlessTexture> depthMap, f32 tileSizeAsPercentageOfScreen)
     -> LightData
 {
     // TODO: This should inspect some GPU capabilities

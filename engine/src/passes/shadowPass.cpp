@@ -41,7 +41,7 @@ auto frustumCornersInWorldSpace(glm::mat4 invViewProj) -> std::array<glm::vec3, 
     return frustumCorners;
 }
 
-void csmLightViewProjMats(glm::mat4* viewProjMats, glm::vec4* cascadeDistances, int cascadeCount, glm::mat4 view,
+void csmLightViewProjMats(glm::mat4* viewProjMats, glm::vec4* cascadeDistances, i32 cascadeCount, glm::mat4 view,
     glm::mat4 proj, glm::vec3 lightDirr, f32 nearClip, f32 farClip, f32 cascadeSplitLambda, f32 resolution)
 {
     // f32 cascadeSplitLambda = 0.8f;
@@ -57,7 +57,7 @@ void csmLightViewProjMats(glm::mat4* viewProjMats, glm::vec4* cascadeDistances, 
 
     // Calculate split depths based on view camera frustum
     // Based on method presented in https://developer.nvidia.com/gpugems/GPUGems3/gpugems3_ch10.html
-    for (uint32_t i = 0; i < cascadeCount; i++)
+    for (u32 i = 0; i < cascadeCount; i++)
     {
         f32 p = (i + 1) / static_cast<f32>(cascadeCount);
         f32 log = minZ * std::pow(ratio, p);
@@ -69,12 +69,12 @@ void csmLightViewProjMats(glm::mat4* viewProjMats, glm::vec4* cascadeDistances, 
 
     f32 lastSplitDist = 0.f;
     glm::mat4 invViewProj = glm::inverse(proj * view);
-    for (int i = 0; i < cascadeCount; i++)
+    for (i32 i = 0; i < cascadeCount; i++)
     {
         std::array<glm::vec3, 8> frustumCorners = frustumCornersInWorldSpace(invViewProj);
 
         f32 splitDist = cascadeSplits[i];
-        for (uint32_t j = 0; j < 4; j++)
+        for (u32 j = 0; j < 4; j++)
         {
             glm::vec3 dist = frustumCorners[j + 4] - frustumCorners[j];
             frustumCorners[j + 4] = frustumCorners[j] + (dist * splitDist);
@@ -83,14 +83,14 @@ void csmLightViewProjMats(glm::mat4* viewProjMats, glm::vec4* cascadeDistances, 
         lastSplitDist = cascadeSplits[i];
 
         glm::vec3 frustumCenter = glm::vec3(0.0f);
-        for (uint32_t j = 0; j < 8; j++)
+        for (u32 j = 0; j < 8; j++)
         {
             frustumCenter += frustumCorners[j];
         }
         frustumCenter /= 8.0f;
 
         f32 radius = 0.0f;
-        for (uint32_t j = 0; j < 8; j++)
+        for (u32 j = 0; j < 8; j++)
         {
             f32 distance = glm::length(frustumCorners[j] - frustumCenter);
             radius = glm::max(radius, distance);
@@ -288,14 +288,14 @@ auto simpleLightViewProj(glm::mat4 view, glm::mat4 proj, glm::vec3 lightDir, f32
     const glm::mat4 invViewProj = glm::inverse(proj * view);
     const std::array<glm::vec3, 8> frustumCorners = frustumCornersInWorldSpace(invViewProj);
     glm::vec4 frustumCenter = glm::vec4(0.0f);
-    for (uint32_t j = 0; j < 8; j++)
+    for (u32 j = 0; j < 8; j++)
     {
         frustumCenter += glm::vec4(frustumCorners[j], 0.f);
     }
     frustumCenter /= 8.0f;
 
     f32 radius = 0.0f;
-    for (uint32_t j = 0; j < 8; j++)
+    for (u32 j = 0; j < 8; j++)
     {
         f32 distance = glm::length(frustumCorners[j] - glm::vec3(frustumCenter));
         radius = glm::max(radius, distance);
@@ -343,7 +343,7 @@ auto initSimpleShadow(VulkanBackend& backend) -> std::optional<ShadowRenderer>
     renderer.shadowMapData = backend.allocateBuffer(info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    constexpr int shadowMapSize = 2048;
+    constexpr i32 shadowMapSize = 2048;
     AllocatedImage shadowMapImage = backend.allocateImage(
         vkutil::init::imageCreateInfo(VK_FORMAT_D32_SFLOAT,
             VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -429,7 +429,7 @@ ShadowPassRenderGraphData simpleShadowPass(std::optional<ShadowRenderer>& shadow
 
         const Texture shadowMap = backend.bindlessResources->getTexture(
             *getResource<BindlessTexture>(graph, data.shadowMap));
-        const uint32_t shadowMapSize = shadowMap.image.extent.height;
+        const u32 shadowMapSize = shadowMap.image.extent.height;
 
         ShadowCascadeData cascadeData = simpleLightViewProj(scene.mainCamera.view(), scene.mainCamera.proj(),
             scene.lightDir, static_cast<f32>(shadowMapSize));

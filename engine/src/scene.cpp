@@ -22,10 +22,10 @@ glm::vec3 up(glm::mat4 mat) { return mat * glm::vec4(0.f, 1.f, 0.f, 0.f); }
 
 glm::vec3 forward(glm::mat4 mat) { return mat * glm::vec4(0.f, 0.f, -1.f, 0.f); }
 
-static std::atomic<double> yOffsetAtomic;
-void scrollCallback(GLFWwindow* window, double xoffset, double yOffset) { yOffsetAtomic.store(yOffset); }
+static std::atomic<f64> yOffsetAtomic;
+void scrollCallback(GLFWwindow* window, f64 xoffset, f64 yOffset) { yOffsetAtomic.store(yOffset); }
 
-void updateFreeCamera(float dt, GLFWwindow* window, Camera& camera)
+void updateFreeCamera(f32 dt, GLFWwindow* window, Camera& camera)
 {
     ZoneScoped;
 
@@ -36,14 +36,14 @@ void updateFreeCamera(float dt, GLFWwindow* window, Camera& camera)
         scrollCallbackSet = true;
     }
 
-    float scrollWheelChange = yOffsetAtomic.exchange(0.0);
+    f32 scrollWheelChange = yOffsetAtomic.exchange(0.0);
     camera.moveSpeed = std::max(0.f, camera.moveSpeed + scrollWheelChange);
 
     static glm::dvec2 lastMousePos = glm::vec2(-1.f - 1.f);
     if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
     {
-        static double radToVertical = .0;
-        static double radToHorizon = .0;
+        static f64 radToVertical = .0;
+        static f64 radToHorizon = .0;
 
         if (lastMousePos.x == -1.f)
         {
@@ -56,17 +56,17 @@ void updateFreeCamera(float dt, GLFWwindow* window, Camera& camera)
         lastMousePos = mousePos;
 
         radToVertical += mousePosDif.x * camera.rotationSpeed / camera.aspectRatio;
-        while (radToVertical > glm::pi<float>() * 2)
+        while (radToVertical > glm::pi<f32>() * 2)
         {
-            radToVertical -= glm::pi<float>() * 2;
+            radToVertical -= glm::pi<f32>() * 2;
         }
-        while (radToVertical < -glm::pi<float>() * 2)
+        while (radToVertical < -glm::pi<f32>() * 2)
         {
-            radToVertical += glm::pi<float>() * 2;
+            radToVertical += glm::pi<f32>() * 2;
         }
 
         radToHorizon -= mousePosDif.y * camera.rotationSpeed;
-        radToHorizon = std::min(std::max(radToHorizon, -glm::pi<double>() / 2 + 0.01), glm::pi<double>() / 2 - 0.01);
+        radToHorizon = std::min(std::max(radToHorizon, -glm::pi<f64>() / 2 + 0.01), glm::pi<f64>() / 2 - 0.01);
 
         camera.rotation = glm::eulerAngleYX(-radToVertical, radToHorizon);
     }
@@ -106,11 +106,11 @@ void updateFreeCamera(float dt, GLFWwindow* window, Camera& camera)
     camera.position += dir * camera.moveSpeed * dt;
 }
 
-void updateLights(float dt, std::vector<PointLight>& pointLights)
+void updateLights(f32 dt, std::vector<PointLight>& pointLights)
 {
-    static double time = 0.f;
+    static f64 time = 0.f;
     //static glm::vec3 initial = pointLights[0].pos;
-    //static float dist = glm::length(glm::vec2(initial));
+    //static f32 dist = glm::length(glm::vec2(initial));
     //time += dt * 0.2f;
     time += dt;
 
@@ -119,26 +119,26 @@ void updateLights(float dt, std::vector<PointLight>& pointLights)
         glm::vec2(490.f, 0.f),
         glm::vec2(-612.f, 0.f),
     };
-    float focalDist = glm::distance(ellipseFocals[0], ellipseFocals[1]);
+    f32 focalDist = glm::distance(ellipseFocals[0], ellipseFocals[1]);
 
     for (auto& light : pointLights)
     {
         // //dists[0] = glm::distance(ellipseFocals[0], glm::vec2(pointLights[0].pos.x, pointLights[0].pos.z));
-        // float dists[] = {
+        // f32 dists[] = {
         //     glm::distance(ellipseFocals[0], glm::vec2(pointLights[0].pos.x, pointLights[0].pos.z)),
         //     glm::distance(ellipseFocals[1], glm::vec2(pointLights[0].pos.x, pointLights[0].pos.z)),
         // };
 
-        // float k = dists[0] + dists[1];
-        // float a = sqrt(k * k - focalDist * focalDist) / 2.f;
-        // //float b = k - dists[1] - glm::length(ellipseFocals[0]);
-        // //float b = k - dists[1] - focalDist / 2.f;
-        // //float b = k - glm::length(ellipseFocals[0]) - glm::length(ellspseFocals[1]) / 2.f;
-        // //float b = (k - focalDist - glm::length(ellipseFocals[0]) * 2.f) / 2.f;
-        // float b = (k - 2 * focalDist) / 2.f;
+        // f32 k = dists[0] + dists[1];
+        // f32 a = sqrt(k * k - focalDist * focalDist) / 2.f;
+        // //f32 b = k - dists[1] - glm::length(ellipseFocals[0]);
+        // //f32 b = k - dists[1] - focalDist / 2.f;
+        // //f32 b = k - glm::length(ellipseFocals[0]) - glm::length(ellspseFocals[1]) / 2.f;
+        // //f32 b = (k - focalDist - glm::length(ellipseFocals[0]) * 2.f) / 2.f;
+        // f32 b = (k - 2 * focalDist) / 2.f;
 
-        // //float dist = glm::length(glm::vec2(light.pos.x, light.pos.z));
-        // //float angle = atan2(ellipseFocals[1].x - light.pos.x, ellipseFocals[1].y - light.pos.z);
+        // //f32 dist = glm::length(glm::vec2(light.pos.x, light.pos.z));
+        // //f32 angle = atan2(ellipseFocals[1].x - light.pos.x, ellipseFocals[1].y - light.pos.z);
 
         // //light.pos.x = sin(angle + dt * 4.f) * a;
         // //light.pos.z = cos(angle + dt * 4.f) * b;
@@ -150,15 +150,15 @@ void updateLights(float dt, std::vector<PointLight>& pointLights)
         // //std::println("{} {}", light.pos.x, light.pos.z);
 
 
-        float dist = glm::length(glm::vec2(light.pos.x, light.pos.z));
-        float angle = atan2(light.pos.x, light.pos.z);
+        f32 dist = glm::length(glm::vec2(light.pos.x, light.pos.z));
+        f32 angle = atan2(light.pos.x, light.pos.z);
 
         light.pos.x = sin(angle + dt) * dist;
         light.pos.z = cos(angle + dt) * dist;
     }
 }
 
-void Scene::update(float dt, float currentTimeMs, GLFWwindow* window)
+void Scene::update(f32 dt, f32 currentTimeMs, GLFWwindow* window)
 {
     static bool released = true;
 
@@ -169,8 +169,8 @@ void Scene::update(float dt, float currentTimeMs, GLFWwindow* window)
 
         bool isMain = (bool)(activeCamera == &mainCamera);
         bool isDebug = (bool)(activeCamera == &debugCamera);
-        std::println("active: {:x}, main: {:x}({}), debug: {:x}({})", (uint64_t)activeCamera, (uint64_t)&mainCamera,
-            isMain, (uint64_t)&debugCamera, isDebug);
+        std::println("active: {:x}, main: {:x}({}), debug: {:x}({})", (u64)activeCamera, (u64)&mainCamera,
+            isMain, (u64)&debugCamera, isDebug);
     }
 
     if (glfwGetKey(window, GLFW_KEY_C) == GLFW_RELEASE)
@@ -225,7 +225,7 @@ void Scene::addMeshes(tinygltf::Model& model, glm::vec3 offset)
 {
     // Matches Vertex definition
     const char* position = "POSITION";
-    const std::pair<const char*, int> attributes[] = {
+    const std::pair<const char*, i32> attributes[] = {
         {position, 4},
         {"TEXCOORD_0", 4},
         {"NORMAL", 4},
@@ -234,7 +234,7 @@ void Scene::addMeshes(tinygltf::Model& model, glm::vec3 offset)
 
     for (tinygltf::Mesh& mesh : model.meshes)
     {
-        int primitiveCount = 0;
+        i32 primitiveCount = 0;
         for (tinygltf::Primitive& primitive : mesh.primitives)
         {
             Mesh& m = meshes.emplace_back();
@@ -247,7 +247,7 @@ void Scene::addMeshes(tinygltf::Model& model, glm::vec3 offset)
             m.aabbMin = glm::vec3(0.f);
             m.aabbMax = glm::vec3(0.f);
 
-            int vertexAttributeOffset = 0;
+            i32 vertexAttributeOffset = 0;
             for (const auto& [attribute, attributeCount] : attributes)
             {
                 if (primitive.attributes.find(attribute) == primitive.attributes.end())
@@ -258,19 +258,19 @@ void Scene::addMeshes(tinygltf::Model& model, glm::vec3 offset)
                 tinygltf::Accessor accessor = model.accessors[primitive.attributes[std::string(attribute)]];
                 tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
                 tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
-                float* data = reinterpret_cast<float*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
+                f32* data = reinterpret_cast<f32*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
 
-                for (int i = 0; i < accessor.count; i++)
+                for (i32 i = 0; i < accessor.count; i++)
                 {
-                    int vertexIndex = m.vertexOffset + i;
+                    i32 vertexIndex = m.vertexOffset + i;
                     if (vertexData.size() <= vertexIndex)
                     {
                         vertexData.emplace_back();
                     }
                     Vertex& vertex = vertexData[vertexIndex];
 
-                    const int componentCount = tinygltf::GetNumComponentsInType(accessor.type);
-                    for (int j = 0; j < componentCount; j++)
+                    const i32 componentCount = tinygltf::GetNumComponentsInType(accessor.type);
+                    for (i32 j = 0; j < componentCount; j++)
                     {
                         vertex.raw[vertexAttributeOffset + j] = data[i * componentCount + j];
                     }
@@ -364,17 +364,17 @@ void Scene::addMeshes(tinygltf::Model& model, glm::vec3 offset)
                 std::string bumpFilename = "generatedBump_" + normalImg.uri + ".png";
                 // TODO: allow specifying format
 
-                int bumpWidth = normalImg.width;
-                int bumpHeight = normalImg.height;
-                int components;
-                uint8_t* loadRes = stbi_load(bumpFilename.c_str(), &bumpWidth, &bumpHeight, &components, STBI_rgb_alpha);
+                i32 bumpWidth = normalImg.width;
+                i32 bumpHeight = normalImg.height;
+                i32 components;
+                u8* loadRes = stbi_load(bumpFilename.c_str(), &bumpWidth, &bumpHeight, &components, STBI_rgb_alpha);
                 if (loadRes == nullptr)
                 {
                     bumpWidth = normalImg.width;
                     bumpHeight = normalImg.height;
 
                     std::print("Generating bump map: {}... ", bumpFilename);
-                    std::vector<uint8_t> bumpMapData = tangentNormalMapToBumpMap(normalImg.image.data(), normalImg.width,
+                    std::vector<u8> bumpMapData = tangentNormalMapToBumpMap(normalImg.image.data(), normalImg.width,
                         normalImg.height);
                     std::println("done");
 
@@ -397,8 +397,8 @@ void Scene::addMeshes(tinygltf::Model& model, glm::vec3 offset)
 
 void Scene::createBuffers()
 {
-    const uint32_t vertexBufferSize = vertexData.size() * sizeof(decltype(vertexData)::value_type);
-    const uint32_t indexBufferSize = indices.size() * sizeof(decltype(indices)::value_type);
+    const u32 vertexBufferSize = vertexData.size() * sizeof(decltype(vertexData)::value_type);
+    const u32 indexBufferSize = indices.size() * sizeof(decltype(indices)::value_type);
 
     std::println("Vert count: {}, element size: {}, total size: {}", vertexData.size(),
         sizeof(decltype(vertexData)::value_type), vertexBufferSize);
@@ -436,7 +436,7 @@ void Scene::createBuffers()
         modelData.push_back(data);
     }
 
-    const uint32_t perModelBufferSize = modelData.size() * sizeof(decltype(modelData)::value_type);
+    const u32 perModelBufferSize = modelData.size() * sizeof(decltype(modelData)::value_type);
     info = vkutil::init::bufferCreateInfo(perModelBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                                                                   VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                                                                   VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
@@ -452,12 +452,12 @@ void Scene::createBuffers()
 
     std::vector<VkDrawIndexedIndirectCommand> cmds;
     cmds.reserve(meshes.size());
-    for (uint32_t i = 0; i < meshes.size(); ++i)
+    for (u32 i = 0; i < meshes.size(); ++i)
     {
         auto& mesh = meshes[i];
-        VkDrawIndexedIndirectCommand command = {.indexCount = static_cast<uint32_t>(mesh.indexCount),
+        VkDrawIndexedIndirectCommand command = {.indexCount = static_cast<u32>(mesh.indexCount),
             .instanceCount = 1,
-            .firstIndex = static_cast<uint32_t>(mesh.indexOffset),
+            .firstIndex = static_cast<u32>(mesh.indexOffset),
             .vertexOffset = 0,
             .firstInstance = i};
         cmds.push_back(command);
@@ -467,7 +467,7 @@ void Scene::createBuffers()
 }
 
 result::result<Scene, assetError> loadScene(VulkanBackend& backend, std::string name, std::string path,
-    uint lightCount)
+    u32 lightCount)
 {
     Scene scene = Scene(name, backend);
 
@@ -490,7 +490,7 @@ result::result<Scene, assetError> loadScene(VulkanBackend& backend, std::string 
 
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> uniformDistribution(0, 1);
+    std::uniform_real_distribution<f32> uniformDistribution(0, 1);
     scene.pointLights.reserve(lightCount);
 
     scene.pointLights.push_back(PointLight {
@@ -513,7 +513,7 @@ result::result<Scene, assetError> loadScene(VulkanBackend& backend, std::string 
     auto offsetMin = scene.aabbMin + diff * 0.15f;
     offsetMin.x -= diff.y * 0.05f;
     offsetMin.y -= diff.y * 0.1f;
-    for (int i = 0; i < lightCount - 1; ++i)
+    for (i32 i = 0; i < lightCount - 1; ++i)
     {
         auto insideExclusion = [&](glm::vec3 pos)
         {

@@ -8,7 +8,7 @@
 #include "rhi/vulkan/vulkan.h"
 
 void DescriptorSetLayoutBuilder::addBinding(
-    uint32_t bindingIndex, VkDescriptorType type, VkDescriptorBindingFlags flags, uint32_t count)
+    u32 bindingIndex, VkDescriptorType type, VkDescriptorBindingFlags flags, u32 count)
 {
     VkDescriptorSetLayoutBinding binding = {};
     binding.binding = bindingIndex;
@@ -34,14 +34,14 @@ VkDescriptorSetLayout DescriptorSetLayoutBuilder::build(
     bindingFlagsCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
     bindingFlagsCreateInfo.pNext = nullptr;
     bindingFlagsCreateInfo.pBindingFlags = bindingFlags.data();
-    bindingFlagsCreateInfo.bindingCount = static_cast<uint32_t>(bindingFlags.size());
+    bindingFlagsCreateInfo.bindingCount = static_cast<u32>(bindingFlags.size());
 
     VkDescriptorSetLayoutCreateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     info.pNext = &bindingFlagsCreateInfo;
 
     info.pBindings = bindings.data();
-    info.bindingCount = static_cast<uint32_t>(bindings.size());
+    info.bindingCount = static_cast<u32>(bindings.size());
     info.flags = flags;
 
     VkDescriptorSetLayout setLayout;
@@ -53,18 +53,18 @@ VkDescriptorSetLayout DescriptorSetLayoutBuilder::build(
 }
 
 void DescriptorAllocator::init(
-    VkDevice device, uint32_t maxSets, std::span<VkDescriptorPoolSize> poolSizes, VkDescriptorPoolCreateFlags flags)
+    VkDevice device, u32 maxSets, std::span<VkDescriptorPoolSize> poolSizes, VkDescriptorPoolCreateFlags flags)
 {
     VkDescriptorPoolCreateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     info.pNext = nullptr;
 
     maxSets = std::ranges::fold_left(
-        poolSizes, 0, [](uint32_t total, VkDescriptorPoolSize size) { return size.descriptorCount + total; });
+        poolSizes, 0, [](u32 total, VkDescriptorPoolSize size) { return size.descriptorCount + total; });
 
     info.flags = flags;
     info.maxSets = maxSets;
-    info.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+    info.poolSizeCount = static_cast<u32>(poolSizes.size());
     info.pPoolSizes = poolSizes.data();
 
     // TODO: VK_CHECK

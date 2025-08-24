@@ -7,4 +7,4 @@ struct Scene;
 
 constexpr std::string GRAPHICS = "graphics";
 
-auto drawDebugUI(VulkanBackend& backend, Scene& scene, double dt) -> void;
+auto drawDebugUI(VulkanBackend& backend, Scene& scene, f64 dt) -> void;

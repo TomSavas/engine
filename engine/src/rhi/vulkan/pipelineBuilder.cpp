@@ -65,7 +65,7 @@ PipelineBuilder& PipelineBuilder::addShader(ShaderPath path, VkShaderStageFlagBi
     if (bindPointSet && newDeterminedBindPoint != determinedBindPoint)
     {
         std::println("Setting shader {} with stage {} results in changing pipeline bind point from {} to {}."
-                     " Operation ignored.", path.sourcePath, (int)stage, (int)determinedBindPoint, (int)newDeterminedBindPoint);
+                     " Operation ignored.", path.sourcePath, (i32)stage, (i32)determinedBindPoint, (i32)newDeterminedBindPoint);
         return *this;
     }
     determinedBindPoint = newDeterminedBindPoint;
@@ -119,14 +119,14 @@ VkPipeline PipelineBuilder::buildGraphicsPipeline(VkPipelineLayout layout)
     VkPipelineDynamicStateCreateInfo dynamicInfo = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
         .pNext = nullptr,
-        .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
+        .dynamicStateCount = static_cast<u32>(dynamicStates.size()),
         .pDynamicStates = dynamicStates.data()
     };
 
     VkGraphicsPipelineCreateInfo pipelineInfo = {
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         .pNext = &renderInfo,
-        .stageCount = static_cast<uint32_t>(shaderStages.size()),
+        .stageCount = static_cast<u32>(shaderStages.size()),
         .pStages = shaderStages.data(),
         .pVertexInputState = &vertexInputInfo,
         .pInputAssemblyState = &inputAssembly,
@@ -277,7 +277,7 @@ PipelineBuilder& PipelineBuilder::colorAttachmentFormat(VkFormat format)
 {
     colorAttachments.push_back(format);
 
-    renderInfo.colorAttachmentCount = static_cast<uint32_t>(colorAttachments.size());
+    renderInfo.colorAttachmentCount = static_cast<u32>(colorAttachments.size());
     renderInfo.pColorAttachmentFormats = colorAttachments.data();
 
     return *this;
@@ -375,14 +375,14 @@ VkPipeline PipelineBuilder::build(VkDevice device, VkPipelineLayout layout)
     VkPipelineDynamicStateCreateInfo dynamicInfo = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
         .pNext = nullptr,
-        .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
+        .dynamicStateCount = static_cast<u32>(dynamicStates.size()),
         .pDynamicStates = dynamicStates.data()
     };
 
     VkGraphicsPipelineCreateInfo pipelineInfo = {
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         .pNext = &renderInfo,
-        .stageCount = static_cast<uint32_t>(shaderStages.size()),
+        .stageCount = static_cast<u32>(shaderStages.size()),
         .pStages = shaderStages.data(),
         .pVertexInputState = &vertexInputInfo,
         .pInputAssemblyState = &inputAssembly,

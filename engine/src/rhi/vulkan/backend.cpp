@@ -67,19 +67,19 @@ FrameStats VulkanBackend::endFrame(Frame&& frame)
 
 VulkanBackend::VulkanBackend(GLFWwindow* window) : window(window)
 {
-    int32_t width;
-    int32_t height;
+    i32 width;
+    i32 height;
     glfwGetFramebufferSize(window, &width, &height);
 
     viewport.x = 0.f;
     viewport.y = 0.f;
-    viewport.width = static_cast<float>(width);
-    viewport.height = static_cast<float>(height);
+    viewport.width = static_cast<f32>(width);
+    viewport.height = static_cast<f32>(height);
     viewport.minDepth = 0.f;
     viewport.maxDepth = 1.f;
 
     scissor.offset = {0, 0};
-    scissor.extent = {static_cast<uint32_t>(viewport.width), static_cast<uint32_t>(viewport.height)};
+    scissor.extent = {static_cast<u32>(viewport.width), static_cast<u32>(viewport.height)};
 
     initVulkan();
     initSwapchain();
@@ -208,7 +208,7 @@ void VulkanBackend::initSwapchain()
 
     // Backbuffer
     backbufferImage.format = VK_FORMAT_R16G16B16A16_SFLOAT;
-    backbufferImage.extent = {static_cast<uint32_t>(viewport.width), static_cast<uint32_t>(viewport.height), 1};
+    backbufferImage.extent = {static_cast<u32>(viewport.width), static_cast<u32>(viewport.height), 1};
     VkImageUsageFlags backbufferUsageFlags = {};
     backbufferUsageFlags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     backbufferUsageFlags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -233,7 +233,7 @@ void VulkanBackend::initCommandBuffers()
     auto commandPoolInfo = vkutil::init::commandPoolCreateInfo(
         computeQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
     auto cmdAllocInfo = vkutil::init::commandBufferAllocateInfo(1, VK_COMMAND_BUFFER_LEVEL_PRIMARY, VK_NULL_HANDLE);
-    for (int i = 0; i < MaxFramesInFlight; i++)
+    for (i32 i = 0; i < MaxFramesInFlight; i++)
     {
         VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &frames[i].cmdComputePool));
         cmdAllocInfo.commandPool = frames[i].cmdComputePool;
@@ -243,7 +243,7 @@ void VulkanBackend::initCommandBuffers()
     commandPoolInfo = vkutil::init::commandPoolCreateInfo(
         graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
     cmdAllocInfo = vkutil::init::commandBufferAllocateInfo(1, VK_COMMAND_BUFFER_LEVEL_PRIMARY, VK_NULL_HANDLE);
-    for (int i = 0; i < MaxFramesInFlight; i++)
+    for (i32 i = 0; i < MaxFramesInFlight; i++)
     {
         VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &frames[i].cmdPool));
         cmdAllocInfo.commandPool = frames[i].cmdPool;
@@ -257,7 +257,7 @@ void VulkanBackend::initCommandBuffers()
 
     // deinitQueue.enqueue([=]() {
     //         LOG_CALL(
-    //                 for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    //                 for (i32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
     //                 vkDestroyCommandPool(device, inFlightFrames[i].cmdPool, nullptr);
     //                 }
     //                 );
@@ -282,7 +282,7 @@ void VulkanBackend::initSyncStructs()
     // For the semaphores we don't need any flags
     auto semCreateInfo = vkutil::init::semaphoreCreateInfo(0);
 
-    for (int i = 0; i < MaxFramesInFlight; i++)
+    for (i32 i = 0; i < MaxFramesInFlight; i++)
     {
         VK_CHECK(vkCreateFence(device, &fenceCreateInfo, nullptr, &frames[i].renderFence));
         VK_CHECK(vkCreateSemaphore(device, &semCreateInfo, nullptr, &frames[i].presentSem));
@@ -294,7 +294,7 @@ void VulkanBackend::initSyncStructs()
 
     // deinitQueue.enqueue([=](){
     //     LOG_CALL(
-    //         for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    //         for (i32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
     //             vkDestroyFence(device, inFlightFrames[i].renderFence, nullptr);
     //             vkDestroySemaphore(device, inFlightFrames[i].presentSem, nullptr);
     //             vkDestroySemaphore(device, inFlightFrames[i].renderSem, nullptr);
@@ -365,7 +365,7 @@ void VulkanBackend::initImgui()
     poolCreateInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 
     poolCreateInfo.maxSets = 1000;
-    poolCreateInfo.poolSizeCount = (uint32_t)std::size(pool_sizes);
+    poolCreateInfo.poolSizeCount = (u32)std::size(pool_sizes);
     poolCreateInfo.pPoolSizes = pool_sizes;
 
     VkDescriptorPool imguiPool;
@@ -406,7 +406,7 @@ void VulkanBackend::initProfiler()
     auto commandPoolInfo = vkutil::init::commandPoolCreateInfo(
         graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
     auto fenceCreateInfo = vkutil::init::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
-    for (int i = 0; i < MaxFramesInFlight; i++)
+    for (i32 i = 0; i < MaxFramesInFlight; i++)
     {
         VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &frames[i].tracyCmdPool));
 
@@ -429,13 +429,13 @@ void VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
     std::string profilerTag = std::format("Rendering (frame={}, mod={})", currentFrameNumber, currentFrameNumber % MaxFramesInFlight);
     ZoneName(profilerTag.c_str(), profilerTag.size());
 
-    constexpr uint64_t timeoutNs = 100'000'000'000'000;
+    constexpr u64 timeoutNs = 100'000'000'000'000;
 
     FrameCtx& frameCtx = frame.ctx;
     auto cmd = frameCtx.cmdBuffer;
     auto computeCmd = frameCtx.cmdComputeBuffer;
 
-    uint32_t swapchainImageIndex;
+    u32 swapchainImageIndex;
     {
         ZoneScopedN("Sync CPU");
 
@@ -476,7 +476,7 @@ void VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
                 cmd, backbufferImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         }
 
-        VkExtent2D swapchainSize{static_cast<uint32_t>(viewport.width), static_cast<uint32_t>(viewport.height)};
+        VkExtent2D swapchainSize{static_cast<u32>(viewport.width), static_cast<u32>(viewport.height)};
 
         // Update scene descriptor set
         {
@@ -486,7 +486,7 @@ void VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
             sceneUniforms.view = scene.activeCamera->view();
             sceneUniforms.projection = scene.activeCamera->proj();
 
-            uint8_t* dataOnGpu;
+            u8* dataOnGpu;
             vmaMapMemory(allocator, sceneUniformBuffer.allocation, (void**)&dataOnGpu);
             memcpy(dataOnGpu, &sceneUniforms, sizeof(sceneUniforms));
             vmaUnmapMemory(allocator, sceneUniformBuffer.allocation);
@@ -508,11 +508,11 @@ void VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
                     VkDependencyInfo barriers = {
                         .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
                         .pNext = nullptr,
-                        .memoryBarrierCount = static_cast<uint32_t>(node.memoryBarriers.size()),
+                        .memoryBarrierCount = static_cast<u32>(node.memoryBarriers.size()),
                         .pMemoryBarriers = node.memoryBarriers.data(),
-                        .bufferMemoryBarrierCount = static_cast<uint32_t>(node.bufferBarriers.size()),
+                        .bufferMemoryBarrierCount = static_cast<u32>(node.bufferBarriers.size()),
                         .pBufferMemoryBarriers = node.bufferBarriers.data(),
-                        .imageMemoryBarrierCount = static_cast<uint32_t>(node.imageBarriers.size()),
+                        .imageMemoryBarrierCount = static_cast<u32>(node.imageBarriers.size()),
                         .pImageMemoryBarriers = node.imageBarriers.data(),
                     };
                     vkCmdPipelineBarrier2(cmd, &barriers);

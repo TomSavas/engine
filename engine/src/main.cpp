@@ -71,7 +71,7 @@ struct WorldRenderer
         compiledRenderGraph = compile(backend, std::move(graph));
     }
 
-    void render(Frame& frame, Scene& scene, double dt)
+    void render(Frame& frame, Scene& scene, f64 dt)
     {
         glfwPollEvents();
 
@@ -94,7 +94,7 @@ struct WorldRenderer
     }
 };
 
-int main()
+i32 main()
 {
     VulkanBackend* backend = initVulkanBackend().expect("Failed initialising Vulkan backend");
 
@@ -108,7 +108,7 @@ int main()
     while (!lastFrameStats.shutdownRequested)
     {
         Frame frame = backend->newFrame();
-        std::chrono::duration<double> elapsed = frame.stats.startTime - lastFrameStats.startTime;
+        std::chrono::duration<f64> elapsed = frame.stats.startTime - lastFrameStats.startTime;
 
         worldRenderer.render(frame, scene, elapsed.count());
 

@@ -21,7 +21,7 @@
 
 struct Stats
 {
-    uint64_t finishedFrameCount = 0;
+    u64 finishedFrameCount = 0;
 };
 
 struct FrameCtx
@@ -54,7 +54,7 @@ result::result<VulkanBackend*, backendError> initVulkanBackend();
 struct FrameStats
 {
     std::chrono::time_point<std::chrono::high_resolution_clock> startTime;
-    uint64_t frameIndex;
+    u64 frameIndex;
     bool shutdownRequested;
 };
 
@@ -89,10 +89,10 @@ struct VulkanBackend
     VkPhysicalDeviceProperties gpuProperties;
 
     VkQueue graphicsQueue;
-    uint32_t graphicsQueueFamily;
+    u32 graphicsQueueFamily;
 
     VkQueue computeQueue;
-    uint32_t computeQueueFamily;
+    u32 computeQueueFamily;
 
     VkViewport viewport;
     VkRect2D scissor;
@@ -112,9 +112,9 @@ struct VulkanBackend
     AllocatedImage backbufferImage;
 
     // Frames
-    static constexpr int MaxFramesInFlight = 2;
+    static constexpr i32 MaxFramesInFlight = 2;
     FrameCtx frames[MaxFramesInFlight];
-    uint64_t currentFrameNumber = 0;
+    u64 currentFrameNumber = 0;
 
     // Allocators
     VmaAllocator allocator;

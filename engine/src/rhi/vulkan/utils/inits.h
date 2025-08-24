@@ -1,5 +1,7 @@
 #pragma once
 
+#include "engine.h"
+
 #include <stdint.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
@@ -16,25 +18,25 @@ VkPipelineMultisampleStateCreateInfo multisampleStateCreateInfo();
 VkPipelineColorBlendAttachmentState colorBlendAttachmentState();
 VkPipelineLayoutCreateInfo layoutCreateInfo();
 VkPipelineLayoutCreateInfo layoutCreateInfo(VkDescriptorSetLayout* descriptorSetLayouts,
-    uint32_t descriptorSetLayoutCount, VkPushConstantRange* pushConstantRanges = nullptr,
-    uint32_t pushConsantRangeCount = 0);
+    u32 descriptorSetLayoutCount, VkPushConstantRange* pushConstantRanges = nullptr,
+    u32 pushConsantRangeCount = 0);
 
-VkPushConstantRange pushConstantRange(VkShaderStageFlags shaderStages, uint32_t size, uint32_t offset = 0);
+VkPushConstantRange pushConstantRange(VkShaderStageFlags shaderStages, u32 size, u32 offset = 0);
 
 VkComputePipelineCreateInfo computePipelineCreateInfo(
     VkPipelineLayout pipelineLayout, VkPipelineShaderStageCreateInfo shaderStageInfo);
 
 VkImageCreateInfo imageCreateInfo(
-    VkFormat format, VkImageUsageFlags usageFlags, VkExtent3D extent, uint32_t mipLevels = 1);
+    VkFormat format, VkImageUsageFlags usageFlags, VkExtent3D extent, u32 mipLevels = 1);
 VkImageViewCreateInfo imageViewCreateInfo(
-    VkFormat format, VkImage image, VkImageAspectFlags aspectFlags, uint32_t mipLevels = 1);
+    VkFormat format, VkImage image, VkImageAspectFlags aspectFlags, u32 mipLevels = 1);
 
 VkPipelineDepthStencilStateCreateInfo depthStencilCreateInfo(bool depthTest, bool depthWrite, VkCompareOp compareOp);
 
 VkDescriptorSetLayoutBinding descriptorSetLayoutBinding(
-    VkDescriptorType type, VkShaderStageFlags stageFlags, uint32_t binding);
+    VkDescriptorType type, VkShaderStageFlags stageFlags, u32 binding);
 VkWriteDescriptorSet writeDescriptorBuffer(
-    VkDescriptorType type, VkDescriptorSet dstSet, VkDescriptorBufferInfo* bufferInfo, uint32_t binding);
+    VkDescriptorType type, VkDescriptorSet dstSet, VkDescriptorBufferInfo* bufferInfo, u32 binding);
 
 VkBufferCreateInfo bufferCreateInfo(size_t size, VkBufferUsageFlags flags);
 
@@ -42,9 +44,9 @@ VkCommandBufferBeginInfo commandBufferBeginInfo(VkCommandBufferUsageFlags flags)
 VkSubmitInfo submitInfo(VkCommandBuffer* cmd);
 
 VkSamplerCreateInfo samplerCreateInfo(
-    VkFilter filters, VkSamplerAddressMode samplerAddressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT, float maxMip = 0);
+    VkFilter filters, VkSamplerAddressMode samplerAddressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT, f32 maxMip = 0);
 VkWriteDescriptorSet writeDescriptorImage(
-    VkDescriptorType type, VkDescriptorSet dstSet, VkDescriptorImageInfo* imageInfo, uint32_t binding);
+    VkDescriptorType type, VkDescriptorSet dstSet, VkDescriptorImageInfo* imageInfo, u32 binding);
 
 VkPipelineViewportStateCreateInfo pipelineViewportState(
     size_t viewportCount, VkViewport* viewports, size_t scissorCount, VkRect2D* scissor);
@@ -54,23 +56,23 @@ VkPipelineColorBlendStateCreateInfo pipelineColorBlendState(bool logicOpEnable, 
 VkDescriptorSetAllocateInfo descriptorSetAllocate(
     VkDescriptorPool descriptorPool, size_t descriptorSetCount, VkDescriptorSetLayout* setLayouts);
 
-VkCommandPoolCreateInfo commandPoolCreateInfo(uint32_t graphicsQueueFamily, VkCommandPoolCreateFlags flags);
+VkCommandPoolCreateInfo commandPoolCreateInfo(u32 graphicsQueueFamily, VkCommandPoolCreateFlags flags);
 VkCommandBufferAllocateInfo commandBufferAllocateInfo(
-    uint32_t commandBufferCount, VkCommandBufferLevel level, VkCommandPool cmdPool);
+    u32 commandBufferCount, VkCommandBufferLevel level, VkCommandPool cmdPool);
 
 VkFenceCreateInfo fenceCreateInfo(VkFenceCreateFlags flags);
 VkSemaphoreCreateInfo semaphoreCreateInfo(VkSemaphoreCreateFlags flags);
 
-VkDescriptorBufferInfo descriptorBufferInfo(VkBuffer buffer, uint64_t offse, uint64_t range);
+VkDescriptorBufferInfo descriptorBufferInfo(VkBuffer buffer, u64 offset, u64 range);
 VkDescriptorImageInfo descriptorImageInfo(VkSampler sampler, VkImageView view, VkImageLayout layout);
 
 VkImageSubresourceRange imageSubresourceRange(
-    VkImageAspectFlags aspectMask, uint32_t mipLevels = VK_REMAINING_MIP_LEVELS);
+    VkImageAspectFlags aspectMask, u32 mipLevels = VK_REMAINING_MIP_LEVELS);
 VkImageMemoryBarrier imageMemoryBarrier(VkImageLayout oldLayout, VkImageLayout newLayout, VkImage image,
-    VkPipelineStageFlags srcAccessMask, VkPipelineStageFlags dstAccessMask, uint32_t mipLevels = 1);
-VkImageBlit imageBlit(uint32_t srcMip, VkOffset3D srcMipSize, uint32_t dstMip, VkOffset3D dstMipSize);
+    VkPipelineStageFlags srcAccessMask, VkPipelineStageFlags dstAccessMask, u32 mipLevels = 1);
+VkImageBlit imageBlit(u32 srcMip, VkOffset3D srcMipSize, u32 dstMip, VkOffset3D dstMipSize);
 
-VkPresentInfoKHR presentInfo(VkSwapchainKHR* swapchains, VkSemaphore* renderSemaphores, uint32_t* imageIndices);
+VkPresentInfoKHR presentInfo(VkSwapchainKHR* swapchains, VkSemaphore* renderSemaphores, u32* imageIndices);
 
 VkSemaphoreSubmitInfo semaphoreSubmitInfo(VkPipelineStageFlags2 stageMask, VkSemaphore semaphore);
 VkCommandBufferSubmitInfo commandBufferSubmitInfo(VkCommandBuffer cmd);
@@ -81,6 +83,6 @@ VkRenderingAttachmentInfo renderingColorAttachmentInfo(
     VkImageView view, VkClearValue* clear, VkImageLayout layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 VkRenderingAttachmentInfo renderingDepthAttachmentInfo(
     VkImageView view, VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR, VkImageLayout layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-VkRenderingInfo renderingInfo(VkExtent2D extent, VkRenderingAttachmentInfo* colorAttachments, int colorAttachmentCount,
+VkRenderingInfo renderingInfo(VkExtent2D extent, VkRenderingAttachmentInfo* colorAttachments, i32 colorAttachmentCount,
     VkRenderingAttachmentInfo* depthAttachments);
 }  // namespace vkutil::init

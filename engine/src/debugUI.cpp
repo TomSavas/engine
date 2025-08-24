@@ -2,9 +2,9 @@
 #include "rhi/vulkan/backend.h"
 #include "scene.h"
 
-void drawDebugUI(VulkanBackend& backend, Scene& scene, double dt)
+void drawDebugUI(VulkanBackend& backend, Scene& scene, f64 dt)
 {
-    constexpr float padding = 10.0f;
+    constexpr f32 padding = 10.0f;
 
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
                                     ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
@@ -18,12 +18,12 @@ void drawDebugUI(VulkanBackend& backend, Scene& scene, double dt)
     ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always, ImVec2(1.f, 0.f));
 
     static bool open = false;
-    constexpr int sampleCount = 1024;
-    static double frameTimes[sampleCount];
-    static int frameTimesIdx = 0;
+    constexpr i32 sampleCount = 1024;
+    static f64 frameTimes[sampleCount];
+    static i32 frameTimesIdx = 0;
     if (!open)
     {
-        for (int i = 0; i < sampleCount; ++i)
+        for (i32 i = 0; i < sampleCount; ++i)
         {
             frameTimes[i] = dt;
         }
@@ -31,12 +31,12 @@ void drawDebugUI(VulkanBackend& backend, Scene& scene, double dt)
     }
 
     frameTimes[frameTimesIdx] = dt;
-    double avgFrameTime = dt;
-    for (int i = (frameTimesIdx + 1) % sampleCount; i != frameTimesIdx; i = (i + 1) % sampleCount)
+    f64 avgFrameTime = dt;
+    for (i32 i = (frameTimesIdx + 1) % sampleCount; i != frameTimesIdx; i = (i + 1) % sampleCount)
     {
         avgFrameTime += frameTimes[i];
     }
-    avgFrameTime /= static_cast<float>(sampleCount);
+    avgFrameTime /= static_cast<f32>(sampleCount);
     frameTimesIdx = (frameTimesIdx + 1) % sampleCount;
 
     ImGui::SetNextWindowBgAlpha(0.75f);

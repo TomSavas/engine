@@ -3,15 +3,15 @@
 #include <fstream>
 #include <print>
 
-std::vector<uint32_t> readFile(std::string path)
+std::vector<u32> readFile(std::string path)
 {
-    std::vector<uint32_t> buffer;
+    std::vector<u32> buffer;
 
     std::ifstream file(path, std::ios::ate | std::ios::binary);
     if (file.is_open())
     {
         size_t fileSize = (size_t)file.tellg();
-        buffer.resize(fileSize / sizeof(uint32_t));
+        buffer.resize(fileSize / sizeof(u32));
 
         file.seekg(0);
         file.read((char*)buffer.data(), fileSize);
@@ -41,7 +41,7 @@ std::optional<ShaderModule*> ShaderModuleCache::loadModule(VkDevice device, Shad
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.pNext = nullptr;
 
-    createInfo.codeSize = module.spirvCode.size() * sizeof(uint32_t);
+    createInfo.codeSize = module.spirvCode.size() * sizeof(u32);
     createInfo.pCode = module.spirvCode.data();
 
     VkShaderModule shaderModule;

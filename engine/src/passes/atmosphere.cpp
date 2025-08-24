@@ -15,7 +15,7 @@ struct AtmospherePushConstants
     glm::vec4 scatteringCoeffs; // Rayleigh xyz, Mie w
 };
 
-auto rayleighScatteringCoefficients(float wavelenghts[3]) -> glm::vec3
+auto rayleighScatteringCoefficients(f32 wavelenghts[3]) -> glm::vec3
 {
     constexpr f32 n = 1.00027717f; // Air refractive index
     constexpr f32 n2 = n * n;

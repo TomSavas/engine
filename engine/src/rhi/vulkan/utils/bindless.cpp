@@ -8,7 +8,7 @@
 
 BindlessResources::BindlessResources(VulkanBackend& backend) : backend(&backend)
 {
-    constexpr uint32_t maxBindlessResourceCount = 10000;
+    constexpr u32 maxBindlessResourceCount = 10000;
     {
         VkDescriptorPoolSize poolSizes[] = {
             VkDescriptorPoolSize{

@@ -126,7 +126,7 @@ VkPipelineLayoutCreateInfo layoutCreateInfo()
 }
 
 VkPipelineLayoutCreateInfo layoutCreateInfo(VkDescriptorSetLayout* descriptorSetLayouts,
-    uint32_t descriptorSetLayoutCount, VkPushConstantRange* pushConstantRanges, uint32_t pushConsantRangeCount)
+    u32 descriptorSetLayoutCount, VkPushConstantRange* pushConstantRanges, u32 pushConsantRangeCount)
 {
     VkPipelineLayoutCreateInfo info = layoutCreateInfo();
 
@@ -139,7 +139,7 @@ VkPipelineLayoutCreateInfo layoutCreateInfo(VkDescriptorSetLayout* descriptorSet
     return info;
 }
 
-VkPushConstantRange pushConstantRange(VkShaderStageFlags shaderStages, uint32_t size, uint32_t offset)
+VkPushConstantRange pushConstantRange(VkShaderStageFlags shaderStages, u32 size, u32 offset)
 {
     VkPushConstantRange range = {};
 
@@ -163,7 +163,7 @@ VkComputePipelineCreateInfo computePipelineCreateInfo(
     return info;
 }
 
-VkImageCreateInfo imageCreateInfo(VkFormat format, VkImageUsageFlags usageFlags, VkExtent3D extent, uint32_t mipLevels)
+VkImageCreateInfo imageCreateInfo(VkFormat format, VkImageUsageFlags usageFlags, VkExtent3D extent, u32 mipLevels)
 {
     VkImageCreateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -184,7 +184,7 @@ VkImageCreateInfo imageCreateInfo(VkFormat format, VkImageUsageFlags usageFlags,
 }
 
 VkImageViewCreateInfo imageViewCreateInfo(
-    VkFormat format, VkImage image, VkImageAspectFlags aspectFlags, uint32_t mipLevels)
+    VkFormat format, VkImage image, VkImageAspectFlags aspectFlags, u32 mipLevels)
 {
     VkImageViewCreateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -221,7 +221,7 @@ VkPipelineDepthStencilStateCreateInfo depthStencilCreateInfo(bool depthTest, boo
 }
 
 VkDescriptorSetLayoutBinding descriptorSetLayoutBinding(
-    VkDescriptorType type, VkShaderStageFlags stageFlags, uint32_t binding)
+    VkDescriptorType type, VkShaderStageFlags stageFlags, u32 binding)
 {
     VkDescriptorSetLayoutBinding setLayoutBinding = {};
     setLayoutBinding.binding = binding;
@@ -234,7 +234,7 @@ VkDescriptorSetLayoutBinding descriptorSetLayoutBinding(
 }
 
 VkWriteDescriptorSet writeDescriptorBuffer(
-    VkDescriptorType type, VkDescriptorSet dstSet, VkDescriptorBufferInfo* bufferInfo, uint32_t binding)
+    VkDescriptorType type, VkDescriptorSet dstSet, VkDescriptorBufferInfo* bufferInfo, u32 binding)
 {
     VkWriteDescriptorSet writeSet = {};
     writeSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -292,7 +292,7 @@ VkSubmitInfo submitInfo(VkCommandBuffer* cmd)
     return submitInfo;
 }
 
-VkSamplerCreateInfo samplerCreateInfo(VkFilter filters, VkSamplerAddressMode samplerAddressMode, float maxMip)
+VkSamplerCreateInfo samplerCreateInfo(VkFilter filters, VkSamplerAddressMode samplerAddressMode, f32 maxMip)
 {
     VkSamplerCreateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -313,7 +313,7 @@ VkSamplerCreateInfo samplerCreateInfo(VkFilter filters, VkSamplerAddressMode sam
 }
 
 VkWriteDescriptorSet writeDescriptorImage(
-    VkDescriptorType type, VkDescriptorSet dstSet, VkDescriptorImageInfo* imageInfo, uint32_t binding)
+    VkDescriptorType type, VkDescriptorSet dstSet, VkDescriptorImageInfo* imageInfo, u32 binding)
 {
     VkWriteDescriptorSet writeSet = {};
     writeSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -372,7 +372,7 @@ VkDescriptorSetAllocateInfo descriptorSetAllocate(
     return info;
 }
 
-VkCommandPoolCreateInfo commandPoolCreateInfo(uint32_t graphicsQueueFamily, VkCommandPoolCreateFlags flags)
+VkCommandPoolCreateInfo commandPoolCreateInfo(u32 graphicsQueueFamily, VkCommandPoolCreateFlags flags)
 {
     VkCommandPoolCreateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -385,7 +385,7 @@ VkCommandPoolCreateInfo commandPoolCreateInfo(uint32_t graphicsQueueFamily, VkCo
 }
 
 VkCommandBufferAllocateInfo commandBufferAllocateInfo(
-    uint32_t commandBufferCount, VkCommandBufferLevel level, VkCommandPool cmdPool)
+    u32 commandBufferCount, VkCommandBufferLevel level, VkCommandPool cmdPool)
 {
     VkCommandBufferAllocateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -420,7 +420,7 @@ VkSemaphoreCreateInfo semaphoreCreateInfo(VkSemaphoreCreateFlags flags)
     return info;
 }
 
-VkDescriptorBufferInfo descriptorBufferInfo(VkBuffer buffer, uint64_t offset, uint64_t range)
+VkDescriptorBufferInfo descriptorBufferInfo(VkBuffer buffer, u64 offset, u64 range)
 {
     VkDescriptorBufferInfo info = {};
     info.buffer = buffer;
@@ -440,7 +440,7 @@ VkDescriptorImageInfo descriptorImageInfo(VkSampler sampler, VkImageView view, V
     return info;
 }
 
-VkImageSubresourceRange imageSubresourceRange(VkImageAspectFlags aspectMask, uint32_t mipLevels)
+VkImageSubresourceRange imageSubresourceRange(VkImageAspectFlags aspectMask, u32 mipLevels)
 {
     VkImageSubresourceRange range = {};
     range.aspectMask = aspectMask;
@@ -453,7 +453,7 @@ VkImageSubresourceRange imageSubresourceRange(VkImageAspectFlags aspectMask, uin
 }
 
 VkImageMemoryBarrier imageMemoryBarrier(VkImageLayout oldLayout, VkImageLayout newLayout, VkImage image,
-    VkPipelineStageFlags srcAccessMask, VkPipelineStageFlags dstAccessMask, uint32_t mipLevels)
+    VkPipelineStageFlags srcAccessMask, VkPipelineStageFlags dstAccessMask, u32 mipLevels)
 {
     VkImageMemoryBarrier barrier = {};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -470,7 +470,7 @@ VkImageMemoryBarrier imageMemoryBarrier(VkImageLayout oldLayout, VkImageLayout n
     return barrier;
 }
 
-VkImageBlit imageBlit(uint32_t srcMip, VkOffset3D srcMipSize, uint32_t dstMip, VkOffset3D dstMipSize)
+VkImageBlit imageBlit(u32 srcMip, VkOffset3D srcMipSize, u32 dstMip, VkOffset3D dstMipSize)
 {
     VkImageBlit blit = {};
     blit.srcOffsets[0] = {0, 0, 0};
@@ -489,7 +489,7 @@ VkImageBlit imageBlit(uint32_t srcMip, VkOffset3D srcMipSize, uint32_t dstMip, V
     return blit;
 }
 
-VkPresentInfoKHR presentInfo(VkSwapchainKHR* swapchains, VkSemaphore* renderSemaphores, uint32_t* imageIndices)
+VkPresentInfoKHR presentInfo(VkSwapchainKHR* swapchains, VkSemaphore* renderSemaphores, u32* imageIndices)
 {
     VkPresentInfoKHR info = {};
     info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -585,7 +585,7 @@ VkRenderingAttachmentInfo renderingDepthAttachmentInfo(VkImageView view, VkAttac
     return info;
 }
 
-VkRenderingInfo renderingInfo(VkExtent2D extent, VkRenderingAttachmentInfo* colorAttachments, int colorAttachmentCount,
+VkRenderingInfo renderingInfo(VkExtent2D extent, VkRenderingAttachmentInfo* colorAttachments, i32 colorAttachmentCount,
     VkRenderingAttachmentInfo* depthAttachments)
 {
     VkRenderingInfo info = {};

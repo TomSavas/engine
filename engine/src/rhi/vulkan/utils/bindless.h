@@ -31,7 +31,7 @@ struct BindlessResources
     // CPU mirror of what data is in the GPU buffer
     std::vector<Texture> textures;
     BindlessTexture lastUsedIndex;
-    int capacity;
+    i32 capacity;
     std::unordered_set<BindlessTexture> freeIndices;  // All free indices that occur before lastUsedIndex
 
     explicit BindlessResources(VulkanBackend& backend);

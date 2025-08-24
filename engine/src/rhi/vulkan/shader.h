@@ -1,11 +1,13 @@
 #pragma once
 
+#include "engine.h"
+
+#include "vulkan/vulkan.h"
+
 #include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-#include "vulkan/vulkan.h"
 
 #define SHADER_SRC_PATH "../src/shaders/"
 #define SHADER_SPIRV_PATH "./shaders/"
@@ -42,7 +44,7 @@ struct ShaderModule
 {
     ShaderPath path;
 
-    std::vector<uint32_t> spirvCode;
+    std::vector<u32> spirvCode;
 
     VkShaderModule module;
 

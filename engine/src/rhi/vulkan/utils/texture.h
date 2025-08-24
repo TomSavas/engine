@@ -1,5 +1,7 @@
 #pragma once
 
+#include "engine.h"
+
 #include "rhi/vulkan/utils/image.h"
 
 #include <optional>
@@ -14,12 +16,12 @@ struct Texture
     AllocatedImage image;
     VkImageView view;
 
-    uint32_t mipCount;
+    u32 mipCount;
 };
 
-Texture whiteTexture(VulkanBackend& backend, uint32_t dimension);
-Texture blackTexture(VulkanBackend& backend, uint32_t dimension);
-Texture errorTexture(VulkanBackend& backend, uint32_t dimension);
+Texture whiteTexture(VulkanBackend& backend, u32 dimension);
+Texture blackTexture(VulkanBackend& backend, u32 dimension);
+Texture errorTexture(VulkanBackend& backend, u32 dimension);
 
 struct Textures
 {
@@ -31,7 +33,7 @@ struct Textures
     // TODO: more ergonomic mip options
     // std::optional<Texture> load(std::string path, bool generateMips = true, bool cache = false);
     std::optional<std::tuple<Texture, std::string>> loadRaw(
-        void* data, int size, int width, int height, bool generateMips, bool cache = false, std::string name = "");
+        void* data, u32 size, u32 width, u32 height, bool generateMips, bool cache = false, std::string name = "");
     void unload(std::string name);
     void unloadRaw(Texture texture);
 };

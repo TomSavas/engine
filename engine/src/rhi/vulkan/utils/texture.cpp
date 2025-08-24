@@ -18,9 +18,9 @@
 //         std::println("Loading new texture {}", path);
 //     }
 
-//     int width;
-//     int height;
-//     int channels;
+//     i32 width;
+//     i32 height;
+//     i32 channels;
 //     stbi_uc* pixels = stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
 
 //     if (!pixels)
@@ -33,7 +33,7 @@
 // }
 
 Texture createTexture(
-    VulkanBackend& backend, void* data, uint32_t size, uint32_t width, uint32_t height, bool generateMips)
+    VulkanBackend& backend, void* data, u32 size, u32 width, u32 height, bool generateMips)
 {
     const VkDeviceSize imageSize = size;
     //const VkFormat imageFormat = VK_FORMAT_R8G8B8A8_SRGB;
@@ -49,7 +49,7 @@ Texture createTexture(
 
     Texture texture;
 
-    uint32_t mipCount = static_cast<uint32_t>(floor(log2(std::min(width, height))) + 1);
+    u32 mipCount = static_cast<u32>(floor(log2(std::min(width, height))) + 1);
     texture.mipCount = generateMips ? mipCount : 1;
 
     texture.image.extent.width = width;
@@ -97,12 +97,12 @@ Texture createTexture(
             VkImageMemoryBarrier mipIntermediateTransitionBarrier = vkutil::init::imageMemoryBarrier(
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, texture.image.image,
                 VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, 1);
-            int32_t mipWidth = width;
-            int32_t mipHeight = height;
-            for (int i = 1; i < texture.mipCount; ++i)
+            i32 mipWidth = width;
+            i32 mipHeight = height;
+            for (i32 i = 1; i < texture.mipCount; ++i)
             {
-                int32_t lastMipWidth = mipWidth;
-                int32_t lastMipHeight = mipHeight;
+                i32 lastMipWidth = mipWidth;
+                i32 lastMipHeight = mipHeight;
                 mipWidth /= 2;
                 mipHeight /= 2;
 
@@ -140,12 +140,12 @@ Texture createTexture(
     return texture;
 }
 
-Texture whiteTexture(VulkanBackend& backend, uint32_t dimension)
+Texture whiteTexture(VulkanBackend& backend, u32 dimension)
 {
-    const uint32_t textureSize = dimension * dimension * 4;
-    std::vector<uint8_t> bytes;
+    const u32 textureSize = dimension * dimension * 4;
+    std::vector<u8> bytes;
     bytes.reserve(textureSize);
-    for (int i = 0; i < dimension * dimension; ++i)
+    for (i32 i = 0; i < dimension * dimension; ++i)
     {
         bytes.push_back(255);
         bytes.push_back(255);
@@ -155,12 +155,12 @@ Texture whiteTexture(VulkanBackend& backend, uint32_t dimension)
     return createTexture(backend, bytes.data(), textureSize, dimension, dimension, false);
 }
 
-Texture blackTexture(VulkanBackend& backend, uint32_t dimension)
+Texture blackTexture(VulkanBackend& backend, u32 dimension)
 {
-    const uint32_t textureSize = dimension * dimension * 4;
-    std::vector<uint8_t> bytes;
+    const u32 textureSize = dimension * dimension * 4;
+    std::vector<u8> bytes;
     bytes.reserve(textureSize);
-    for (int i = 0; i < dimension * dimension; ++i)
+    for (i32 i = 0; i < dimension * dimension; ++i)
     {
         bytes.push_back(0);
         bytes.push_back(0);
@@ -170,19 +170,19 @@ Texture blackTexture(VulkanBackend& backend, uint32_t dimension)
     return createTexture(backend, bytes.data(), textureSize, dimension, dimension, false);
 }
 
-Texture errorTexture(VulkanBackend& backend, uint32_t dimension)
+Texture errorTexture(VulkanBackend& backend, u32 dimension)
 {
-    const uint32_t textureSize = dimension * dimension * 4;
-    std::vector<uint8_t> bytes;
+    const u32 textureSize = dimension * dimension * 4;
+    std::vector<u8> bytes;
     bytes.reserve(textureSize);
-    for (uint32_t y = 0; y < dimension; ++y)
+    for (u32 y = 0; y < dimension; ++y)
     {
-        for (uint32_t x = 0; x < dimension; ++x)
+        for (u32 x = 0; x < dimension; ++x)
         {
-            const uint32_t stridedY = y / 8;
-            const uint32_t stridedX = x / 8;
+            const u32 stridedY = y / 8;
+            const u32 stridedX = x / 8;
             const bool magentaArea = (stridedX + stridedY) % 2 != 0;
-            const uint8_t redBlue = magentaArea ? 255 : 0;
+            const u8 redBlue = magentaArea ? 255 : 0;
 
             bytes.push_back(redBlue);
             bytes.push_back(0);
@@ -194,7 +194,7 @@ Texture errorTexture(VulkanBackend& backend, uint32_t dimension)
 }
 
 std::optional<std::tuple<Texture, std::string>> Textures::loadRaw(
-    void* data, int size, int width, int height, bool generateMips, bool cache, std::string name)
+    void* data, u32 size, u32 width, u32 height, bool generateMips, bool cache, std::string name)
 {
     Texture texture = createTexture(*backend, data, size, width, height, generateMips);
 
@@ -202,7 +202,7 @@ std::optional<std::tuple<Texture, std::string>> Textures::loadRaw(
     {
         if (name.empty())
         {
-            static int genTextureNameCounter = 0;
+            static i32 genTextureNameCounter = 0;
             name = std::format("texture_{}", genTextureNameCounter);
             genTextureNameCounter += 1;
 

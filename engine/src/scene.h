@@ -46,7 +46,7 @@ struct Scene
 
     std::vector<Mesh> meshes;
     std::vector<Vertex> vertexData;
-    std::vector<uint32_t> indices;
+    std::vector<u32> indices;
 
     // TEMP: move to a texture pool
     std::vector<tinygltf::Image> images;
@@ -148,12 +148,12 @@ struct Scene
         return *this;
     }
 
-    void update(float dt, float currentTimeMs, GLFWwindow* window);
+    void update(f32 dt, f32 currentTimeMs, GLFWwindow* window);
     void load(const char* path);
     void addMeshes(tinygltf::Model& model, glm::vec3 offset = glm::vec3(0.f));
     void createBuffers();
 };
 
 result::result<Scene, assetError> loadScene(VulkanBackend& backend, std::string name, std::string path,
-    uint lightCount);
+    u32 lightCount);
 Scene emptyScene(VulkanBackend& backend);
