@@ -1,17 +1,18 @@
 #pragma once
 
-#include <glm/glm.hpp>
-#include <glm/gtx/quaternion.hpp>
-#include <string>
-#include <vector>
-
 #include "camera.h"
 #include "mesh.h"
 #include "result.hpp"
 #include "rhi/vulkan/utils/bindless.h"
 #include "rhi/vulkan/utils/buffer.h"
-#include "rhi/vulkan/utils/texture.h"
+#include "sceneGraph.h"
+
 #include "tiny_gltf.h"
+
+#include <glm/glm.hpp>
+#include <glm/gtx/quaternion.hpp>
+#include <string>
+#include <vector>
 
 class GLFWwindow;
 class VulkanBackend;
@@ -41,6 +42,8 @@ struct Scene
 
     VulkanBackend& backend;
 
+    SceneGraph sceneGraph;
+
     glm::vec3 aabbMin = glm::vec3(0.f);
     glm::vec3 aabbMax = glm::vec3(0.f);
 
@@ -64,7 +67,10 @@ struct Scene
 
     bool worldPaused = true;
 
-    Scene(std::string name, VulkanBackend& backend) : name(name), activeCamera(&mainCamera), backend(backend), meshCount(0) {}
+    Scene(std::string name, VulkanBackend& backend) : name(name), activeCamera(&mainCamera), backend(backend), meshCount(0)
+    {
+        sceneGraph.root = new SceneGraph::Node("root", glm::mat4(1.f), glm::mat4(1.f), 0, nullptr);
+    }
 
     Scene(Scene& other) : Scene(other.name, other.backend)
     {
@@ -86,6 +92,7 @@ struct Scene
         perModelBuffer = other.perModelBuffer;
         indirectCommands = other.indirectCommands;
         meshCount = other.meshCount;
+        sceneGraph = other.sceneGraph;
     }
 
     Scene(Scene&& other) : Scene(other.name, other.backend)
@@ -108,6 +115,7 @@ struct Scene
         perModelBuffer = other.perModelBuffer;
         indirectCommands = other.indirectCommands;
         meshCount = other.meshCount;
+        sceneGraph = other.sceneGraph;
     }
 
     Scene& operator=(Scene& other)
@@ -130,6 +138,7 @@ struct Scene
         perModelBuffer = other.perModelBuffer;
         indirectCommands = other.indirectCommands;
         meshCount = other.meshCount;
+        sceneGraph = other.sceneGraph;
         return *this;
     }
 
@@ -153,14 +162,15 @@ struct Scene
         perModelBuffer = other.perModelBuffer;
         indirectCommands = other.indirectCommands;
         meshCount = other.meshCount;
+        sceneGraph = other.sceneGraph;
         return *this;
     }
 
     void update(f32 dt, f32 currentTimeMs, GLFWwindow* window);
     void load(const char* path);
     void addModel(tinygltf::Model& model, glm::mat4 transform = glm::mat4(1.f));
-    void addNodes(tinygltf::Model& model, tinygltf::Node& node, glm::mat4 transform);
-    void addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 transform);
+    void addNodes(tinygltf::Model& model, tinygltf::Node& node, glm::mat4 transform, SceneGraph::Node& parent);
+    void addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 transform, SceneGraph::Node& parent);
     void createBuffers();
 };
 

@@ -106,14 +106,15 @@ auto cpuFrustumCullingPass(std::optional<GeometryCulling>& geometryCulling, Vulk
         {
             for (auto& instance : mesh.second.instances)
             {
-                //const u32 instanceCount = insideCameraFrustum(instance.aabbMin, instance.aabbMax, frustumPlanes) ? 1 : 0;
-                const u32 instanceCount = 1;
+                const u32 instanceCount = insideCameraFrustum(instance.aabbMin, instance.aabbMax, frustumPlanes) ? 1 : 0;
+                // const u32 instanceCount = 1;
                 VkDrawIndexedIndirectCommand command = {
                     .indexCount = static_cast<u32>(mesh.second.indexCount),
                     .instanceCount = instanceCount,
                     .firstIndex = static_cast<u32>(mesh.second.indexOffset),
                     .vertexOffset = 0,
-                    .firstInstance = i++
+                    //.firstInstance = i++
+                    .firstInstance = 0,
                 };
                 indirectCmds.push_back(command);
             }

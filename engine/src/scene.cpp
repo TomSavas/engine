@@ -9,10 +9,12 @@
 #include <random>
 
 #include "GLFW/glfw3.h"
+#include "debugUI.h"
 #include "glm/gtc/type_ptr.hpp"
 #include "imageProcessing/displacement.h"
 #include "rhi/vulkan/backend.h"
 #include "rhi/vulkan/utils/inits.h"
+#include "sceneGraph.h"
 #include "stb_image.h"
 #include "stb_image_write.h"
 #include "tracy/Tracy.hpp"
@@ -159,8 +161,68 @@ void updateLights(f32 dt, std::vector<PointLight>& pointLights)
     }
 }
 
+struct ModelData
+{
+    glm::vec4 textures;
+    glm::vec4 selected;
+    glm::mat4 model;
+};
+
+auto gatherModelData(Scene& scene) -> std::vector<ModelData>
+{
+    std::vector<ModelData> modelData;
+    modelData.reserve(scene.meshCount);
+    for (auto& mesh : scene.meshes)
+    {
+        for (auto& instance : mesh.second.instances)
+        {
+            ModelData data;
+            data.textures = glm::vec4(mesh.second.albedoTexture, mesh.second.normalTexture, mesh.second.bumpTexture, mesh.second.metallicRoughnessTexture);
+            data.model = instance.modelTransform;
+            data.selected = glm::vec4(instance.selected ? 1.f : 0.f);
+            modelData.push_back(data);
+        }
+    }
+
+    return modelData;
+}
+
+
 void Scene::update(f32 dt, f32 currentTimeMs, GLFWwindow* window)
 {
+    // Selection logic
+    static std::string selectedMesh;
+    static int selectedInstance = 0;
+
+    if (!selectedMesh.empty())
+    {
+        meshes[selectedMesh].instances[selectedInstance].selected = false;
+    }
+
+    if (!debugUI.selectedNode.empty())
+    {
+        auto meshDelim = debugUI.selectedNode.rfind('_');
+        auto instanceDelim = debugUI.selectedNode.rfind(':');
+
+        if (meshDelim != std::string::npos && instanceDelim != std::string::npos)
+        {
+            selectedMesh = debugUI.selectedNode.substr(0, meshDelim);
+            auto selectedInstanceStr = debugUI.selectedNode.substr(instanceDelim + 1, 1);
+            selectedInstance = std::stoi(selectedInstanceStr);
+
+            // std::println("Selected mesh: {}, selected instance: {}", selectedMesh, selectedInstance);
+
+            meshes[selectedMesh].instances[selectedInstance].selected = true;
+        }
+    }
+
+    updateSceneGraphTransforms(sceneGraph);
+    // TODO: move to a render pass
+    {
+        auto modelData = gatherModelData(*this);
+        backend.copyBufferWithStaging(modelData.data(), modelData.size() * sizeof(ModelData), perModelBuffer.buffer);
+    }
+
     static bool released = true;
 
     if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS && released)
@@ -224,39 +286,52 @@ void Scene::load(const char* path)
 
 void Scene::addModel(tinygltf::Model& model, glm::mat4 transform)
 {
+    auto* sceneGraphNode = new SceneGraph::Node("model", glm::mat4(1.f), glm::mat4(1.f), 0, sceneGraph.root);
+    sceneGraph.root->children.push_back(sceneGraphNode);
+
     for (auto& node : model.nodes)
     {
-        addNodes(model, node, transform);
+        addNodes(model, node, transform, *sceneGraphNode);
     }
 }
 
-void Scene::addNodes(tinygltf::Model& model, tinygltf::Node& node, glm::mat4 transform)
+void Scene::addNodes(tinygltf::Model& model, tinygltf::Node& node, glm::mat4 transform, SceneGraph::Node& parent)
 {
+    glm::mat4 localTransform = glm::mat4(1.0f);
     if (node.matrix.empty())
     {
-        glm::mat4 mat = (node.translation.empty() ? glm::mat4(1.f) : glm::translate(glm::vec3(node.translation[0], node.translation[1], node.translation[2]))) *
+        localTransform = (node.translation.empty() ? glm::mat4(1.f) : glm::translate(glm::vec3(node.translation[0], node.translation[1], node.translation[2]))) *
             (node.rotation.empty() ? glm::mat4(1.f) : glm::toMat4(glm::quat(node.rotation[3], node.rotation[0], node.rotation[1], node.rotation[2]))) *
             (node.scale.empty() ? glm::mat4(1.f) : glm::scale(glm::vec3(node.scale[0], node.scale[1], node.scale[2])));
-
-        transform = transform * mat;
     }
     else
     {
-        transform = transform * glm::mat4(glm::make_mat4(node.matrix.data()));
+        localTransform = glm::mat4(glm::make_mat4(node.matrix.data()));
+    }
+    transform = transform * localTransform;
+
+    static int a = 0;
+    auto* sceneGraphNode = new SceneGraph::Node(node.name, localTransform, transform, 0, &parent);
+    parent.children.push_back(sceneGraphNode);
+
+    if (node.name.empty())
+    {
+        sceneGraphNode->name = std::format("gltf_node_{}", a++);
     }
 
     if (node.mesh != -1)
     {
-        addMesh(model, model.meshes[node.mesh], transform);
+        addMesh(model, model.meshes[node.mesh], transform, *sceneGraphNode);
+        //sceneGraphNode->name = model.meshes[node.mesh].name;
     }
 
     for (auto& child : node.children)
     {
-        addNodes(model, model.nodes[child], transform);
+        addNodes(model, model.nodes[child], transform, *sceneGraphNode);
     }
 }
 
-void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 transform)
+void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 transform, SceneGraph::Node& parent)
 {
     // Matches Vertex definition
     const char* position = "POSITION";
@@ -277,7 +352,7 @@ void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 tran
     for (tinygltf::Primitive& primitive : mesh.primitives)
     {
         meshCount++;
-        auto debugName = std::format("{}_{}", mesh.name, primitiveCount++);
+        auto debugName = std::format("{}_{}", mesh.name.empty() ? "unnamed" : mesh.name, primitiveCount++);
 
         if (auto it = meshes.find(debugName); it != meshes.end())
         {
@@ -285,8 +360,13 @@ void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 tran
                 .modelTransform = transform,
                 .aabbMin = transform * glm::vec4(it->second.aabbMin, 1.f),
                 .aabbMax = transform * glm::vec4(it->second.aabbMax, 1.f),
+                .selected = false,
             };
             it->second.instances.push_back(instance);
+
+            auto* sceneGraphNode = new SceneGraph::Node(std::format("{}_inst:{}", debugName, it->second.instances.size()-1), glm::mat4(1.f), transform, 0, &parent);
+            sceneGraphNode->instance = &it->second.instances.back(); // This will crash 100%
+            parent.children.push_back(sceneGraphNode);
 
             aabbMin.x = std::min(aabbMin.x, instance.aabbMin.x);
             aabbMin.y = std::min(aabbMin.y, instance.aabbMin.y);
@@ -356,8 +436,13 @@ void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 tran
             .modelTransform = transform,
             .aabbMin = transform * glm::vec4(m.aabbMin, 1.f),
             .aabbMax = transform * glm::vec4(m.aabbMax, 1.f),
+            .selected = false,
         };
         m.instances.push_back(instance);
+
+        auto* sceneGraphNode = new SceneGraph::Node(std::format("{}_inst:0", debugName), glm::mat4(1.f), transform, 0, &parent);
+        sceneGraphNode->instance = &m.instances.back(); // This will crash 100%
+        parent.children.push_back(sceneGraphNode);
 
         // Update scene AABB
         aabbMin.x = std::min(aabbMin.x, instance.aabbMin.x);
@@ -405,21 +490,22 @@ void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 tran
             m.albedoTexture = bindlessImages.back();
         }
 
-        tinygltf::TextureInfo& metallicRoughnessTextureInfo = pbr.metallicRoughnessTexture;
-        if (metallicRoughnessTextureInfo.index != -1)
-        {
-            // TODO: metallicRoughnessTexture
-            tinygltf::Texture& metallicRoughness = model.textures[metallicRoughnessTextureInfo.index];
-            // TODO: don't ignore sampler
-            // TODO: don't ignore texCoord index
-            tinygltf::Image& metallicRoughnessImg = model.images[metallicRoughness.source];
+        //tinygltf::TextureInfo& metallicRoughnessTextureInfo = pbr.metallicRoughnessTexture;
+        //if (metallicRoughnessTextureInfo.index != -1)
+        //{
+        //    // TODO: metallicRoughnessTexture
+        //    tinygltf::Texture& metallicRoughness = model.textures[metallicRoughnessTextureInfo.index];
+        //    // TODO: don't ignore sampler
+        //    // TODO: don't ignore texCoord index
+        //    tinygltf::Image& metallicRoughnessImg = model.images[metallicRoughness.source];
 
-            // TODO: remove above
-            auto maybeTexture = backend.textures->loadRaw(metallicRoughnessImg.image.data(), metallicRoughnessImg.image.size(),
-                metallicRoughnessImg.width, metallicRoughnessImg.height, true, true, metallicRoughnessImg.uri);
-            bindlessImages.push_back(backend.bindlessResources->addTexture(std::get<0>(*maybeTexture)));
-            m.metallicRoughnessTexture = bindlessImages.back();
-        }
+        //    // TODO: remove above
+        //    auto maybeTexture = backend.textures->loadRaw(metallicRoughnessImg.image.data(), metallicRoughnessImg.image.size(),
+        //        metallicRoughnessImg.width, metallicRoughnessImg.height, true, true, metallicRoughnessImg.uri);
+        //    bindlessImages.push_back(backend.bindlessResources->addTexture(std::get<0>(*maybeTexture)));
+        //    m.metallicRoughnessTexture = bindlessImages.back();
+        //}
+        m.metallicRoughnessTexture = BindlessResources::kWhite;
 
         tinygltf::NormalTextureInfo& normalTextureInfo = material.normalTexture;
         if (normalTextureInfo.index != -1)
@@ -493,24 +579,7 @@ void Scene::createBuffers()
     backend.copyBufferWithStaging(vertexData.data(), vertexBufferSize, vertexBuffer.buffer);
     backend.copyBufferWithStaging(indices.data(), indexBufferSize, indexBuffer.buffer);
 
-    struct ModelData
-    {
-        glm::vec4 textures;
-        glm::mat4 model;
-    };
-    std::vector<ModelData> modelData;
-    modelData.reserve(meshCount);
-    for (auto& mesh : meshes)
-    {
-        for (auto& instance : mesh.second.instances)
-        {
-            ModelData data;
-            data.textures = glm::vec4(mesh.second.albedoTexture, mesh.second.normalTexture, mesh.second.bumpTexture, mesh.second.metallicRoughnessTexture);
-            data.model = instance.modelTransform;
-            modelData.push_back(data);
-        }
-    }
-
+    auto modelData = gatherModelData(*this);
     const u32 perModelBufferSize = modelData.size() * sizeof(decltype(modelData)::value_type);
     info = vkutil::init::bufferCreateInfo(perModelBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                                                                   VK_BUFFER_USAGE_TRANSFER_DST_BIT |

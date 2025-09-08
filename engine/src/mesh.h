@@ -25,6 +25,7 @@ struct Instance
     glm::mat4 modelTransform;
     glm::vec3 aabbMin;
     glm::vec3 aabbMax;
+    bool selected;
 };
 
 struct Mesh

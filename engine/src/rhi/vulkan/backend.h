@@ -56,6 +56,7 @@ struct FrameStats
     std::chrono::time_point<std::chrono::high_resolution_clock> startTime;
     u64 frameIndex;
     bool shutdownRequested;
+    f64 pastFrameDt;
 };
 
 struct Frame

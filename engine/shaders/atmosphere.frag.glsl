@@ -6,6 +6,7 @@ layout(push_constant) uniform Constants
     vec4 fullscreenQuadDepth;
     vec4 sunDirAndIntensity;
     vec4 scatteringCoeffs;
+    vec4 earthAtmosphereScale;
 };
 
 layout (location = 0) in vec2 uv;
@@ -56,8 +57,8 @@ vec2 opticalDepthTowards(vec3 samplePoint, vec3 dir, float rayLength, vec3 plane
     float mOpticalDepth = 0.f;
     for (int j = 0; j < OPTICAL_DEPTH_ITERATIONS; j++)
     {
-        rOpticalDepth += opticalDepth(samplePoint, planetCenter, eR, rHeightScale) * stepLength;
-        mOpticalDepth += opticalDepth(samplePoint, planetCenter, eR, mHeightScale) * stepLength;
+        rOpticalDepth += opticalDepth(samplePoint, planetCenter, eR * earthAtmosphereScale.x, rHeightScale * earthAtmosphereScale.x) * stepLength / earthAtmosphereScale.x;
+        mOpticalDepth += opticalDepth(samplePoint, planetCenter, eR * earthAtmosphereScale.x, mHeightScale * earthAtmosphereScale.x) * stepLength / earthAtmosphereScale.x;
         samplePoint += dir * stepLength;
     }
 
@@ -66,24 +67,24 @@ vec2 opticalDepthTowards(vec3 samplePoint, vec3 dir, float rayLength, vec3 plane
 
 void main()
 {
-    const vec3 rScatteringCoeff = scatteringCoeffs.xyz;
-    const vec3 mScatteringCoeff = vec3(scatteringCoeffs.w);
+    const vec3 rScatteringCoeff = scatteringCoeffs.xyz * earthAtmosphereScale.w;
+    const vec3 mScatteringCoeff = vec3(scatteringCoeffs.w) * earthAtmosphereScale.w;
 
     const vec3 fragmentWS = deproject(vec3(uv * 2.f - 1.f, 1.f), inverse(scene.proj * scene.view));
     const vec3 rayDir = normalize(fragmentWS - scene.cameraPos.xyz);
 
     // Let's assume we're a little bit above the center of the planet
     const vec3 up = vec3(0.f, 1.f, 0.f);
-    const vec3 planetCenter = -eR * up;
+    const vec3 planetCenter = -(eR * earthAtmosphereScale.x) * up;
 
-    Hit atmosphereHit = raySphereIntersection(scene.cameraPos.xyz, rayDir, planetCenter, aR);
+    Hit atmosphereHit = raySphereIntersection(scene.cameraPos.xyz, rayDir, planetCenter, aR * earthAtmosphereScale.y);
     if (!atmosphereHit.hit || atmosphereHit.t1 < 0.f)
     {
         color = vec4(0.f, 0.f, 0.f, 1.f);
         return;
     }
 
-    const Hit earthHit = raySphereIntersection(scene.cameraPos.xyz, rayDir, planetCenter, eR);
+    const Hit earthHit = raySphereIntersection(scene.cameraPos.xyz, rayDir, planetCenter, eR * earthAtmosphereScale.x);
     if (earthHit.hit && earthHit.t0 > 0.f)
     {
         // Limit raymarching until the surface of the earth.
@@ -101,12 +102,12 @@ void main()
     vec3 samplePoint = scene.cameraPos.xyz + rayDir * max(0.f, atmosphereHit.t0);
     for (int i = 0; i < SAMPLE_ITERATIONS; i++)
     {
-        const float rOpticalDepthAtSample = opticalDepth(samplePoint, planetCenter, eR, rHeightScale) * stepLength;
-        const float mOpticalDepthAtSample = opticalDepth(samplePoint, planetCenter, eR, mHeightScale) * stepLength;
+        const float rOpticalDepthAtSample = opticalDepth(samplePoint, planetCenter, eR * earthAtmosphereScale.x, rHeightScale * earthAtmosphereScale.x) * stepLength / earthAtmosphereScale.x;
+        const float mOpticalDepthAtSample = opticalDepth(samplePoint, planetCenter, eR * earthAtmosphereScale.x, mHeightScale * earthAtmosphereScale.x) * stepLength / earthAtmosphereScale.x;
         rOpticalDepth += rOpticalDepthAtSample;
         mOpticalDepth += mOpticalDepthAtSample;
 
-        const float sampleToAtmosphereLen = raySphereIntersection(samplePoint, sunDirAndIntensity.xyz, planetCenter, aR).t1;
+        const float sampleToAtmosphereLen = raySphereIntersection(samplePoint, sunDirAndIntensity.xyz, planetCenter, aR * earthAtmosphereScale.y).t1;
         const vec2 opticalDepthTowardsSun = opticalDepthTowards(samplePoint, sunDirAndIntensity.xyz, sampleToAtmosphereLen, planetCenter);
         const float rOpticalDepthTowardsSun = opticalDepthTowardsSun.x;
         const float mOpticalDepthTowardsSun = opticalDepthTowardsSun.y;

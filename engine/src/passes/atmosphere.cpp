@@ -1,6 +1,8 @@
 #include "passes/atmosphere.h"
 
+#include "debugUI.h"
 #include "glm/ext/scalar_constants.hpp"
+#define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
 #include "rhi/vulkan/backend.h"
 #include "rhi/vulkan/pipelineBuilder.h"
@@ -13,6 +15,7 @@ struct AtmospherePushConstants
     glm::vec4 depth;
     glm::vec4 sunDir;
     glm::vec4 scatteringCoeffs; // Rayleigh xyz, Mie w
+    glm::vec4 earthAtmosphereScale;
 };
 
 auto rayleighScatteringCoefficients(f32 wavelenghts[3]) -> glm::vec3
@@ -106,22 +109,90 @@ auto atmospherePass(std::optional<AtmosphereRenderer>& atmosphere, VulkanBackend
         static f32 mieFactor = 1.f;
         f32 mieCoeff = mieBaseCoeff * mieFactor;
 
-        if (ImGui::Begin("Atmosphere"))
+        static f32 earthScale = 1.f;
+        static f32 atmosphereScale = 1.f;
+        static f32 heightScale = 1.f;
+        static f32 scatteringScale = 1.f;
+        static bool scalesLocked = true;
+
+        // Seems like the static debugUI is not shared between CUs
+        addDebugUI(debugUI, GRAPHICS_PASSES, [&]()
         {
-            ImGui::SliderFloat("Time", &time, 0, 2 * glm::pi<f32>());
-            ImGui::Checkbox("Sun movement", &moveSun);
-            ImGui::SliderFloat("Speed", &speed, 0.00001f, 0.01f, "%.5f");
+            if (ImGui::TreeNode("Atmosphere"))
+            {
+                ImGui::SliderFloat("Time", &time, 0, 2 * glm::pi<f32>());
+                ImGui::Checkbox("Sun movement", &moveSun);
+                ImGui::SliderFloat("Speed", &speed, 0.00001f, 0.01f, "%.5f");
 
-            ImGui::Separator();
+                ImGui::Separator();
 
-            ImGui::SliderFloat("Sun Intensity", &sunIntensity, 0.f, 100.f);
-            ImGui::SliderFloat3("Rayleigh scattering wavelengths", rayleighScatteringWavelengths,
-                380e-9, 700e-9, "%.8f");
-            ImGui::Text("\t%.1e, %.1e, %.1e", rayleighCoeffs.x, rayleighCoeffs.y, rayleighCoeffs.z);
-            ImGui::SliderFloat("Mie scattering factor", &mieFactor, 0.01f, 1000.f);
-            ImGui::Text("\t%.1e", mieCoeff);
-        }
-        ImGui::End();
+                ImGui::SliderFloat("Sun Intensity", &sunIntensity, 0.f, 100.f);
+                ImGui::SliderFloat3("Rayleigh scattering wavelengths", rayleighScatteringWavelengths,
+                    380e-9, 700e-9, "%.8f");
+                ImGui::Text("\t%.1e, %.1e, %.1e", rayleighCoeffs.x, rayleighCoeffs.y, rayleighCoeffs.z);
+                ImGui::SliderFloat("Mie scattering factor", &mieFactor, 0.01f, 1000.f);
+                ImGui::Text("\t%.1e", mieCoeff);
+
+                ImGui::Separator();
+
+                if (ImGui::SliderFloat("Earth scale", &earthScale, 0.0001f, 1.f, "%.4f") && scalesLocked)
+                {
+                    atmosphereScale = earthScale;
+                }
+                if (ImGui::SliderFloat("Atmosphere scale", &atmosphereScale, 0.0001f, 1.f, "%.4f") && scalesLocked)
+                {
+                    earthScale = atmosphereScale;
+                }
+                ImGui::Checkbox("Lock scales together", &scalesLocked);
+
+                ImGui::SliderFloat("Height scale", &heightScale, 0.0001f, 1.f, "%.4f");
+                ImGui::SliderFloat("Scattering scale", &scatteringScale, 0.0001f, 1.f, "%.4f");
+
+                ImGui::TreePop();
+            }
+        });
+
+        //if (ImGui::Begin(GRAPHICS))
+        //{
+        //    if (ImGui::TreeNode(GRAPHICS_PASSES))
+        //    {
+        //        if (ImGui::TreeNode("Atmosphere"))
+        //        {
+        //            ImGui::SliderFloat("Time", &time, 0, 2 * glm::pi<f32>());
+        //            ImGui::Checkbox("Sun movement", &moveSun);
+        //            ImGui::SliderFloat("Speed", &speed, 0.00001f, 0.01f, "%.5f");
+
+        //            ImGui::Separator();
+
+        //            ImGui::SliderFloat("Sun Intensity", &sunIntensity, 0.f, 100.f);
+        //            ImGui::SliderFloat3("Rayleigh scattering wavelengths", rayleighScatteringWavelengths,
+        //                380e-9, 700e-9, "%.8f");
+        //            ImGui::Text("\t%.1e, %.1e, %.1e", rayleighCoeffs.x, rayleighCoeffs.y, rayleighCoeffs.z);
+        //            ImGui::SliderFloat("Mie scattering factor", &mieFactor, 0.01f, 1000.f);
+        //            ImGui::Text("\t%.1e", mieCoeff);
+
+        //            ImGui::Separator();
+
+        //            if (ImGui::SliderFloat("Earth scale", &earthScale, 0.0001f, 1.f, "%.4f") && scalesLocked)
+        //            {
+        //                atmosphereScale = earthScale;
+        //            }
+        //            if (ImGui::SliderFloat("Atmosphere scale", &atmosphereScale, 0.0001f, 1.f, "%.4f") && scalesLocked)
+        //            {
+        //                earthScale = atmosphereScale;
+        //            }
+        //            ImGui::Checkbox("Lock scales together", &scalesLocked);
+
+        //            ImGui::SliderFloat("Height scale", &heightScale, 0.0001f, 1.f, "%.4f");
+        //            ImGui::SliderFloat("Scattering scale", &scatteringScale, 0.0001f, 1.f, "%.4f");
+
+        //            ImGui::TreePop();
+        //        }
+
+        //        ImGui::TreePop();
+        //    }
+        //}
+        //ImGui::End();
 
         if (moveSun)
         {
@@ -137,7 +208,8 @@ auto atmospherePass(std::optional<AtmosphereRenderer>& atmosphere, VulkanBackend
         const AtmospherePushConstants pushConstants = {
             .depth = glm::vec4(1.f),
             .sunDir = glm::vec4(-scene.lightDir.x, -scene.lightDir.y, scene.lightDir.z, sunIntensity),
-            .scatteringCoeffs = glm::vec4(rayleighCoeffs, mieCoeff)
+            .scatteringCoeffs = glm::vec4(rayleighCoeffs, mieCoeff),
+            .earthAtmosphereScale = glm::vec4(earthScale, atmosphereScale, heightScale, scatteringScale),
         };
         vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(pushConstants),
             &pushConstants);

@@ -8,36 +8,11 @@
 #include "utils.glsl"
 #include "pbr.glsl"
 #include "scene.glsl"
+#include "mesh.glsl"
 
 layout(origin_upper_left) in vec4 gl_FragCoord;
 
 layout(set = 1, binding = 0) uniform sampler2D textures[];
-
-struct Vertex
-{
-	vec4 position;
-	vec4 uv;
-	vec4 normal;
-	vec4 tangent;
-}; 
-
-layout(buffer_reference, std430) readonly buffer VertexBuffer
-{ 
-	Vertex vertices[];
-};
-
-struct ModelData 
-{
-	vec4 textures;
-	// int albedo;
-	// int normal;
-	mat4 model;
-};
-
-layout(buffer_reference, std430) readonly buffer ModelDataBuffer
-{ 
-	ModelData data[];
-};
 
 layout(buffer_reference, std430) readonly buffer ShadowPassData
 { 
@@ -68,6 +43,7 @@ layout (location = 3) in vec3 tangentCameraPos;
 layout (location = 2) in vec3 tangentFragPos;
 
 layout (location = 0) out vec4 outColor;
+layout (location = 1) out vec4 reflection;
 
 #include "parallax.glsl"
 
@@ -219,6 +195,11 @@ void main()
 
     vec3 ambient = vec3(0.02) * albedo;
     vec3 color = ambient + Lo;
+
+    if (constants.modelData.data[index].selected.x > 0.f)
+    {
+        color = mix(color, vec3(1.f, 1.f, 1.f), cos(scene.time.x * 5.f) * 0.5f + 0.5f);
+    }
 
     //outColor = vec4(color * heatmapGradient(float(lightCount) / 32.f), 1.f);
     outColor = vec4(color, 1.f);

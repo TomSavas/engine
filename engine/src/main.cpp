@@ -1,8 +1,4 @@
 #define GLFW_INCLUDE_VULKAN
-#include "GLFW/glfw3.h"
-#include "imgui.h"
-#include "imgui_impl_glfw.h"
-#include "imgui_impl_vulkan.h"
 #include "passes/atmosphere.h"
 #include "passes/culling.h"
 #include "passes/forward.h"
@@ -14,14 +10,22 @@
 #include "rhi/vulkan/backend.h"
 #include "scene.h"
 #include "debugUI.h"
+#include "sceneGraph.h"
 
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include <chrono>
-#include <optional>
 
 #include "tiny_gltf.h"
+#include "GLFW/glfw3.h"
+
+#define IMGUI_DEFINE_MATH_OPERATORS
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_vulkan.h"
+
+#include <chrono>
+#include <optional>
 
 struct WorldRenderer
 {
@@ -79,9 +83,14 @@ struct WorldRenderer
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        ImGui::SetNextWindowBgAlpha(0.0f);
+        ImGui::DockSpaceOverViewport(0, nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
+        ImGui::ShowDemoWindow();
+
         scene.update(dt, 0.f, backend.window);
 
-        drawDebugUI(backend, scene, dt);
+        drawDebugUI(debugUI, backend, scene, dt);
+        debugUI.fns.clear();
 
         // NOTE: for now let's just directly pass in the graph and let the
         // backend figure out what it wants to do. Generally we should transform
@@ -101,7 +110,7 @@ i32 main()
     //Scene scene = loadScene(*backend, "Sponza", "../assets/Suzanne/Suzanne.gltf", 1)
     Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf", 1024 - 1)
     //Scene scene = loadScene(*backend, "Sponza", "../assets/VC/VC.gltf", 1024 - 1)
-    // Scene scene = loadScene(*backend, "Sponza", "../assets/intelsponza/sponza.gltf", 1)
+    //Scene scene = loadScene(*backend, "Sponza", "../assets/intelsponza/sponza.gltf", 1)
         .value_or(emptyScene(*backend));
 
     WorldRenderer worldRenderer(*backend);
@@ -112,6 +121,7 @@ i32 main()
     {
         Frame frame = backend->newFrame();
         std::chrono::duration<f64> elapsed = frame.stats.startTime - lastFrameStats.startTime;
+        frame.stats.pastFrameDt = elapsed.count();
 
         worldRenderer.render(frame, scene, elapsed.count());
 

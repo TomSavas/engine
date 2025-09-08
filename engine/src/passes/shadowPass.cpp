@@ -1,5 +1,6 @@
 #include "passes/shadows.h"
 
+#define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
 #include "rhi/renderpass.h"
 #include "rhi/vulkan/backend.h"
@@ -199,8 +200,7 @@ auto initCsm(VulkanBackend& backend, u32 cascadeCount) -> std::optional<ShadowRe
     };
 }
 
-auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend,
-    RenderGraph& graph, u8 cascadeCount)
+auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend, RenderGraph& graph, u8 cascadeCount)
     ->ShadowPassRenderGraphData
 {
     if (!shadowRenderer)

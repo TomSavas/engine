@@ -3,6 +3,7 @@
 #include "engine.h"
 
 #include "GLFW/glfw3.h"
+#define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
 #include "renderGraph.h"
 #include "rhi/renderpass.h"
@@ -111,7 +112,7 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
         vkCmdBeginRendering(cmd, &renderingInfo);
     };
 
-    pass.pass.draw = [data, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass& pass, Scene& scene)
+    pass.pass.draw = [data, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass& pass, Scene& scene) -> void
     {
         ZoneScopedCpuGpuAuto("Forward opaque pass", backend.currentFrame());
 

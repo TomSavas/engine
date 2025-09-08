@@ -1,18 +1,7 @@
 #version 460
 #extension GL_EXT_buffer_reference : require
 
-struct Vertex 
-{
-	vec4 position;
-	vec4 uv;
-	vec4 normal;
-	vec4 tangent;
-}; 
-
-layout(buffer_reference, std430) readonly buffer VertexBuffer
-{ 
-	Vertex vertices[];
-};
+#include "mesh.glsl"
 
 layout(buffer_reference, std430) readonly buffer ShadowPassData
 { 
@@ -20,17 +9,6 @@ layout(buffer_reference, std430) readonly buffer ShadowPassData
 	mat4 invLightViewProj[4];
 	vec4 cascadeDistances[4];
 	int cascadeCount;
-};
-
-struct ModelData
-{
-	vec4 textures;
-	mat4 model;
-};
-
-layout(buffer_reference, std430) readonly buffer ModelDataBuffer
-{
-	ModelData data[];
 };
 
 layout(push_constant) uniform Constants
