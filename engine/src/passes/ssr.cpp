@@ -84,6 +84,7 @@ auto ssrPass(std::optional<ScreenSpaceRenderer>& ssRenderer, VulkanBackend& back
         static enum Mode
         {
             REFLECTED_UVS = 0,
+            MASKED_REFLECTED_UVS,
             COLOR,
             REFLECTIONS,
             BLEND,
@@ -93,7 +94,8 @@ auto ssrPass(std::optional<ScreenSpaceRenderer>& ssRenderer, VulkanBackend& back
         {
             if (ImGui::TreeNode("Screen Space Reflections"))
             {
-                if (ImGui::RadioButton("Refected UVs", mode == REFLECTED_UVS)) { mode = REFLECTED_UVS; }
+                if (ImGui::RadioButton("Reflected UVs", mode == REFLECTED_UVS)) { mode = REFLECTED_UVS; }
+                if (ImGui::RadioButton("Masked reflected UVs", mode == MASKED_REFLECTED_UVS)) { mode = MASKED_REFLECTED_UVS; }
                 if (ImGui::RadioButton("Color only", mode == COLOR)) { mode = COLOR; }
                 if (ImGui::RadioButton("Reflections only", mode == REFLECTIONS)) { mode = REFLECTIONS; }
                 if (ImGui::RadioButton("Blended", mode == BLEND)) { mode = BLEND; }

@@ -18,17 +18,21 @@ layout(push_constant) uniform Constants
 } constants;
 
 const uint REFLECTION_UVS = 0;
-const uint COLOR = 1;
-const uint REFLECTIONS = 2;
-const uint BLEND = 3;
+const uint MASKED_REFLECTION_UVS = 1;
+const uint COLOR = 2;
+const uint REFLECTIONS = 3;
+const uint BLEND = 4;
 
 void main()
 {
     vec4 reflectedUv = texture(textures[constants.reflectionUvs], uv);
     if (constants.mode == REFLECTION_UVS)
     {
-        //outColor = reflectedUv;
         outColor = vec4(reflectedUv.rg, 0.f, 1.f);
+    }
+    else if (constants.mode == MASKED_REFLECTION_UVS)
+    {
+        outColor = vec4(mix(vec2(0.f), reflectedUv.rg, reflectedUv.b), 0.f, 1.f);
     }
     else if (constants.mode == COLOR)
     {

@@ -38,6 +38,12 @@ float linearizeDepth(float depth, float near, float far)
     return near * far / (far + depth * (near - far));
 }
 
+float distanceSquared(vec2 a, vec2 b)
+{
+    const vec2 distVec = a - b;
+    return dot(distVec, distVec);
+}
+
 // Collisions
 
 struct Hit

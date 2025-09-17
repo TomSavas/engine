@@ -90,7 +90,6 @@ struct WorldRenderer
 
         ImGui::SetNextWindowBgAlpha(0.0f);
         ImGui::DockSpaceOverViewport(0, nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
-        ImGui::ShowDemoWindow();
 
         scene.update(dt, 0.f, backend.window);
 
