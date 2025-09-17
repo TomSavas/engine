@@ -44,7 +44,7 @@ struct PipelineBuilder
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly;
     VkPipelineRasterizationStateCreateInfo rasterizer;
-    VkPipelineColorBlendAttachmentState colorBlendAttachment;
+    std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachments;
     VkPipelineMultisampleStateCreateInfo multisampling;
     VkPipelineDepthStencilStateCreateInfo depthStencil;
     VkPipelineRenderingCreateInfo renderInfo;

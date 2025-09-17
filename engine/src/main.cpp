@@ -20,12 +20,13 @@
 #include "GLFW/glfw3.h"
 
 #define IMGUI_DEFINE_MATH_OPERATORS
+#include <chrono>
+#include <optional>
+
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
-
-#include <chrono>
-#include <optional>
+#include "passes/screenSpace.h"
 
 struct WorldRenderer
 {
@@ -39,6 +40,10 @@ struct WorldRenderer
     std::optional<LightCulling> lightCulling;
 
     std::optional<AtmosphereRenderer> atmosphere;
+
+    // Postpro fx
+    std::optional<ScreenSpaceRenderer> ss;
+
 
     std::optional<TestRenderer> test;
 
@@ -63,12 +68,12 @@ struct WorldRenderer
         // auto [pointLightShadowAtlas] = pointLightShadowPass(pointLightShadows, backend, graph, lightList, lightIndexList, lightGrid);
         // auto [lightList, culledLightData] = clusteredLightCullingPass(lightCulling, backend, graph);
         // auto planarReflections = planarReflectionPass(reflections, backend, graph);
-        opaqueForwardPass(opaque, backend, graph, culledDraws, depthMap, cascadeData, shadowMap, lightData);
-        // skyPass(backend, graph);
+        const auto [colorOutput, normal, reflections] = opaqueForwardPass(opaque, backend, graph, culledDraws, depthMap, cascadeData, shadowMap, lightData);
+        auto _ = ssrPass(ss, backend, graph, colorOutput, normal, reflections);
         // bloomPass(backend, graph);
         // reinhardTonemapPass(backend, graph);
         // smaaPass(backend, graph);
-        atmospherePass(atmosphere, backend, graph, depthMap);
+        atmospherePass(atmosphere, backend, graph, depthMap); //, output);
 
         //testPass(test, backend, graph);
 

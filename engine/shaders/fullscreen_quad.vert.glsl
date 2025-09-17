@@ -4,8 +4,6 @@ layout(push_constant) uniform Constants
 {
     // TODO: convert to specialisation constant
     vec4 fullscreenQuadDepth;
-    vec4 sunDirAndIntensity;
-    vec4 scatteringCoeffs;
 };
 
 layout (location = 0) out vec2 uv;

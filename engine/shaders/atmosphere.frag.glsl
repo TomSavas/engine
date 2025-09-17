@@ -2,9 +2,7 @@
 
 layout(push_constant) uniform Constants
 {
-    // TODO: convert to specialisation constant
-    vec4 fullscreenQuadDepth;
-    vec4 sunDirAndIntensity;
+    layout(offset=16) vec4 sunDirAndIntensity;
     vec4 scatteringCoeffs;
     vec4 earthAtmosphereScale;
 };

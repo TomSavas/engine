@@ -25,10 +25,26 @@ struct ForwardPushConstants
     VkDeviceAddress lightIndexList;
     VkDeviceAddress lightGrid;
     u32 shadowMapIndex;
+    u32 depthMapIndex;
 };
 
 auto initForwardOpaque(VulkanBackend& backend) -> std::optional<ForwardOpaqueRenderer>
 {
+    const auto reflectionImage = backend.allocateImage(vkutil::init::imageCreateInfo(VK_FORMAT_R16G16B16A16_SFLOAT,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        backend.backbufferImage.extent, 1), VMA_MEMORY_USAGE_GPU_ONLY, 0, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT);
+
+    const auto outputNormalImage = backend.allocateImage(vkutil::init::imageCreateInfo(VK_FORMAT_R16G16B16A16_SFLOAT,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        backend.backbufferImage.extent, 1), VMA_MEMORY_USAGE_GPU_ONLY, 0, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT);
+
+    const auto outputImage = backend.allocateImage(vkutil::init::imageCreateInfo(VK_FORMAT_R16G16B16A16_SFLOAT,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        backend.backbufferImage.extent, 1), VMA_MEMORY_USAGE_GPU_ONLY, 0, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT);
+
     return ForwardOpaqueRenderer{
         .pipeline = PipelineBuilder(backend)
             .addDescriptorLayouts({
@@ -48,12 +64,37 @@ auto initForwardOpaque(VulkanBackend& backend) -> std::optional<ForwardOpaqueRen
             .polyMode(VK_POLYGON_MODE_FILL)
             .cullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE)
             .disableMultisampling()
+            .colorAttachmentFormat(outputImage.format)
             .enableAlphaBlending()
-            .colorAttachmentFormat(backend.backbufferImage.format)
+            .colorAttachmentFormat(outputNormalImage.format)
+            .enableAlphaBlending()
+            .colorAttachmentFormat(reflectionImage.format)
+            .enableAlphaBlending()
             .depthFormat(VK_FORMAT_D32_SFLOAT) // TEMP: this should be taken from bindless
             .addViewportScissorDynamicStates()
             .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
             .build(),
+        .color = backend.bindlessResources->addTexture(
+            Texture{
+                .image = outputImage,
+                .view = outputImage.view,
+                .mipCount = 1,
+            }
+        ),
+        .normal = backend.bindlessResources->addTexture(
+            Texture{
+                .image = outputNormalImage,
+                .view = outputNormalImage.view,
+                .mipCount = 1,
+            }
+        ),
+        .reflections = backend.bindlessResources->addTexture(
+            Texture{
+                .image = reflectionImage,
+                .view = reflectionImage.view,
+                .mipCount = 1,
+            }
+        ),
     };
 }
 
@@ -61,7 +102,7 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
     RenderGraph& graph, RenderGraphResource<Buffer> culledDraws, RenderGraphResource<BindlessTexture> depthMap,
     RenderGraphResource<Buffer> shadowData, RenderGraphResource<BindlessTexture> shadowMap,
     LightData lightData)
-    -> void
+    -> ForwardRenderGraphData
 {
     if (!forwardOpaqueRenderer)
     {
@@ -81,6 +122,9 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
         RenderGraphResource<Buffer> lightList;
         RenderGraphResource<Buffer> lightIndexList;
         RenderGraphResource<Buffer> lightGrid;
+        RenderGraphResource<BindlessTexture> color;
+        RenderGraphResource<BindlessTexture> normal;
+        RenderGraphResource<BindlessTexture> reflections;
     } data = {
         .culledDraws = readResource<Buffer>(graph, pass, culledDraws),
         .shadowData = readResource<Buffer>(graph, pass, shadowData),
@@ -88,7 +132,16 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
         .depthMap = readResource<BindlessTexture>(graph, pass, depthMap, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL),
         .lightList = readResource<Buffer>(graph, pass, lightData.lightList),
         .lightIndexList = readResource<Buffer>(graph, pass, lightData.lightIndexList),
-        .lightGrid = readResource<Buffer>(graph, pass, lightData.lightGrid)
+        .lightGrid = readResource<Buffer>(graph, pass, lightData.lightGrid),
+        .color = writeResource<BindlessTexture>(graph, pass,
+            importResource<BindlessTexture>(graph, pass, &forwardOpaqueRenderer->color),
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL),
+        .normal = writeResource<BindlessTexture>(graph, pass,
+            importResource<BindlessTexture>(graph, pass, &forwardOpaqueRenderer->normal),
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL),
+        .reflections = writeResource<BindlessTexture>(graph, pass,
+            importResource<BindlessTexture>(graph, pass, &forwardOpaqueRenderer->reflections),
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
     };
 
     pass.pass.beginRendering = [data, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph)
@@ -100,15 +153,30 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
         VkClearValue colorClear = {
             .color = {.uint32 = {0, 0, 0, 0}}
         };
-        auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(
-            backend.backbufferImage.view, &colorClear, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        const auto& colorImage = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(graph,
+            data.color));
+        auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(colorImage.view, &colorClear,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        const auto& normalImage = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(graph,
+            data.normal));
+        auto normalAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(normalImage.view, &colorClear,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        const auto& reflectionImage = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(graph,
+            data.reflections));
+        auto reflectionAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(reflectionImage.view, &colorClear,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        VkRenderingAttachmentInfo attachments[] = {
+            colorAttachmentInfo,
+            normalAttachmentInfo,
+            reflectionAttachmentInfo,
+        };
         auto depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(
             backend.bindlessResources->getTexture(
                 *getResource<BindlessTexture>(graph, data.depthMap)).view,
-                // TEMPORARY
-                VK_ATTACHMENT_LOAD_OP_CLEAR);
-                //VK_ATTACHMENT_LOAD_OP_LOAD);
-        auto renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, 1, &depthAttachmentInfo);
+                // No clear -- we're using ZPrePass
+                VK_ATTACHMENT_LOAD_OP_LOAD);
+        auto renderingInfo = vkutil::init::renderingInfo(swapchainSize, attachments, std::size(attachments),
+            &depthAttachmentInfo);
         vkCmdBeginRendering(cmd, &renderingInfo);
     };
 
@@ -123,7 +191,8 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
             .lightList = backend.getBufferDeviceAddress(*getResource<Buffer>(graph, data.lightList)),
             .lightIndexList = backend.getBufferDeviceAddress(*getResource<Buffer>(graph, data.lightIndexList)),
             .lightGrid = backend.getBufferDeviceAddress(*getResource<Buffer>(graph, data.lightGrid)),
-            .shadowMapIndex = *getResource<BindlessTexture>(graph, data.shadowMap)
+            .shadowMapIndex = *getResource<BindlessTexture>(graph, data.shadowMap),
+            .depthMapIndex = *getResource<BindlessTexture>(graph, data.depthMap)
         };
         vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(pushConstants),
             &pushConstants);
@@ -132,5 +201,11 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
         vkCmdBindIndexBuffer(cmd, scene.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
         vkCmdDrawIndexedIndirect(cmd, *getResource<Buffer>(graph, data.culledDraws), 0, scene.meshes.size(),
             sizeof(VkDrawIndexedIndirectCommand));
+    };
+
+    return ForwardRenderGraphData {
+        .color = data.color,
+        .normal = data.normal,
+        .reflections = data.reflections
     };
 }

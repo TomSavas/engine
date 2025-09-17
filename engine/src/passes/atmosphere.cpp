@@ -12,7 +12,6 @@
 
 struct AtmospherePushConstants
 {
-    glm::vec4 depth;
     glm::vec4 sunDir;
     glm::vec4 scatteringCoeffs; // Rayleigh xyz, Mie w
     glm::vec4 earthAtmosphereScale;
@@ -42,8 +41,13 @@ auto initAtmosphere(VulkanBackend& backend) -> std::optional<AtmosphereRenderer>
             })
             .addPushConstants({
                 VkPushConstantRange{
-                    .stageFlags = VK_SHADER_STAGE_ALL,
+                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
                     .offset = 0,
+                    .size = sizeof(glm::vec4)
+                },
+                VkPushConstantRange{
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                    .offset = sizeof(glm::vec4),
                     .size = sizeof(AtmospherePushConstants)
                 }
             })
@@ -205,13 +209,15 @@ auto atmospherePass(std::optional<AtmosphereRenderer>& atmosphere, VulkanBackend
         scene.lightDir = glm::normalize(glm::vec3(-sin(time), -cos(time), 0.f));
 
         ZoneScopedCpuGpuAuto("Atmosphere pass", backend.currentFrame());
+        constexpr glm::vec4 depth = glm::vec4(1.f);
         const AtmospherePushConstants pushConstants = {
-            .depth = glm::vec4(1.f),
             .sunDir = glm::vec4(-scene.lightDir.x, -scene.lightDir.y, scene.lightDir.z, sunIntensity),
             .scatteringCoeffs = glm::vec4(rayleighCoeffs, mieCoeff),
             .earthAtmosphereScale = glm::vec4(earthScale, atmosphereScale, heightScale, scatteringScale),
         };
-        vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(pushConstants),
+        vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::vec4),
+            &depth);
+        vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(glm::vec4), sizeof(pushConstants),
             &pushConstants);
 
         vkCmdDraw(cmd, 3, 1, 0, 0);

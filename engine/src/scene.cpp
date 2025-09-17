@@ -490,22 +490,22 @@ void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 tran
             m.albedoTexture = bindlessImages.back();
         }
 
-        //tinygltf::TextureInfo& metallicRoughnessTextureInfo = pbr.metallicRoughnessTexture;
-        //if (metallicRoughnessTextureInfo.index != -1)
-        //{
-        //    // TODO: metallicRoughnessTexture
-        //    tinygltf::Texture& metallicRoughness = model.textures[metallicRoughnessTextureInfo.index];
-        //    // TODO: don't ignore sampler
-        //    // TODO: don't ignore texCoord index
-        //    tinygltf::Image& metallicRoughnessImg = model.images[metallicRoughness.source];
+        tinygltf::TextureInfo& metallicRoughnessTextureInfo = pbr.metallicRoughnessTexture;
+        if (metallicRoughnessTextureInfo.index != -1)
+        {
+            // TODO: metallicRoughnessTexture
+            tinygltf::Texture& metallicRoughness = model.textures[metallicRoughnessTextureInfo.index];
+            // TODO: don't ignore sampler
+            // TODO: don't ignore texCoord index
+            tinygltf::Image& metallicRoughnessImg = model.images[metallicRoughness.source];
 
-        //    // TODO: remove above
-        //    auto maybeTexture = backend.textures->loadRaw(metallicRoughnessImg.image.data(), metallicRoughnessImg.image.size(),
-        //        metallicRoughnessImg.width, metallicRoughnessImg.height, true, true, metallicRoughnessImg.uri);
-        //    bindlessImages.push_back(backend.bindlessResources->addTexture(std::get<0>(*maybeTexture)));
-        //    m.metallicRoughnessTexture = bindlessImages.back();
-        //}
-        m.metallicRoughnessTexture = BindlessResources::kWhite;
+            // TODO: remove above
+            auto maybeTexture = backend.textures->loadRaw(metallicRoughnessImg.image.data(), metallicRoughnessImg.image.size(),
+                metallicRoughnessImg.width, metallicRoughnessImg.height, true, true, metallicRoughnessImg.uri);
+            bindlessImages.push_back(backend.bindlessResources->addTexture(std::get<0>(*maybeTexture)));
+            m.metallicRoughnessTexture = bindlessImages.back();
+        }
+        //m.metallicRoughnessTexture = BindlessResources::kWhite;
 
         tinygltf::NormalTextureInfo& normalTextureInfo = material.normalTexture;
         if (normalTextureInfo.index != -1)

@@ -33,6 +33,11 @@ Plane planeFromPoints(vec3 a, vec3 b, vec3 c)
     return p;
 }
 
+float linearizeDepth(float depth, float near, float far)
+{
+    return near * far / (far + depth * (near - far));
+}
+
 // Collisions
 
 struct Hit
