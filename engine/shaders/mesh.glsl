@@ -15,6 +15,7 @@ struct ModelData
 {
 	vec4 textures; // albedo, normal, roughness
 	vec4 selected; // debug only
+	vec4 metallicRoughnessFactors;
 	mat4 model;
 };
 

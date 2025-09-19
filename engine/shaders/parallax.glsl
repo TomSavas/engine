@@ -34,8 +34,13 @@ vec2 steepParallaxMap(vec2 vertUv, int bumpMapIndex)
 	return uv;
 }
 
-vec2 parallaxOcclussionMap(vec2 vertUv, int bumpMapIndex)
+vec2 parallaxOcclusionMap(vec2 vertUv, int bumpMapIndex)
 {
+    if (bumpMapIndex == WHITE_BINDLESS)
+    {
+        return vertUv;
+    }
+
 	const float heightScale = 0.025f;
 	vec3 viewDir = tangentCameraPos - tangentFragPos;
 
@@ -86,7 +91,7 @@ vec2 parallaxOcclussionMap(vec2 vertUv, int bumpMapIndex)
 	return finalTexCoords;
 }
 
-vec2 parallaxOcclussionMapBinarySearch(vec2 vertUv, int bumpMapIndex)
+vec2 parallaxOcclusionMapBinarySearch(vec2 vertUv, int bumpMapIndex)
 {
 	const float heightScale = 0.025f;
 	vec3 viewDir = normalize(tangentCameraPos - tangentFragPos);

@@ -7,8 +7,10 @@ struct SsrPushConstants
 {
     u32 color;
     u32 normal;
+    u32 positions;
     u32 reflections;
     u32 mode;
+    f32 reflectionIntensity;
 };
 
 auto initScreenSpace(VulkanBackend& backend) -> std::optional<ScreenSpaceRenderer>
@@ -47,7 +49,7 @@ auto initScreenSpace(VulkanBackend& backend) -> std::optional<ScreenSpaceRendere
 
 auto ssrPass(std::optional<ScreenSpaceRenderer>& ssRenderer, VulkanBackend& backend, RenderGraph& graph,
     RenderGraphResource<BindlessTexture> colorOutput, RenderGraphResource<BindlessTexture> normal,
-    RenderGraphResource<BindlessTexture> reflectionUvs)
+    RenderGraphResource<BindlessTexture> positions, RenderGraphResource<BindlessTexture> reflectionUvs)
     -> RenderGraphResource<BindlessTexture>
 {
     if (!ssRenderer)
@@ -60,6 +62,7 @@ auto ssrPass(std::optional<ScreenSpaceRenderer>& ssRenderer, VulkanBackend& back
 
     colorOutput = readResource<BindlessTexture>(graph, pass, colorOutput, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     normal = readResource<BindlessTexture>(graph, pass, normal, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    positions = readResource<BindlessTexture>(graph, pass, positions, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     reflectionUvs = readResource<BindlessTexture>(graph, pass, reflectionUvs, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     pass.pass.beginRendering = [&backend](VkCommandBuffer cmd, CompiledRenderGraph& graph)
@@ -77,7 +80,7 @@ auto ssrPass(std::optional<ScreenSpaceRenderer>& ssRenderer, VulkanBackend& back
         vkCmdBeginRendering(cmd, &renderingInfo);
     };
 
-    pass.pass.draw = [colorOutput, normal, reflectionUvs, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass& pass, Scene& scene)
+    pass.pass.draw = [colorOutput, normal, positions, reflectionUvs, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass& pass, Scene& scene)
     {
         ZoneScopedCpuGpuAuto("SSR pass", backend.currentFrame());
 
@@ -90,10 +93,13 @@ auto ssrPass(std::optional<ScreenSpaceRenderer>& ssRenderer, VulkanBackend& back
             BLEND,
             ERROR
         } mode = BLEND;
+        static float reflectionIntensity = 2.f;
         addDebugUI(debugUI, GRAPHICS_PASSES, [&]()
         {
             if (ImGui::TreeNode("Screen Space Reflections"))
             {
+                ImGui::SliderFloat("Reflection intensity", &reflectionIntensity, 0.f, 50.f, "%.3f");
+
                 if (ImGui::RadioButton("Reflected UVs", mode == REFLECTED_UVS)) { mode = REFLECTED_UVS; }
                 if (ImGui::RadioButton("Masked reflected UVs", mode == MASKED_REFLECTED_UVS)) { mode = MASKED_REFLECTED_UVS; }
                 if (ImGui::RadioButton("Color only", mode == COLOR)) { mode = COLOR; }
@@ -109,8 +115,10 @@ auto ssrPass(std::optional<ScreenSpaceRenderer>& ssRenderer, VulkanBackend& back
         const SsrPushConstants pushConstants = {
             .color = *getResource<BindlessTexture>(graph, colorOutput),
             .normal = *getResource<BindlessTexture>(graph, normal),
+            .positions = *getResource<BindlessTexture>(graph, positions),
             .reflections = *getResource<BindlessTexture>(graph, reflectionUvs),
             .mode = static_cast<u32>(mode),
+            .reflectionIntensity = reflectionIntensity,
         };
         vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::vec4),
             &depth);

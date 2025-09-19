@@ -13,6 +13,7 @@ struct ForwardOpaqueRenderer
 
     BindlessTexture color;
     BindlessTexture normal;
+    BindlessTexture positions;
     BindlessTexture reflections;
 };
 
@@ -20,6 +21,7 @@ struct ForwardRenderGraphData
 {
     RenderGraphResource<BindlessTexture> color;
     RenderGraphResource<BindlessTexture> normal;
+    RenderGraphResource<BindlessTexture> positions;
     RenderGraphResource<BindlessTexture> reflections;
 };
 

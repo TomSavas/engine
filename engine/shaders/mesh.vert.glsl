@@ -16,6 +16,7 @@ layout(buffer_reference, std430) readonly buffer ShadowPassData
 
 layout(push_constant) uniform Constants
 {	
+	vec4 enabledFeatures; // normal mapping, parallax mapping
 	VertexBuffer vertexBuffer;
 	ModelDataBuffer modelData;
 	ShadowPassData shadowData;

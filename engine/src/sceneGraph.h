@@ -24,6 +24,9 @@ struct SceneGraph
 
         Instance* instance;
 
+        // Debug
+        u32 materialIndex = -1;
+
         //bool dirtyTransform;
     };
 

@@ -111,11 +111,22 @@ void updateFreeCamera(f32 dt, GLFWwindow* window, Camera& camera)
 
 void updateLights(f32 dt, std::vector<PointLight>& pointLights)
 {
-    static f64 time = 0.f;
+    static f32 time = 0.f;
     //static glm::vec3 initial = pointLights[0].pos;
     //static f32 dist = glm::length(glm::vec2(initial));
     //time += dt * 0.2f;
-    time += dt;
+    static bool tickTime = true;
+    if (tickTime)
+    {
+        time += dt;
+    }
+
+    if (ImGui::Begin("Scene"))
+    {
+        ImGui::Checkbox("Tick time", &tickTime);
+        ImGui::SliderFloat("Light time", &time, 0.f, 100.f);
+    }
+    ImGui::End();
 
     // Ignoring y component
     glm::vec2 ellipseFocals[] = {
@@ -124,8 +135,22 @@ void updateLights(f32 dt, std::vector<PointLight>& pointLights)
     };
     f32 focalDist = glm::distance(ellipseFocals[0], ellipseFocals[1]);
 
-    for (auto& light : pointLights)
+    static std::vector<glm::vec3>* startPositions = new std::vector<glm::vec3>();
+    bool add = false;
+    if (startPositions->empty())
     {
+        startPositions->reserve(pointLights.size());
+        add = true;
+    }
+
+    for (int i = 0; i < pointLights.size(); i++)
+    {
+        auto& light = pointLights[i];
+        if (add)
+        {
+            startPositions->emplace_back(light.pos);
+        }
+
         // //dists[0] = glm::distance(ellipseFocals[0], glm::vec2(pointLights[0].pos.x, pointLights[0].pos.z));
         // f32 dists[] = {
         //     glm::distance(ellipseFocals[0], glm::vec2(pointLights[0].pos.x, pointLights[0].pos.z)),
@@ -153,11 +178,17 @@ void updateLights(f32 dt, std::vector<PointLight>& pointLights)
         // //std::println("{} {}", light.pos.x, light.pos.z);
 
 
-        f32 dist = glm::length(glm::vec2(light.pos.x, light.pos.z));
-        f32 angle = atan2(light.pos.x, light.pos.z);
+        //f32 dist = glm::length(glm::vec2(light.pos.x, light.pos.z));
+        //f32 angle = atan2(light.pos.x, light.pos.z);
 
-        light.pos.x = sin(angle + dt * 0.2) * dist;
-        light.pos.z = cos(angle + dt * 0.2) * dist;
+
+        f32 dist = glm::length(glm::vec2(startPositions->at(i).x, startPositions->at(i).z));
+        f32 angle = atan2(startPositions->at(i).x, startPositions->at(i).z);
+
+        light.pos.x = sin(angle + time * 0.2) * dist;
+        light.pos.z = cos(angle + time * 0.2) * dist;
+        //light.pos.x = sin(angle + dt * 0.2) * dist;
+        //light.pos.z = cos(angle + dt * 0.2) * dist;
     }
 }
 
@@ -165,6 +196,7 @@ struct ModelData
 {
     glm::vec4 textures;
     glm::vec4 selected;
+    glm::vec4 metallicRoughnessFactors;
     glm::mat4 model;
 };
 
@@ -176,11 +208,17 @@ auto gatherModelData(Scene& scene) -> std::vector<ModelData>
     {
         for (auto& instance : mesh.second.instances)
         {
-            ModelData data;
-            data.textures = glm::vec4(mesh.second.albedoTexture, mesh.second.normalTexture, mesh.second.bumpTexture, mesh.second.metallicRoughnessTexture);
-            data.model = instance.modelTransform;
-            data.selected = glm::vec4(instance.selected ? 1.f : 0.f);
-            modelData.push_back(data);
+            modelData.push_back({
+                .textures = glm::vec4(
+                    mesh.second.albedoTexture,
+                    mesh.second.normalTexture,
+                    mesh.second.bumpTexture,
+                    mesh.second.metallicRoughnessTexture
+                ),
+                .selected = glm::vec4(instance.selected ? 1.f : 0.f),
+                .metallicRoughnessFactors = instance.metallicRoughnessFactors,
+                .model = instance.modelTransform,
+            });
         }
     }
 
@@ -190,32 +228,6 @@ auto gatherModelData(Scene& scene) -> std::vector<ModelData>
 
 void Scene::update(f32 dt, f32 currentTimeMs, GLFWwindow* window)
 {
-    // Selection logic
-    static std::string selectedMesh;
-    static int selectedInstance = 0;
-
-    if (!selectedMesh.empty())
-    {
-        meshes[selectedMesh].instances[selectedInstance].selected = false;
-    }
-
-    if (!debugUI.selectedNode.empty())
-    {
-        auto meshDelim = debugUI.selectedNode.rfind('_');
-        auto instanceDelim = debugUI.selectedNode.rfind(':');
-
-        if (meshDelim != std::string::npos && instanceDelim != std::string::npos)
-        {
-            selectedMesh = debugUI.selectedNode.substr(0, meshDelim);
-            auto selectedInstanceStr = debugUI.selectedNode.substr(instanceDelim + 1, 1);
-            selectedInstance = std::stoi(selectedInstanceStr);
-
-            // std::println("Selected mesh: {}, selected instance: {}", selectedMesh, selectedInstance);
-
-            meshes[selectedMesh].instances[selectedInstance].selected = true;
-        }
-    }
-
     updateSceneGraphTransforms(sceneGraph);
     // TODO: move to a render pass
     {
@@ -351,8 +363,17 @@ void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 tran
     i32 primitiveCount = 0;
     for (tinygltf::Primitive& primitive : mesh.primitives)
     {
+        // Material
+        if (primitive.material == -1)
+        {
+            continue;
+        }
+        tinygltf::Material& material = model.materials[primitive.material];
+        tinygltf::PbrMetallicRoughness& pbr = material.pbrMetallicRoughness;
+
         meshCount++;
         auto debugName = std::format("{}_{}", mesh.name.empty() ? "unnamed" : mesh.name, primitiveCount++);
+        //std::println("{} uses material {}", debugName, primitive.material);
 
         if (auto it = meshes.find(debugName); it != meshes.end())
         {
@@ -360,11 +381,18 @@ void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 tran
                 .modelTransform = transform,
                 .aabbMin = transform * glm::vec4(it->second.aabbMin, 1.f),
                 .aabbMax = transform * glm::vec4(it->second.aabbMax, 1.f),
+                .metallicRoughnessFactors = glm::vec4(
+                    pbr.metallicFactor,
+                    pbr.roughnessFactor,
+                    1.f,
+                    1.f
+                ),
                 .selected = false,
             };
             it->second.instances.push_back(instance);
 
             auto* sceneGraphNode = new SceneGraph::Node(std::format("{}_inst:{}", debugName, it->second.instances.size()-1), glm::mat4(1.f), transform, 0, &parent);
+            sceneGraphNode->materialIndex = primitive.material;
             sceneGraphNode->instance = &it->second.instances.back(); // This will crash 100%
             parent.children.push_back(sceneGraphNode);
 
@@ -436,11 +464,18 @@ void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 tran
             .modelTransform = transform,
             .aabbMin = transform * glm::vec4(m.aabbMin, 1.f),
             .aabbMax = transform * glm::vec4(m.aabbMax, 1.f),
+            .metallicRoughnessFactors = glm::vec4(
+                pbr.metallicFactor,
+                pbr.roughnessFactor,
+                1.f,
+                1.f
+            ),
             .selected = false,
         };
         m.instances.push_back(instance);
 
         auto* sceneGraphNode = new SceneGraph::Node(std::format("{}_inst:0", debugName), glm::mat4(1.f), transform, 0, &parent);
+        sceneGraphNode->materialIndex = primitive.material;
         sceneGraphNode->instance = &m.instances.back(); // This will crash 100%
         parent.children.push_back(sceneGraphNode);
 
@@ -465,15 +500,7 @@ void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 tran
         m.vertexCount = vertexData.size() - m.vertexOffset;
         m.indexCount = indices.size() - m.indexOffset;
 
-        // Material
-        if (primitive.material == -1)
-        {
-            continue;
-        }
-        tinygltf::Material& material = model.materials[primitive.material];
-
         // TODO: Base color factor
-        tinygltf::PbrMetallicRoughness& pbr = material.pbrMetallicRoughness;
         tinygltf::TextureInfo& albedoTextureInfo = pbr.baseColorTexture;
         if (albedoTextureInfo.index != -1)
         {
@@ -549,8 +576,15 @@ void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 tran
                     bumpHeight, true, true, bumpFilename);
             }
 
-            bindlessImages.push_back(backend.bindlessResources->addTexture(std::get<0>(*maybeTexture)));
-            m.bumpTexture = bindlessImages.back();
+            if (maybeTexture)
+            {
+                bindlessImages.push_back(backend.bindlessResources->addTexture(std::get<0>(*maybeTexture)));
+                m.bumpTexture = bindlessImages.back();
+            }
+            else
+            {
+                m.bumpTexture = BindlessResources::kWhite;
+            }
         }
     }
 }

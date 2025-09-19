@@ -68,8 +68,8 @@ struct WorldRenderer
         // auto [pointLightShadowAtlas] = pointLightShadowPass(pointLightShadows, backend, graph, lightList, lightIndexList, lightGrid);
         // auto [lightList, culledLightData] = clusteredLightCullingPass(lightCulling, backend, graph);
         // auto planarReflections = planarReflectionPass(reflections, backend, graph);
-        const auto [colorOutput, normal, reflections] = opaqueForwardPass(opaque, backend, graph, culledDraws, depthMap, cascadeData, shadowMap, lightData);
-        auto _ = ssrPass(ss, backend, graph, colorOutput, normal, reflections);
+        const auto [colorOutput, normal, positions, reflections] = opaqueForwardPass(opaque, backend, graph, culledDraws, depthMap, cascadeData, shadowMap, lightData);
+        auto _ = ssrPass(ss, backend, graph, colorOutput, normal, positions, reflections);
         // bloomPass(backend, graph);
         // reinhardTonemapPass(backend, graph);
         // smaaPass(backend, graph);

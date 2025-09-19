@@ -116,7 +116,7 @@ void drawDebugUI(DebugUI& debugUi, VulkanBackend& backend, Scene& scene, f64 dt)
     ImGui::End();
 
     static bool sceneOpen = true;
-    SceneGraph::Node* selectedNode = nullptr;
+    static SceneGraph::Node* selectedNode = nullptr;
     if (ImGui::Begin(SCENE_CSTR, &sceneOpen))
     {
         std::stack<SceneGraph::Node*> nodes;
@@ -129,6 +129,11 @@ void drawDebugUI(DebugUI& debugUi, VulkanBackend& backend, Scene& scene, f64 dt)
         {
             SceneGraph::Node* node = nodes.top();
             nodes.pop();
+
+            if (node->instance != nullptr)
+            {
+                node->instance->selected = false;
+            }
 
             while (!parents.empty() && parents.top() != node->parent)
             {
@@ -152,6 +157,7 @@ void drawDebugUI(DebugUI& debugUi, VulkanBackend& backend, Scene& scene, f64 dt)
                 if (selectedNode != nullptr && selectedNode->instance != nullptr)
                 {
                     flags = static_cast<ImGuiTreeNodeFlags_>(flags | ImGuiTreeNodeFlags_AllowOverlap);
+                    selectedNode->instance->selected = true;
                 }
             }
 
@@ -261,6 +267,17 @@ void drawDebugUI(DebugUI& debugUi, VulkanBackend& backend, Scene& scene, f64 dt)
                 ImGui::DragFloat3("Min aabb", glm::value_ptr(selectedNode->instance->aabbMin), 0.1f, -10.f, 10.f, "%.5f");
                 ImGui::DragFloat3("Max aabb", glm::value_ptr(selectedNode->instance->aabbMax), 0.1f, -10.f, 10.f, "%.5f");
                 ImGui::EndDisabled();
+
+                ImGui::Separator();
+
+                ImGui::SliderFloat("Metallicness factor", &selectedNode->instance->metallicRoughnessFactors.x, 0.f, 50.f);
+                ImGui::SliderFloat("Roughness factor", &selectedNode->instance->metallicRoughnessFactors.y, 0.f, 50.f);
+
+                ImGui::Separator();
+                ImGui::Text("Debug GLTF data");
+
+                ImGui::Text("Material: %d", selectedNode->materialIndex);
+
             }
         }
 

@@ -101,7 +101,7 @@ auto atmospherePass(std::optional<AtmosphereRenderer>& atmosphere, VulkanBackend
 
     pass.pass.draw = [&backend](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass& pass, Scene& scene)
     {
-        static f32 time = 0.f;
+        static f32 time = 0.35f;
         static bool moveSun = false;
         static f32 speed = 0.0008f;
         static f32 sign = 1.f;
