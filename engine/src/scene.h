@@ -26,7 +26,7 @@ struct PointLight
     // TODO: pack
     glm::vec4 pos;
     glm::vec4 color;
-    glm::vec4 range;
+    glm::vec4 rangeAndStrength;
 };
 
 struct Scene

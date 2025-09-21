@@ -121,10 +121,17 @@ void updateLights(f32 dt, std::vector<PointLight>& pointLights)
         time += dt;
     }
 
+    static float rangeMultiplier = 1.f;
+    static float strengthMultiplier = 1.f;
     if (ImGui::Begin("Scene"))
     {
         ImGui::Checkbox("Tick time", &tickTime);
         ImGui::SliderFloat("Light time", &time, 0.f, 100.f);
+
+        ImGui::SliderFloat("Range multiplier", &rangeMultiplier, 0.f, 50.f);
+        ImGui::SliderFloat("Strength multiplier", &strengthMultiplier, 0.f, 50.f);
+
+        ImGui::Separator();
     }
     ImGui::End();
 
@@ -135,20 +142,23 @@ void updateLights(f32 dt, std::vector<PointLight>& pointLights)
     };
     f32 focalDist = glm::distance(ellipseFocals[0], ellipseFocals[1]);
 
-    static std::vector<glm::vec3>* startPositions = new std::vector<glm::vec3>();
-    bool add = false;
-    if (startPositions->empty())
+    static std::vector<glm::vec3> startPositions;
+    static std::vector<glm::vec4> startRangesAndStrengths;
+    bool startingValuesRecorded = false;
+    if (startPositions.empty())
     {
-        startPositions->reserve(pointLights.size());
-        add = true;
+        startPositions.reserve(pointLights.size());
+        startRangesAndStrengths.reserve(pointLights.size());
+        startingValuesRecorded = true;
     }
 
     for (int i = 0; i < pointLights.size(); i++)
     {
         auto& light = pointLights[i];
-        if (add)
+        if (startingValuesRecorded)
         {
-            startPositions->emplace_back(light.pos);
+            startPositions.push_back(light.pos);
+            startRangesAndStrengths.push_back(light.rangeAndStrength);
         }
 
         // //dists[0] = glm::distance(ellipseFocals[0], glm::vec2(pointLights[0].pos.x, pointLights[0].pos.z));
@@ -182,13 +192,20 @@ void updateLights(f32 dt, std::vector<PointLight>& pointLights)
         //f32 angle = atan2(light.pos.x, light.pos.z);
 
 
-        f32 dist = glm::length(glm::vec2(startPositions->at(i).x, startPositions->at(i).z));
-        f32 angle = atan2(startPositions->at(i).x, startPositions->at(i).z);
+        f32 dist = glm::length(glm::vec2(startPositions[i].x, startPositions[i].z));
+        f32 angle = atan2(startPositions[i].x, startPositions[i].z);
 
         light.pos.x = sin(angle + time * 0.2) * dist;
         light.pos.z = cos(angle + time * 0.2) * dist;
         //light.pos.x = sin(angle + dt * 0.2) * dist;
         //light.pos.z = cos(angle + dt * 0.2) * dist;
+
+        light.rangeAndStrength = glm::vec4(
+            startRangesAndStrengths[i].x * rangeMultiplier,
+            startRangesAndStrengths[i].y * strengthMultiplier,
+            0.f,
+            0.f
+        );
     }
 }
 
@@ -697,7 +714,7 @@ result::result<Scene, assetError> loadScene(VulkanBackend& backend, std::string 
         //.pos = glm::vec4(520.f, 40.f, 0.f, 1.f),
         .color = glm::vec4(1.f, 0.95f, 0.8f, 1.f) * 10.f,
         //.range = glm::vec4(150.f),
-        .range = glm::vec4(1.0f),
+        .rangeAndStrength = glm::vec4(1.0f),
     });
 
     glm::vec3 exclusionAabb[2] = {
@@ -738,7 +755,7 @@ result::result<Scene, assetError> loadScene(VulkanBackend& backend, std::string 
                 uniformDistribution(gen) * 0.6 + 0.4,
                 1.f
             ) * 10.f,
-            .range = glm::vec4(uniformDistribution(gen) * 40 + 20) * 0.025f, // [20; 200]
+            .rangeAndStrength = glm::vec4((uniformDistribution(gen) * 40 + 20) * 0.025f, 1.f, 0.f, 0.f) // [20; 200]
         });
     }
 

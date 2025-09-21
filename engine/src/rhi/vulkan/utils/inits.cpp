@@ -585,6 +585,13 @@ VkRenderingAttachmentInfo renderingDepthAttachmentInfo(VkImageView view, VkAttac
     return info;
 }
 
+VkRenderingInfo renderingInfo(VkExtent3D extent, VkRenderingAttachmentInfo* colorAttachments, i32 colorAttachmentCount,
+    VkRenderingAttachmentInfo* depthAttachments)
+{
+    return renderingInfo(VkExtent2D{extent.width, extent.height}, colorAttachments, colorAttachmentCount,
+        depthAttachments);
+}
+
 VkRenderingInfo renderingInfo(VkExtent2D extent, VkRenderingAttachmentInfo* colorAttachments, i32 colorAttachmentCount,
     VkRenderingAttachmentInfo* depthAttachments)
 {

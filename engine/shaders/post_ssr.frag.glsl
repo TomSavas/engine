@@ -14,11 +14,13 @@ layout(push_constant) uniform Constants
     uint normal;
     uint positions;
     uint reflectionUvs;
+    uint blurredReflectionUvs;
 
     // DEBUG
     uint mode;
 
     float reflectionIntensity;
+    float blurIntensity;
 } constants;
 
 const uint REFLECTION_UVS = 0;
@@ -29,7 +31,9 @@ const uint BLEND = 4;
 
 void main()
 {
-    vec4 reflectedUv = texture(textures[constants.reflectionUvs], uv);
+    //vec4 reflectedUv = texture(textures[constants.reflectionUvs], uv);
+    vec4 reflectedUv = mix(texture(textures[constants.reflectionUvs], uv),
+        texture(textures[constants.blurredReflectionUvs], uv), constants.blurIntensity);
 
     vec3 pos = texture(textures[constants.positions], uv).xyz;
     vec3 pointNormal = texture(textures[constants.normal], uv).xyz;

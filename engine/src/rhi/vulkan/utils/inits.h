@@ -83,6 +83,8 @@ VkRenderingAttachmentInfo renderingColorAttachmentInfo(
     VkImageView view, VkClearValue* clear, VkImageLayout layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 VkRenderingAttachmentInfo renderingDepthAttachmentInfo(
     VkImageView view, VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR, VkImageLayout layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+VkRenderingInfo renderingInfo(VkExtent3D extent, VkRenderingAttachmentInfo* colorAttachments, i32 colorAttachmentCount,
+    VkRenderingAttachmentInfo* depthAttachments);
 VkRenderingInfo renderingInfo(VkExtent2D extent, VkRenderingAttachmentInfo* colorAttachments, i32 colorAttachmentCount,
     VkRenderingAttachmentInfo* depthAttachments);
 }  // namespace vkutil::init

@@ -6,6 +6,9 @@
 #include "passes/shadows.h"
 #include "passes/testPass.h"
 #include "passes/zPrePass.h"
+#include "passes/blur.h"
+#include "passes/bloom.h"
+#include "passes/screenSpace.h"
 #include "renderGraph.h"
 #include "rhi/vulkan/backend.h"
 #include "scene.h"
@@ -26,7 +29,6 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
-#include "passes/screenSpace.h"
 
 struct WorldRenderer
 {
@@ -43,6 +45,8 @@ struct WorldRenderer
 
     // Postpro fx
     std::optional<ScreenSpaceRenderer> ss;
+    std::optional<BlurRenderer> blur;
+    std::optional<BloomRenderer> bloom;
 
 
     std::optional<TestRenderer> test;
@@ -65,15 +69,15 @@ struct WorldRenderer
         const auto [shadowMap, cascadeData] = csmPass(shadows, backend, graph, 4);
         auto lightData = tiledLightCullingPass(lightCulling, backend, graph, scene, depthMap,
             1.f / 20.f);
-        // auto [pointLightShadowAtlas] = pointLightShadowPass(pointLightShadows, backend, graph, lightList, lightIndexList, lightGrid);
         // auto [lightList, culledLightData] = clusteredLightCullingPass(lightCulling, backend, graph);
-        // auto planarReflections = planarReflectionPass(reflections, backend, graph);
-        const auto [colorOutput, normal, positions, reflections] = opaqueForwardPass(opaque, backend, graph, culledDraws, depthMap, cascadeData, shadowMap, lightData);
-        auto _ = ssrPass(ss, backend, graph, colorOutput, normal, positions, reflections);
-        // bloomPass(backend, graph);
-        // reinhardTonemapPass(backend, graph);
-        // smaaPass(backend, graph);
-        atmospherePass(atmosphere, backend, graph, depthMap); //, output);
+        // auto [pointLightShadowAtlas] = pointLightShadowPass(pointLightShadows, backend, graph, lightList, lightIndexList, lightGrid);
+        auto [colorOutput, normal, positions, reflections] = opaqueForwardPass(opaque, backend, graph, culledDraws, depthMap, cascadeData, shadowMap, lightData);
+        auto output = ssrPass(ss, blur, backend, graph, colorOutput, normal, positions, reflections);
+        output = atmospherePass(atmosphere, backend, graph, depthMap, output);
+
+        auto _ = bloomPass(bloom, blur, backend, graph, output);
+        //output = reinhardTonemapPass(tonemapper, backend, graph, output);
+        //smaaPass(antiAliaser, backend, graph, output);
 
         //testPass(test, backend, graph);
 

@@ -67,8 +67,8 @@ auto initAtmosphere(VulkanBackend& backend) -> std::optional<AtmosphereRenderer>
 }
 
 auto atmospherePass(std::optional<AtmosphereRenderer>& atmosphere, VulkanBackend& backend, RenderGraph& graph,
-    RenderGraphResource<BindlessTexture> depthMap)
-    -> void
+    RenderGraphResource<BindlessTexture> depthMap, RenderGraphResource<BindlessTexture> input)
+    -> RenderGraphResource<BindlessTexture>
 {
     if (!atmosphere)
     {
@@ -79,15 +79,19 @@ auto atmospherePass(std::optional<AtmosphereRenderer>& atmosphere, VulkanBackend
     pass.pass.debugName = "Atmosphere pass";
     pass.pass.pipeline = atmosphere->pipeline;
 
-    depthMap = readResource<BindlessTexture>(graph, pass, depthMap, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL),
+    depthMap = readResource<BindlessTexture>(graph, pass, depthMap, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+    const auto output = writeResource<BindlessTexture>(graph, pass,
+        readResource<BindlessTexture>(graph, pass, input, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL),
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-    pass.pass.beginRendering = [depthMap, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph)
+    pass.pass.beginRendering = [output, depthMap, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph)
     {
         VkExtent2D swapchainSize = {
             static_cast<u32>(backend.viewport.width),
             static_cast<u32>(backend.viewport.height)
         };
-        auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backend.backbufferImage.view, nullptr,
+        const auto& outputTexture = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(graph, output));
+        auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(outputTexture.view, nullptr,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         auto depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(
             backend.bindlessResources->getTexture(
@@ -222,4 +226,6 @@ auto atmospherePass(std::optional<AtmosphereRenderer>& atmosphere, VulkanBackend
 
         vkCmdDraw(cmd, 3, 1, 0, 0);
     };
+
+    return output;
 }

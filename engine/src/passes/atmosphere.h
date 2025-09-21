@@ -10,6 +10,6 @@ struct AtmosphereRenderer
     Pipeline pipeline;
 };
 
-auto atmospherePass(std::optional<AtmosphereRenderer>& renderer, VulkanBackend& backend, RenderGraph& graph,
-    RenderGraphResource<BindlessTexture> depthMap)
-    -> void;
+auto atmospherePass(std::optional<AtmosphereRenderer>& atmosphere, VulkanBackend& backend, RenderGraph& graph,
+    RenderGraphResource<BindlessTexture> depthMap, RenderGraphResource<BindlessTexture> input)
+    -> RenderGraphResource<BindlessTexture>;

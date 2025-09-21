@@ -131,13 +131,12 @@ void main()
         float radius = light.range.x;
 
         float normalizedDist = (radius - dist) / radius;
-        float strength = pow(max(normalizedDist, 0.f), 2.f);
+        float attenuation = pow(max(normalizedDist, 0.f), 2.f);
+        float strength = light.range.y;
 
         vec3 L = normLightDir;
         vec3 H = normalize(cameraDir + L);
-        //float attenuation = 1.0 / (dist);
-        float attenuation = strength;
-        vec3 radiance     = light.color.rgb * attenuation;
+        vec3 radiance     = light.color.rgb * attenuation * strength;
 
         // cook-torrance brdf
         float NDF = trowbridgeReitzGgx(n, H, metallicRoughness.y);
