@@ -570,7 +570,7 @@ void VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
             sceneUniforms.cameraPos = glm::vec4(scene.activeCamera->position, 1.f);
             sceneUniforms.view = scene.activeCamera->view();
             sceneUniforms.projection = scene.activeCamera->proj();
-            sceneUniforms.lightDir = glm::vec4(scene.lightDir, 0.f);
+            sceneUniforms.lightDir = glm::vec4(scene.lightDir, 5.f);
             static f64 time = 0.f;
             time += frame.stats.pastFrameDt;
             sceneUniforms.time = glm::vec4(time);

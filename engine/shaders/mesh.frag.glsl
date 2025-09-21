@@ -159,9 +159,9 @@ void main()
 
     // Global directional light
     {
-        vec3 L = vec3(-scene.lightDir.x, -scene.lightDir.y, scene.lightDir.z);
+        vec3 L = vec3(-scene.lightDirIntensity.x, -scene.lightDirIntensity.y, scene.lightDirIntensity.z);
         vec3 H = normalize(cameraDir + L);
-        vec3 radiance     = vec3(1.f - shadow);
+        vec3 radiance     = vec3(1.f - shadow) * scene.lightDirIntensity.w;
 
         // cook-torrance brdf
         float NDF = trowbridgeReitzGgx(n, H, metallicRoughness.y);
