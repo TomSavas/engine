@@ -6,7 +6,7 @@
 #include "rhi/vulkan/shader.h"
 #include "rhi/vulkan/utils/inits.h"
 
-auto initTestRenderer(VulkanBackend& backend) -> std::optional<TestRenderer>
+auto initTestRenderer(VulkanBackend& backend) -> TestRenderer
 {
     return TestRenderer{
         .pipeline = PipelineBuilder(backend)

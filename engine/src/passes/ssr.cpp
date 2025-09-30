@@ -1,7 +1,13 @@
-#include "debugUI.h"
 #include "passes/screenSpace.h"
+
+#include "debugUI.h"
 #include "rhi/vulkan/backend.h"
 #include "rhi/vulkan/utils/inits.h"
+#include "rhi/vulkan/vulkan.h"
+
+#include <glm/vec4.hpp>
+
+#include <math.h>
 
 struct SsrPushConstants
 {
@@ -15,7 +21,7 @@ struct SsrPushConstants
     f32 blurIntensity;
 };
 
-auto initScreenSpace(VulkanBackend& backend) -> std::optional<ScreenSpaceRenderer>
+auto initScreenSpace(VulkanBackend& backend) -> ScreenSpaceRenderer
 {
     const auto outputImage = backend.allocateImage(vkutil::init::imageCreateInfo(VK_FORMAT_R16G16B16A16_SFLOAT,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,

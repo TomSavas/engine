@@ -3,7 +3,7 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
 
-#include <print>
+#include <stdint.h>
 
 #if defined(DEBUG)
     #if defined(__linux__)

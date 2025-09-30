@@ -11,7 +11,6 @@ layout (buffer_reference, std430) buffer LightTileData
 
 layout (buffer_reference, std430) buffer LightIds
 {
-    //uint lightIdCount;
     uint ids[];
 };
 

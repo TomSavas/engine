@@ -3,6 +3,7 @@
 #include "rhi/vulkan/backend.h"
 #include "rhi/vulkan/pipelineBuilder.h"
 #include "rhi/vulkan/utils/inits.h"
+#include "rhi/vulkan/vulkan.h"
 #include "scene.h"
 
 struct ZPrePassPushConstants
@@ -11,7 +12,7 @@ struct ZPrePassPushConstants
     VkDeviceAddress perModelDataBufferAddr;
 };
 
-auto initZPrePass(VulkanBackend& backend) -> std::optional<ZPrePassRenderer>
+auto initZPrePass(VulkanBackend& backend) -> ZPrePassRenderer
 {
     const auto depthImage = backend.allocateImage(vkutil::init::imageCreateInfo(VK_FORMAT_D32_SFLOAT,
         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,

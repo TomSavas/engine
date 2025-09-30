@@ -4,6 +4,7 @@
 #include "rhi/vulkan/pipelineBuilder.h"
 #include "rhi/vulkan/shader.h"
 #include "rhi/vulkan/utils/inits.h"
+#include "rhi/vulkan/vulkan.h"
 #include "scene.h"
 
 struct LightCullingPushConstants
@@ -15,7 +16,7 @@ struct LightCullingPushConstants
     VkDeviceAddress lightCount;
 };
 
-auto initLightCulling(VulkanBackend& backend, Scene& scene, const u16 tileCount[2]) -> std::optional<LightCulling>
+auto initLightCulling(VulkanBackend& backend, Scene& scene, const u16 tileCount[2]) -> LightCulling
 {
     const u16 lightGridSize = tileCount[0] * tileCount[1];
 

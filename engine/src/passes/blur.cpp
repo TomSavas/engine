@@ -1,9 +1,12 @@
 #include "passes/blur.h"
 
-#include "glm/vec2.hpp"
-#include "glm/vec4.hpp"
 #include "rhi/vulkan/backend.h"
 #include "rhi/vulkan/utils/inits.h"
+#include "rhi/vulkan/vulkan.h"
+
+#include <glm/vec4.hpp>
+
+#include <math.h>
 
 struct DualKawasePushConstants
 {
@@ -14,8 +17,7 @@ struct DualKawasePushConstants
     u32 inputTexture;
 };
 
-auto initDualKawase(std::optional<BlurRenderer>& blur, VulkanBackend& backend, RenderGraph& graph)
-    -> std::optional<BlurRenderer>
+auto initDualKawase(VulkanBackend& backend, RenderGraph& graph) -> BlurRenderer
 {
     // TODO: this should be retrieved from render graph
     const auto outputImage = backend.allocateImage(vkutil::init::imageCreateInfo(VK_FORMAT_R16G16B16A16_SFLOAT,
@@ -128,8 +130,9 @@ auto kawasePass(Pipeline& kawasePipeline, VulkanBackend& backend, RenderGraph& g
     pass.pass.pipeline = kawasePipeline;
 
     input = readResource<BindlessTexture>(graph, pass, input, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    BindlessTexture* ffs = new BindlessTexture(output);
-    auto outputResource = writeResource<BindlessTexture>(graph, pass, importResource(graph, pass, ffs),
+    BindlessTexture* hackToNotLooseResource = new BindlessTexture(output);
+    auto outputResource = writeResource<BindlessTexture>(graph, pass, importResource(graph, pass,
+        hackToNotLooseResource),
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
     pass.pass.beginRendering = [outputResource, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph)
@@ -186,28 +189,23 @@ auto kawasePass(Pipeline& kawasePipeline, VulkanBackend& backend, RenderGraph& g
 
 [[nodiscard]]
 auto dualKawaseBlur(std::optional<BlurRenderer>& blur, VulkanBackend& backend, RenderGraph& graph,
-    RenderGraphResource<BindlessTexture> input, u8 downsampleCount, f32 positionOffsetMultiplier, f32 colorMultiplier,
-    bool useAdditiveBlending)
+    RenderGraphResource<BindlessTexture> input, u8 downsampleCount, f32 positionOffsetMultiplier, f32 colorMultiplier)
     -> RenderGraphResource<BindlessTexture>
 {
     if (!blur)
     {
-        blur = initDualKawase(blur, backend, graph);
+        blur = initDualKawase(backend, graph);
     }
 
-    std::println("Doing {} downsample iterations.", downsampleCount);
     for (i8 i = 0; i < downsampleCount; i++)
     {
-        std::println("\titeration {}", i);
         const auto outputTexture = blur->intermediateTextures[i];
         input = kawasePass(blur->dualKawaseDownPipeline, backend, graph, positionOffsetMultiplier, colorMultiplier,
             input, outputTexture);
     }
 
-    std::println("Doing {} upsample iterations.", downsampleCount);
     for (i8 i = downsampleCount - 2; i > 0; i--)
     {
-        std::println("\titeration {}", i);
         const auto outputTexture = blur->intermediateTextures[i];
         input = kawasePass(blur->dualKawaseUpPipeline, backend, graph, positionOffsetMultiplier, colorMultiplier,
             input, outputTexture);

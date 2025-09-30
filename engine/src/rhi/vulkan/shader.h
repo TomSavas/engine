@@ -24,18 +24,18 @@ struct ShaderPath
 
     // File timestamps? -> mv ShaderFileInfo
 
-    ShaderPath(std::string filename, std::string spirvPath, std::string sourcePath)
+    explicit ShaderPath(std::string filename, std::string spirvPath, std::string sourcePath)
         : filename(filename), spirvPath(spirvPath), sourcePath(sourcePath)
     {
     }
 
     bool operator==(const ShaderPath& other) const { return spirvPath.compare(other.spirvPath) == 0; }
 
-    size_t hash() const { return std::hash<std::string>{}(spirvPath); }
+    auto hash() const -> size_t { return std::hash<std::string>{}(spirvPath); }
 
     struct Hash
     {
-        size_t operator()(const ShaderPath& shaderPath) const { return shaderPath.hash(); }
+        auto operator()(const ShaderPath& shaderPath) const -> size_t { return shaderPath.hash(); }
     };
 };
 #define SHADER_PATH(filename) ShaderPath(SHADER_FILENAME_AND_SPIRV_AND_SRC_PATH(filename))
@@ -48,13 +48,13 @@ struct ShaderModule
 
     VkShaderModule module;
 
-    ShaderModule(ShaderPath path) : path(path) {}
+    explicit ShaderModule(ShaderPath path) : path(path) {}
 };
 
 struct ShaderModuleCache
 {
-    // TODO: watcher to reload shaders?
+    // TODO: watcher to reload shaders
     std::unordered_map<ShaderPath, ShaderModule, ShaderPath::Hash> cache;
 
-    std::optional<ShaderModule*> loadModule(VkDevice device, ShaderPath path);
+    auto loadModule(VkDevice device, ShaderPath path) -> std::optional<ShaderModule*>;
 };

@@ -31,9 +31,8 @@ struct Textures
     explicit Textures(VulkanBackend& backend) : backend(&backend) {}
 
     // TODO: more ergonomic mip options
-    // std::optional<Texture> load(std::string path, bool generateMips = true, bool cache = false);
-    std::optional<std::tuple<Texture, std::string>> loadRaw(
-        void* data, u32 size, u32 width, u32 height, bool generateMips, bool cache = false, std::string name = "");
-    void unload(std::string name);
-    void unloadRaw(Texture texture);
+    auto loadRaw(void* data, u32 size, u32 width, u32 height, bool generateMips, bool cache = false,
+        std::string name = "") -> std::optional<std::tuple<Texture, std::string>>;
+    auto unload(std::string name) -> void;
+    auto unloadRaw(Texture texture) -> void;
 };

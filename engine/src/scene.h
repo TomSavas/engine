@@ -1,18 +1,17 @@
 #pragma once
 
-#include "camera.h"
-#include "mesh.h"
-#include "result.hpp"
-#include "rhi/vulkan/utils/bindless.h"
-#include "rhi/vulkan/utils/buffer.h"
-#include "sceneGraph.h"
-
-#include "tiny_gltf.h"
-
 #include <glm/glm.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <string>
 #include <vector>
+
+#include "camera.h"
+#include "mesh.h"
+#include "result.hpp"
+#include "rhi/vulkan/bindless.h"
+#include "rhi/vulkan/utils/buffer.h"
+#include "sceneGraph.h"
+#include "tiny_gltf.h"
 
 class GLFWwindow;
 class VulkanBackend;

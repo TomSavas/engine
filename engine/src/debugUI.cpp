@@ -9,6 +9,8 @@
 #include "rhi/vulkan/backend.h"
 #include "scene.h"
 
+#include <print>
+
 DebugUI debugUI;
 
 auto addDebugUI(DebugUI& debugUi, std::string parentId, std::function<void()> fn) -> void

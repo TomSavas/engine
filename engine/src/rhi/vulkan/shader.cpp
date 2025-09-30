@@ -3,7 +3,7 @@
 #include <fstream>
 #include <print>
 
-std::vector<u32> readFile(std::string path)
+auto readFile(std::string path) -> std::vector<u32>
 {
     std::vector<u32> buffer;
 
@@ -21,7 +21,7 @@ std::vector<u32> readFile(std::string path)
     return buffer;
 }
 
-std::optional<ShaderModule*> ShaderModuleCache::loadModule(VkDevice device, ShaderPath path)
+auto ShaderModuleCache::loadModule(VkDevice device, ShaderPath path) -> std::optional<ShaderModule*>
 {
     auto moduleFromCache = cache.find(path);
     if (moduleFromCache != cache.end())

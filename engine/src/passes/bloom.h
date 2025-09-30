@@ -1,8 +1,8 @@
 #pragma once
 
-#include "renderGraph.h"
-#include "rhi/vulkan/utils/bindless.h"
 #include "passes/blur.h"
+#include "renderGraph.h"
+#include "rhi/vulkan/bindless.h"
 
 struct BloomRenderer
 {

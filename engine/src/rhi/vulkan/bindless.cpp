@@ -1,10 +1,10 @@
-#include "rhi/vulkan/utils/bindless.h"
+#include "rhi/vulkan/bindless.h"
 
+#include "renderGraph.h"
 #include "rhi/vulkan/backend.h"
 #include "rhi/vulkan/descriptors.h"
 #include "rhi/vulkan/utils/inits.h"
 #include "rhi/vulkan/utils/texture.h"
-#include "renderGraph.h"
 
 BindlessResources::BindlessResources(VulkanBackend& backend) : backend(&backend)
 {
@@ -44,7 +44,7 @@ BindlessResources::BindlessResources(VulkanBackend& backend) : backend(&backend)
     addTexture(errorTexture(backend, 64));
 }
 
-BindlessTexture BindlessResources::addTexture(Texture texture)
+auto BindlessResources::addTexture(Texture texture) -> BindlessTexture
 {
     // TODO: Updating the bindless texture data should be moved
     VkSampler sampler;
@@ -76,17 +76,19 @@ BindlessTexture BindlessResources::addTexture(Texture texture)
     return index;
 }
 
-const Texture& BindlessResources::getTexture(BindlessTexture handle, BindlessTexture defaultTexture)
+auto BindlessResources::getTexture(BindlessTexture handle, BindlessTexture defaultTexture) -> const Texture&
 {
     if (handle < textures.size() && !freeIndices.contains(handle)) return textures[handle];
 
     return textures[defaultTexture];
 }
 
-void BindlessResources::removeTexture(BindlessTexture handle) { assert(false); }
+auto BindlessResources::removeTexture(BindlessTexture handle) -> void { assert(false); }
 
 template <>
-void addTransition<BindlessTexture>(VulkanBackend& backend, CompiledRenderGraph::Node& node, BindlessTexture* resource, Layout oldLayout, Layout newLayout)
+auto addTransition<BindlessTexture>(VulkanBackend& backend, CompiledRenderGraph::Node& node, BindlessTexture* resource,
+    Layout oldLayout, Layout newLayout)
+    -> void
 {
     if (oldLayout == newLayout)
     {

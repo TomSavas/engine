@@ -4,7 +4,6 @@
 #include "passes/forward.h"
 #include "passes/lightCulling.h"
 #include "passes/shadows.h"
-#include "passes/testPass.h"
 #include "passes/zPrePass.h"
 #include "passes/blur.h"
 #include "passes/bloom.h"
@@ -13,7 +12,6 @@
 #include "rhi/vulkan/backend.h"
 #include "scene.h"
 #include "debugUI.h"
-#include "sceneGraph.h"
 
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
@@ -33,6 +31,7 @@
 struct WorldRenderer
 {
     VulkanBackend& backend;
+
     std::optional<CompiledRenderGraph> compiledRenderGraph;
 
     std::optional<GeometryCulling> culling;
@@ -41,15 +40,12 @@ struct WorldRenderer
     std::optional<ForwardOpaqueRenderer> opaque;
     std::optional<LightCulling> lightCulling;
 
+    // Postpro fx
     std::optional<AtmosphereRenderer> atmosphere;
 
-    // Postpro fx
     std::optional<ScreenSpaceRenderer> ss;
     std::optional<BlurRenderer> blur;
     std::optional<BloomRenderer> bloom;
-
-
-    std::optional<TestRenderer> test;
 
     explicit WorldRenderer(VulkanBackend& backend) : backend(backend) {}
 
@@ -78,8 +74,6 @@ struct WorldRenderer
         auto _ = bloomPass(bloom, blur, backend, graph, output);
         //output = reinhardTonemapPass(tonemapper, backend, graph, output);
         //smaaPass(antiAliaser, backend, graph, output);
-
-        //testPass(test, backend, graph);
 
         compiledRenderGraph = compile(backend, std::move(graph));
     }
@@ -115,10 +109,7 @@ i32 main()
 {
     VulkanBackend* backend = initVulkanBackend().expect("Failed initialising Vulkan backend");
 
-    //Scene scene = loadScene(*backend, "Sponza", "../assets/Suzanne/Suzanne.gltf", 1)
-    Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf", 1024 - 1)
-    //Scene scene = loadScene(*backend, "Sponza", "../assets/VC/VC.gltf", 1024 - 1)
-    //Scene scene = loadScene(*backend, "Sponza", "../assets/intelsponza/sponza.gltf", 1)
+    Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf", 4096 - 1)
         .value_or(emptyScene(*backend));
 
     WorldRenderer worldRenderer(*backend);

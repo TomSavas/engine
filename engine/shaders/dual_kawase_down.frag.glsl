@@ -18,7 +18,7 @@ layout (push_constant) uniform Constants
 
 void main()
 {
-	/* Dual Kawase downsample: sample center + 4 diagonal corners */
+	// Dual Kawase downsample: sample center + 4 diagonal corners
     const vec2 resolutionReciprocal = params.xy;
     const float positionOffsetMultiplier = params.z;
     const float colorMultiplier = params.w;
@@ -26,15 +26,15 @@ void main()
 	vec2 halfpixel = resolutionReciprocal * 0.5;
 	vec2 o = halfpixel * positionOffsetMultiplier;
 
-	/* Sample center with 4x weight */
+	// Sample center with 4x weight
 	vec4 color = texture(textures[inputTexture], uv) * 4.0;
 
-	/* Sample 4 diagonal corners with 1x weight each */
-	color += texture(textures[inputTexture], uv + vec2(-o.x, -o.y)); /* bottom-left */
-	color += texture(textures[inputTexture], uv + vec2( o.x, -o.y)); /* bottom-right   */
-	color += texture(textures[inputTexture], uv + vec2(-o.x,  o.y)); /* top-left */
-	color += texture(textures[inputTexture], uv + vec2( o.x,  o.y)); /* top-right */
+	// Sample 4 diagonal corners with 1x weight each
+	color += texture(textures[inputTexture], uv + vec2(-o.x, -o.y)); // bottom-left
+	color += texture(textures[inputTexture], uv + vec2( o.x, -o.y)); // bottom-right
+	color += texture(textures[inputTexture], uv + vec2(-o.x,  o.y)); // top-left
+	color += texture(textures[inputTexture], uv + vec2( o.x,  o.y)); // top-right
 
-	/* Apply bloom strength and normalize by total weight (8) */
+	// Apply bloom strength and normalize by total weight (8)
 	outColor = (color / 8.0) * colorMultiplier;
 }

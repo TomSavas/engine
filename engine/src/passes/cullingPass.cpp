@@ -32,7 +32,7 @@ auto insideCameraFrustum(const glm::vec3 aabbMin, const glm::vec3 aabbMax,
     return true;
 }
 
-auto initCulling(VulkanBackend& backend) -> std::optional<GeometryCulling>
+auto initCulling(VulkanBackend& backend) -> GeometryCulling
 {
     // FIXME: we should not be hardcoding the mesh count
     const auto info = vkutil::init::bufferCreateInfo(sizeof(VkDrawIndexedIndirectCommand) * 1000,
@@ -60,68 +60,45 @@ auto cpuFrustumCullingPass(std::optional<GeometryCulling>& geometryCulling, Vulk
 
     pass.pass.draw = [data, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass&, Scene& scene)
     {
-        ZoneScopedN("culling");
-
+        ZoneScopedN("CPU Frustum culling");
         {
-            ZoneScopedN("Real culling");
 
+            const auto view = glm::inverse(
+                glm::translate(glm::mat4(1.f), scene.mainCamera.position) * scene.mainCamera.rotation);
+            const auto projection = glm::perspectiveFov<f32>(scene.mainCamera.verticalFov,
+                backend.backbufferImage.extent.width, backend.backbufferImage.extent.height,
+                scene.mainCamera.nearClippingPlaneDist, scene.mainCamera.farClippingPlaneDist);
+            const auto viewProj = projection * view;
+            const auto viewProjTranspose = glm::transpose(viewProj);
+            const std::array frustumPlanes = {
+                (viewProjTranspose[3] + viewProjTranspose[0]),
+                (viewProjTranspose[3] - viewProjTranspose[0]),
+                (viewProjTranspose[3] + viewProjTranspose[1]),
+                (viewProjTranspose[3] - viewProjTranspose[1]),
+                (viewProjTranspose[3] + viewProjTranspose[2]),
+                (viewProjTranspose[3] - viewProjTranspose[2]),
+            };
 
-        const auto view = glm::inverse(
-            glm::translate(glm::mat4(1.f), scene.mainCamera.position) * scene.mainCamera.rotation);
-        const auto projection = glm::perspectiveFov<f32>(scene.mainCamera.verticalFov,
-            backend.backbufferImage.extent.width, backend.backbufferImage.extent.height,
-            scene.mainCamera.nearClippingPlaneDist, scene.mainCamera.farClippingPlaneDist);
-        const auto viewProj = projection * view;
-        const auto viewProjTranspose = glm::transpose(viewProj);
-        const std::array frustumPlanes = {
-            (viewProjTranspose[3] + viewProjTranspose[0]),
-            (viewProjTranspose[3] - viewProjTranspose[0]),
-            (viewProjTranspose[3] + viewProjTranspose[1]),
-            (viewProjTranspose[3] - viewProjTranspose[1]),
-            (viewProjTranspose[3] + viewProjTranspose[2]),
-            (viewProjTranspose[3] - viewProjTranspose[2]),
-        };
-
-        // TODO: shouldn't recalculate this unecessarily
-        //std::vector<VkDrawIndexedIndirectCommand> indirectCmds;
-        //indirectCmds.reserve(scene.meshes.size());
-        //for (u32 i = 0; i < scene.meshes.size(); ++i)
-        //{
-        //    const auto& mesh = scene.meshes[i];
-        //    const u32 instanceCount = insideCameraFrustum(mesh.aabbMin, mesh.aabbMax, frustumPlanes) ? 1 : 0;
-        //    VkDrawIndexedIndirectCommand command = {
-        //        .indexCount = static_cast<u32>(mesh.indexCount),
-        //        .instanceCount = instanceCount,
-        //        .firstIndex = static_cast<u32>(mesh.indexOffset),
-        //        .vertexOffset = 0,
-        //        .firstInstance = i
-        //    };
-        //    indirectCmds.push_back(command);
-        //}
-
-        std::vector<VkDrawIndexedIndirectCommand> indirectCmds;
-        indirectCmds.reserve(scene.meshCount);
-        u32 i = 0;
-        for (auto& mesh : scene.meshes)
-        {
-            for (auto& instance : mesh.second.instances)
+            std::vector<VkDrawIndexedIndirectCommand> indirectCmds;
+            indirectCmds.reserve(scene.meshCount);
+            for (auto& mesh : scene.meshes)
             {
-                const u32 instanceCount = insideCameraFrustum(instance.aabbMin, instance.aabbMax, frustumPlanes) ? 1 : 0;
-                // const u32 instanceCount = 1;
-                VkDrawIndexedIndirectCommand command = {
-                    .indexCount = static_cast<u32>(mesh.second.indexCount),
-                    .instanceCount = instanceCount,
-                    .firstIndex = static_cast<u32>(mesh.second.indexOffset),
-                    .vertexOffset = 0,
-                    //.firstInstance = i++
-                    .firstInstance = 0,
-                };
-                indirectCmds.push_back(command);
+                for (auto& instance : mesh.second.instances)
+                {
+                    const u32 instanceCount = insideCameraFrustum(instance.aabbMin, instance.aabbMax, frustumPlanes) ? 1 : 0;
+                    VkDrawIndexedIndirectCommand command = {
+                        .indexCount = static_cast<u32>(mesh.second.indexCount),
+                        .instanceCount = instanceCount,
+                        .firstIndex = static_cast<u32>(mesh.second.indexOffset),
+                        .vertexOffset = 0,
+                        .firstInstance = 0,
+                    };
+                    indirectCmds.push_back(command);
+                }
             }
-        }
 
-        backend.copyBufferWithStaging(indirectCmds.data(), sizeof(VkDrawIndexedIndirectCommand) * indirectCmds.size(),
-            *getResource<Buffer>(graph, data.culledDraws));
+            backend.copyBufferWithStaging(indirectCmds.data(), sizeof(VkDrawIndexedIndirectCommand) * indirectCmds.size(),
+                *getResource<Buffer>(graph, data.culledDraws));
         }
     };
 

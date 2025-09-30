@@ -7,8 +7,8 @@
 
 #include "rhi/vulkan/vulkan.h"
 
-void DescriptorSetLayoutBuilder::addBinding(
-    u32 bindingIndex, VkDescriptorType type, VkDescriptorBindingFlags flags, u32 count)
+auto DescriptorSetLayoutBuilder::addBinding(u32 bindingIndex, VkDescriptorType type, VkDescriptorBindingFlags flags,
+    u32 count) -> void
 {
     VkDescriptorSetLayoutBinding binding = {};
     binding.binding = bindingIndex;
@@ -19,10 +19,8 @@ void DescriptorSetLayoutBuilder::addBinding(
     bindingFlags.push_back(flags);
 }
 
-// void DescriptorSetLayoutBuilder::build(VkDevice device, VkShaderStageFlags shaderStages, void* pNext,
-// VkDescriptorSetLayoutCreateFlags flags)
-VkDescriptorSetLayout DescriptorSetLayoutBuilder::build(
-    VkDevice device, VkShaderStageFlags shaderStages, VkDescriptorSetLayoutCreateFlags flags)
+auto DescriptorSetLayoutBuilder::build(VkDevice device, VkShaderStageFlags shaderStages,
+    VkDescriptorSetLayoutCreateFlags flags) -> VkDescriptorSetLayout
 {
     for (auto& binding : bindings)
     {
@@ -45,15 +43,13 @@ VkDescriptorSetLayout DescriptorSetLayoutBuilder::build(
     info.flags = flags;
 
     VkDescriptorSetLayout setLayout;
-    // VK_CHECK(vkCreateDescriptorSetLayout(device, &info, nullptr, &setLayout));
-    // TODO: add VK_CHECK
     VK_CHECK(vkCreateDescriptorSetLayout(device, &info, nullptr, &setLayout));
 
     return setLayout;
 }
 
-void DescriptorAllocator::init(
-    VkDevice device, u32 maxSets, std::span<VkDescriptorPoolSize> poolSizes, VkDescriptorPoolCreateFlags flags)
+auto DescriptorAllocator::init(VkDevice device, u32 maxSets, std::span<VkDescriptorPoolSize> poolSizes,
+    VkDescriptorPoolCreateFlags flags) -> void
 {
     VkDescriptorPoolCreateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -67,11 +63,10 @@ void DescriptorAllocator::init(
     info.poolSizeCount = static_cast<u32>(poolSizes.size());
     info.pPoolSizes = poolSizes.data();
 
-    // TODO: VK_CHECK
     VK_CHECK(vkCreateDescriptorPool(device, &info, nullptr, &pool));
 }
 
-VkDescriptorSet DescriptorAllocator::allocate(VkDevice device, VkDescriptorSetLayout layout, void* pNext)
+auto DescriptorAllocator::allocate(VkDevice device, VkDescriptorSetLayout layout, void* pNext) -> VkDescriptorSet
 {
     VkDescriptorSetAllocateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -82,7 +77,6 @@ VkDescriptorSet DescriptorAllocator::allocate(VkDevice device, VkDescriptorSetLa
     info.pSetLayouts = &layout;
 
     VkDescriptorSet descriptorSet;
-    // TODO: VK_CHECK
     VK_CHECK(vkAllocateDescriptorSets(device, &info, &descriptorSet));
 
     return descriptorSet;

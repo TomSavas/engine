@@ -2,19 +2,17 @@
 
 #include <chrono>
 #include <functional>
-#include <glm/glm.hpp>
 
 #include "VkBootstrap.h"
 #include "engine.h"
 #include "result.hpp"
 #include "rhi/renderpass.h"
+#include "rhi/vulkan/bindless.h"
 #include "rhi/vulkan/descriptors.h"
 #include "rhi/vulkan/shader.h"
-#include "rhi/vulkan/utils/bindless.h"
 #include "rhi/vulkan/utils/buffer.h"
 #include "rhi/vulkan/utils/image.h"
 #include "rhi/vulkan/utils/texture.h"
-#include "rhi/vulkan/vulkan.h"
 #include "tracy/Tracy.hpp"
 #include "tracy/TracyVulkan.hpp"
 #include "vk_mem_alloc.h"
@@ -67,17 +65,6 @@ struct Frame
 
 struct VulkanBackend
 {
-    VulkanBackend() {}
-
-    VulkanBackend(GLFWwindow* window);
-    // TODO: init?
-    void deinit();
-
-    FrameCtx& currentFrame();
-
-    Frame newFrame();
-    FrameStats endFrame(Frame&& frame);
-
     GLFWwindow* window;
 
     vkb::Instance vkbInstance;
@@ -137,25 +124,34 @@ struct VulkanBackend
 
     VkDescriptorSetLayout sceneDescriptorSetLayout;
 
-    void render(const Frame& frame, CompiledRenderGraph& compiledRenderGraph, Scene& scene);
+    explicit VulkanBackend() {}
+    explicit VulkanBackend(GLFWwindow* window);
+    // TODO: init?
+    auto deinit() -> void;
 
-    void immediateSubmit(std::function<void(VkCommandBuffer)>&& f);
-    void copyBuffer(VkBuffer src, VkBuffer dst, VkBufferCopy copyRegion);
-    void copyBufferWithStaging(void* data, size_t size, VkBuffer dst, VkBufferCopy copyRegion = VkBufferCopy());
+    auto currentFrame() -> FrameCtx&;
+    auto newFrame() -> Frame;
+    auto endFrame(Frame&& frame) -> FrameStats;
 
-    AllocatedBuffer allocateBuffer(VkBufferCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags,
-        VkMemoryPropertyFlags requiredFlags);
-    AllocatedImage allocateImage(VkImageCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags,
-        VkMemoryPropertyFlags requiredFlags, VkImageAspectFlags aspectFlags);
+    auto render(const Frame& frame, CompiledRenderGraph& compiledRenderGraph, Scene& scene) -> void;
 
-    VkDeviceAddress getBufferDeviceAddress(VkBuffer buffer);
+    auto immediateSubmit(std::function<void(VkCommandBuffer)>&& f) -> void;
+    auto copyBuffer(VkBuffer src, VkBuffer dst, VkBufferCopy copyRegion) -> void;
+    auto copyBufferWithStaging(void* data, size_t size, VkBuffer dst, VkBufferCopy copyRegion = VkBufferCopy()) -> void;
 
-   private:
-    void initVulkan();
-    void initSwapchain();
-    void initCommandBuffers();
-    void initSyncStructs();
-    void initDescriptors();
-    void initImgui();
-    void initProfiler();
+    auto allocateBuffer(VkBufferCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags,
+        VkMemoryPropertyFlags requiredFlags) -> AllocatedBuffer;
+    auto allocateImage(VkImageCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags,
+        VkMemoryPropertyFlags requiredFlags, VkImageAspectFlags aspectFlags) -> AllocatedImage;
+
+    auto getBufferDeviceAddress(VkBuffer buffer) -> VkDeviceAddress;
+
+private:
+    auto initVulkan() -> void;
+    auto initSwapchain() -> void;
+    auto initCommandBuffers() -> void;
+    auto initSyncStructs() -> void;
+    auto initDescriptors() -> void;
+    auto initImgui() -> void;
+    auto initProfiler() -> void;
 };

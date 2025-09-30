@@ -1,8 +1,7 @@
 #pragma once
 
+#include "../rhi/vulkan/bindless.h"
 #include "renderGraph.h"
-
-#include "rhi/vulkan/utils/bindless.h"
 #include "rhi/vulkan/utils/buffer.h"
 
 class VulkanBackend;
@@ -20,9 +19,6 @@ struct ShadowPassRenderGraphData
     RenderGraphResource<Buffer> cascadeParams;
 };
 
-//auto simpleShadowPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend,
-//    RenderGraph& graph)
-//    -> ShadowPassRenderGraphData;
 [[nodiscard]]
 auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend,
     RenderGraph& graph, u8 cascadeCount = 4)

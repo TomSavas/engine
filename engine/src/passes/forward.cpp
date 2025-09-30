@@ -30,7 +30,7 @@ struct ForwardPushConstants
     u32 depthMapIndex;
 };
 
-auto initForwardOpaque(VulkanBackend& backend) -> std::optional<ForwardOpaqueRenderer>
+auto initForwardOpaque(VulkanBackend& backend) -> ForwardOpaqueRenderer
 {
     const auto reflectionImage = backend.allocateImage(vkutil::init::imageCreateInfo(VK_FORMAT_R16G16B16A16_SFLOAT,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,

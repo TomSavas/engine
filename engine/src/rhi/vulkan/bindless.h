@@ -1,20 +1,17 @@
 #pragma once
 
-#include "engine.h"
-
-#include "rhi/vulkan/descriptors.h"
-#include "rhi/vulkan/utils/texture.h"
-
 #include <vulkan/vulkan.h>
 
 #include <unordered_set>
 #include <vector>
 
-
-using BindlessTexture = u32;
+#include "engine.h"
+#include "rhi/vulkan/descriptors.h"
+#include "rhi/vulkan/utils/texture.h"
 
 class VulkanBackend;
 
+using BindlessTexture = u32;
 struct BindlessResources
 {
     static constexpr BindlessTexture kWhite = 0;
@@ -36,7 +33,7 @@ struct BindlessResources
 
     explicit BindlessResources(VulkanBackend& backend);
 
-    BindlessTexture addTexture(Texture texture);
-    const Texture& getTexture(BindlessTexture handle, BindlessTexture defaultTexture = kError);
-    void removeTexture(BindlessTexture handle);
+    auto addTexture(Texture texture) -> BindlessTexture;
+    auto getTexture(BindlessTexture handle, BindlessTexture defaultTexture = kError) -> const Texture&;
+    auto removeTexture(BindlessTexture handle) -> void;
 };

@@ -4,6 +4,7 @@
 #include "glm/vec4.hpp"
 #include "rhi/vulkan/backend.h"
 #include "rhi/vulkan/utils/inits.h"
+#include "rhi/vulkan/vulkan.h"
 
 struct PushConstants
 {
@@ -12,8 +13,7 @@ struct PushConstants
     u32 input;
 };
 
-auto initBloom(std::optional<BloomRenderer>& bloom, VulkanBackend& backend, RenderGraph& graph)
-    -> std::optional<BloomRenderer>
+auto initBloom(VulkanBackend& backend) -> BloomRenderer
 {
     return BloomRenderer{
         .pipeline = PipelineBuilder(backend)
@@ -58,7 +58,7 @@ auto bloomPass(std::optional<BloomRenderer>& bloom, std::optional<BlurRenderer>&
 
     if (!bloom)
     {
-        bloom = initBloom(bloom, backend, graph);
+        bloom = initBloom(backend);
     }
 
     auto& pass = createPass(graph);

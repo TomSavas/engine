@@ -2,6 +2,11 @@
 
 #include "engine.h"
 
+#include <vulkan/vulkan.h>
+
+#include <print>
+#include <source_location>
+
 #define ZoneScopedCpuGpuAuto(name, currentFrame) \
     ZoneScopedCpuGpu(currentFrame.tracyCtx, currentFrame.tracyCmdBuffer, name)
 #define ZoneScopedCpuGpu(ctx, cmd, name)   \
@@ -11,7 +16,7 @@
         /*TracyVkZone(ctx, cmd, name " GPU")*/ \
     } while (0)
 
-inline const char * VkResultToCString(VkResult result)
+inline const char* VkResultToCString(VkResult result)
 {
     switch (result)
     {
@@ -69,17 +74,15 @@ inline const char * VkResultToCString(VkResult result)
     }
 }
 
-#include <print>
-#include <source_location>
-#define VK_CHECK(x)                                            \
-    do                                                         \
-    {                                                          \
-        VkResult err = x;                                      \
-        if (err)                                               \
-        {                                                      \
-            std::println("Vulkan error: {:x}: {}", u32(err), VkResultToCString(err));      \
-            auto location = std::source_location::current();   \
+#define VK_CHECK(x)                                                                                      \
+    do                                                                                                   \
+    {                                                                                                    \
+        VkResult err = x;                                                                                \
+        if (err)                                                                                         \
+        {                                                                                                \
+            std::println("Vulkan error: {:x}: {}", u32(err), VkResultToCString(err));                    \
+            auto location = std::source_location::current();                                             \
             std::println("{}({}): {}", location.file_name(), location.line(), location.function_name()); \
-            BREAKPOINT;                                        \
-        }                                                      \
+            BREAKPOINT;                                                                                  \
+        }                                                                                                \
     } while (0)

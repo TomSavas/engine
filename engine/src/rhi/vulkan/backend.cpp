@@ -1,17 +1,8 @@
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-
 #include "rhi/vulkan/backend.h"
 
-#include <vulkan/vulkan_core.h>
-
-#include <chrono>
-#include <cmath>
-#include <glm/ext/matrix_clip_space.hpp>
-#include <glm/ext/matrix_transform.hpp>
-#include <glm/glm.hpp>
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
 #include "GLFW/glfw3.h"
-#include "backend.h"
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -23,11 +14,18 @@
 #include "rhi/vulkan/utils/buffer.h"
 #include "rhi/vulkan/utils/image.h"
 #include "rhi/vulkan/utils/inits.h"
+#include "rhi/vulkan/vulkan.h"
 #include "scene.h"
 #include "tracy/Tracy.hpp"
 #include "tracy/TracyVulkan.hpp"
 
-result::result<VulkanBackend*, backendError> initVulkanBackend()
+#include <vulkan/vulkan_core.h>
+#include <glm/glm.hpp>
+
+#include <chrono>
+#include <cmath>
+
+auto initVulkanBackend() -> result::result<VulkanBackend*, backendError>
 {
     if (!glfwInit())
     {
@@ -44,7 +42,7 @@ result::result<VulkanBackend*, backendError> initVulkanBackend()
     return backend;
 }
 
-Frame VulkanBackend::newFrame()
+auto VulkanBackend::newFrame() -> Frame
 {
     return Frame{
         .stats =
@@ -58,7 +56,7 @@ Frame VulkanBackend::newFrame()
     };
 }
 
-FrameStats VulkanBackend::endFrame(Frame&& frame)
+auto VulkanBackend::endFrame(Frame&& frame) -> FrameStats
 {
     FrameMark;
     currentFrameNumber++;
@@ -96,13 +94,13 @@ VulkanBackend::VulkanBackend(GLFWwindow* window) : window(window)
     bindlessResources = BindlessResources(*this);
 }
 
-void VulkanBackend::deinit()
+auto VulkanBackend::deinit() -> void
 {
     glfwDestroyWindow(window);
     glfwTerminate();
 }
 
-void VulkanBackend::initVulkan()
+auto VulkanBackend::initVulkan() -> void
 {
     vkb::InstanceBuilder builder;
     vkbInstance = builder
@@ -182,7 +180,7 @@ void VulkanBackend::initVulkan()
     vmaCreateAllocator(&allocatorInfo, &allocator);
 }
 
-void VulkanBackend::initSwapchain()
+auto VulkanBackend::initSwapchain() -> void
 {
     vkDeviceWaitIdle(device);
 
@@ -203,10 +201,6 @@ void VulkanBackend::initSwapchain()
     swapchainImages = vkbSwapchain.get_images().value();
     swapchainImageViews = vkbSwapchain.get_image_views().value();
     swapchainImageFormat = vkbSwapchain.image_format;
-
-    // swapchainDeinitQueue.enqueue([=]() {
-    //     LOG_CALL(vkDestroySwapchainKHR(device, swapchain, nullptr));
-    // });
 
     // Backbuffer
     backbufferImage.format = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -230,7 +224,7 @@ void VulkanBackend::initSwapchain()
     VK_CHECK(vkCreateImageView(device, &imgViewInfo, nullptr, &backbufferImage.view));
 }
 
-void VulkanBackend::initCommandBuffers()
+auto VulkanBackend::initCommandBuffers() -> void
 {
     auto commandPoolInfo = vkutil::init::commandPoolCreateInfo(
         computeQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
@@ -256,27 +250,9 @@ void VulkanBackend::initCommandBuffers()
     VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &immediateCmdPool));
     cmdAllocInfo = vkutil::init::commandBufferAllocateInfo(1, VK_COMMAND_BUFFER_LEVEL_PRIMARY, immediateCmdPool);
     VK_CHECK(vkAllocateCommandBuffers(device, &cmdAllocInfo, &immediateCmdBuffer));
-
-    // deinitQueue.enqueue([=]() {
-    //         LOG_CALL(
-    //                 for (i32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    //                 vkDestroyCommandPool(device, inFlightFrames[i].cmdPool, nullptr);
-    //                 }
-    //                 );
-    //         });
-
-    // VkCommandPoolCreateInfo uploadCmdPoolInfo = commandPoolCreateInfo(graphicsQueueFamily, 0);
-    // VK_CHECK(vkCreateCommandPool(device, &uploadCmdPoolInfo, nullptr, &uploadCtx.cmdPool));
-
-    // VkCommandBufferAllocateInfo uploadCmdAllocInfo = commandBufferAllocateInfo(1, VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-    // uploadCtx.cmdPool); VK_CHECK(vkAllocateCommandBuffers(device, &uploadCmdAllocInfo, &uploadCtx.cmdBuffer));
-
-    // deinitQueue.enqueue([=]() {
-    //         LOG_CALL(vkDestroyCommandPool(device, uploadCtx.cmdPool, nullptr));
-    // });
 }
 
-void VulkanBackend::initSyncStructs()
+auto VulkanBackend::initSyncStructs() -> void
 {
     // We want to create the fence with the Create Signaled flag, so we can wait on it before using it on a GPU command
     // (for the first frame)
@@ -293,22 +269,6 @@ void VulkanBackend::initSyncStructs()
 
     // TEMP: move somewhere else. Immediate context
     VK_CHECK(vkCreateFence(device, &fenceCreateInfo, nullptr, &immediateFence));
-
-    // deinitQueue.enqueue([=](){
-    //     LOG_CALL(
-    //         for (i32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    //             vkDestroyFence(device, inFlightFrames[i].renderFence, nullptr);
-    //             vkDestroySemaphore(device, inFlightFrames[i].presentSem, nullptr);
-    //             vkDestroySemaphore(device, inFlightFrames[i].renderSem, nullptr);
-    //         }
-    //     );
-    // });
-
-    // VkFenceCreateInfo uploadFenceCreateInfo = vkutil::init::fenceCreateInfo(0);
-    // VK_CHECK(vkCreateFence(device, &uploadFenceCreateInfo, nullptr, &uploadCtx.uploadFence));
-    // deinitQueue.enqueue([=](){
-    //     LOG_CALL(vkDestroyFence(device, uploadCtx.uploadFence, nullptr));
-    // });
 }
 
 // TODO(savas): REMOVE ME! Testing purposes only
@@ -324,7 +284,7 @@ static SceneUniforms sceneUniforms;
 static AllocatedBuffer sceneUniformBuffer;
 static VkDescriptorSet sceneDescriptorSet;
 
-void VulkanBackend::initDescriptors()
+auto VulkanBackend::initDescriptors() -> void
 {
     VkDescriptorPoolSize poolSizes[] = {
         VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 10},
@@ -355,7 +315,7 @@ void VulkanBackend::initDescriptors()
     }
 }
 
-void VulkanBackend::initImgui()
+auto VulkanBackend::initImgui() -> void
 {
     VkDescriptorPoolSize pool_sizes[] = {{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000}, {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
@@ -484,7 +444,7 @@ void VulkanBackend::initImgui()
     // ImGui_ImplVulkan_CreateFontsTexture();
 }
 
-void VulkanBackend::initProfiler()
+auto VulkanBackend::initProfiler() -> void
 {
     auto commandPoolInfo = vkutil::init::commandPoolCreateInfo(
         graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
@@ -504,9 +464,9 @@ void VulkanBackend::initProfiler()
     }
 }
 
-FrameCtx& VulkanBackend::currentFrame() { return frames[currentFrameNumber % MaxFramesInFlight]; }
+auto VulkanBackend::currentFrame() -> FrameCtx& { return frames[currentFrameNumber % MaxFramesInFlight]; }
 
-void VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene& scene)
+auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene& scene) -> void
 {
     ZoneScoped;
     std::string profilerTag = std::format(
@@ -552,6 +512,7 @@ void VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
         auto cmdBeginInfo = vkutil::init::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
         VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
+        // TODO: this should go away once fully migrated over to render graph
         {
             ZoneScopedCpuGpuAuto("Transition resources", frameCtx);
 
@@ -563,6 +524,7 @@ void VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
 
         VkExtent2D swapchainSize{static_cast<u32>(viewport.width), static_cast<u32>(viewport.height)};
 
+        // TODO: this should live as a separate pass in the render graph
         // Update scene descriptor set
         {
             ZoneScopedCpuGpuAuto("Memcpy SceneUniforms to GPU", frameCtx);
@@ -713,7 +675,7 @@ void VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
     }
 }
 
-void VulkanBackend::immediateSubmit(std::function<void(VkCommandBuffer)>&& f)
+auto VulkanBackend::immediateSubmit(std::function<void(VkCommandBuffer)>&& f) -> void
 {
     ZoneScopedCpuGpuAuto("Immediate submit", currentFrame());
 
@@ -739,13 +701,13 @@ void VulkanBackend::immediateSubmit(std::function<void(VkCommandBuffer)>&& f)
     }
 }
 
-void VulkanBackend::copyBuffer(VkBuffer src, VkBuffer dst, VkBufferCopy copyRegion)
+auto VulkanBackend::copyBuffer(VkBuffer src, VkBuffer dst, VkBufferCopy copyRegion) -> void
 {
     ZoneScopedCpuGpuAuto("Copy buffer", currentFrame());
     immediateSubmit([&](VkCommandBuffer cmd) { vkCmdCopyBuffer(cmd, src, dst, 1, &copyRegion); });
 }
 
-void VulkanBackend::copyBufferWithStaging(void* data, size_t size, VkBuffer dst, VkBufferCopy copyRegion)
+auto VulkanBackend::copyBufferWithStaging(void* data, size_t size, VkBuffer dst, VkBufferCopy copyRegion) -> void
 {
     ZoneScopedCpuGpuAuto("Copy buffer with staging", currentFrame());
 
@@ -764,8 +726,8 @@ void VulkanBackend::copyBufferWithStaging(void* data, size_t size, VkBuffer dst,
     // TODO: release staging data
 }
 
-AllocatedBuffer VulkanBackend::allocateBuffer(
-    VkBufferCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags, VkMemoryPropertyFlags requiredFlags)
+auto VulkanBackend::allocateBuffer(VkBufferCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags,
+    VkMemoryPropertyFlags requiredFlags) -> AllocatedBuffer
 {
     AllocatedBuffer buffer;
 
@@ -779,8 +741,8 @@ AllocatedBuffer VulkanBackend::allocateBuffer(
     return buffer;
 }
 
-AllocatedImage VulkanBackend::allocateImage(VkImageCreateInfo info, VmaMemoryUsage usage,
-    VmaAllocationCreateFlags flags, VkMemoryPropertyFlags requiredFlags, VkImageAspectFlags aspectFlags)
+auto VulkanBackend::allocateImage(VkImageCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags,
+    VkMemoryPropertyFlags requiredFlags, VkImageAspectFlags aspectFlags) -> AllocatedImage
 {
     AllocatedImage image;
     image.format = info.format;
@@ -799,7 +761,7 @@ AllocatedImage VulkanBackend::allocateImage(VkImageCreateInfo info, VmaMemoryUsa
     return image;
 }
 
-VkDeviceAddress VulkanBackend::getBufferDeviceAddress(VkBuffer buffer)
+auto VulkanBackend::getBufferDeviceAddress(VkBuffer buffer) -> VkDeviceAddress
 {
     VkBufferDeviceAddressInfo addressInfo = {.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffer};
 

@@ -1,42 +1,15 @@
 #include "rhi/vulkan/utils/texture.h"
 
-#include <print>
-#include <string>
-
 #include "inits.h"
 #include "rhi/vulkan/backend.h"
 
-// std::optional<Texture> Textures::load(std::string path, bool generateMips, bool cache)
-// {
-//     auto cachedTexture = textureCache.find(path);
-//     if (cachedTexture != textureCache.end())
-//     {
-//         return cachedTexture->second;
-//     }
-//     else
-//     {
-//         std::println("Loading new texture {}", path);
-//     }
+#include <math.h>
+#include <print>
+#include <string>
 
-//     i32 width;
-//     i32 height;
-//     i32 channels;
-//     stbi_uc* pixels = stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
-
-//     if (!pixels)
-//     {
-// 		std::println("Failed to load texture file {}", path);
-//         return std::optional{};
-//     }
-
-// 	return loadRaw(pixels, width * height * channels * 1, width, height, generateMips, cache, path);
-// }
-
-Texture createTexture(
-    VulkanBackend& backend, void* data, u32 size, u32 width, u32 height, bool generateMips)
+auto createTexture(VulkanBackend& backend, void* data, u32 size, u32 width, u32 height, bool generateMips) -> Texture
 {
     const VkDeviceSize imageSize = size;
-    //const VkFormat imageFormat = VK_FORMAT_R8G8B8A8_SRGB;
     const VkFormat imageFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
     // NOTE: we can probably refactor this and avoid the vkCmdCopyBufferToImage call altogether by allocating a texture
@@ -49,7 +22,7 @@ Texture createTexture(
 
     Texture texture;
 
-    u32 mipCount = static_cast<u32>(floor(log2(std::min(width, height))) + 1);
+    u32 mipCount = static_cast<u32>(std::floor(std::log2(std::min(width, height))) + 1);
     texture.mipCount = generateMips ? mipCount : 1;
 
     texture.image.extent.width = width;
@@ -140,7 +113,7 @@ Texture createTexture(
     return texture;
 }
 
-Texture whiteTexture(VulkanBackend& backend, u32 dimension)
+auto whiteTexture(VulkanBackend& backend, u32 dimension) -> Texture
 {
     const u32 textureSize = dimension * dimension * 4;
     std::vector<u8> bytes;
@@ -155,7 +128,7 @@ Texture whiteTexture(VulkanBackend& backend, u32 dimension)
     return createTexture(backend, bytes.data(), textureSize, dimension, dimension, false);
 }
 
-Texture blackTexture(VulkanBackend& backend, u32 dimension)
+auto blackTexture(VulkanBackend& backend, u32 dimension) -> Texture
 {
     const u32 textureSize = dimension * dimension * 4;
     std::vector<u8> bytes;
@@ -170,7 +143,7 @@ Texture blackTexture(VulkanBackend& backend, u32 dimension)
     return createTexture(backend, bytes.data(), textureSize, dimension, dimension, false);
 }
 
-Texture errorTexture(VulkanBackend& backend, u32 dimension)
+auto errorTexture(VulkanBackend& backend, u32 dimension) -> Texture
 {
     const u32 textureSize = dimension * dimension * 4;
     std::vector<u8> bytes;
@@ -193,8 +166,8 @@ Texture errorTexture(VulkanBackend& backend, u32 dimension)
     return createTexture(backend, bytes.data(), textureSize, dimension, dimension, false);
 }
 
-std::optional<std::tuple<Texture, std::string>> Textures::loadRaw(
-    void* data, u32 size, u32 width, u32 height, bool generateMips, bool cache, std::string name)
+auto Textures::loadRaw(void* data, u32 size, u32 width, u32 height, bool generateMips, bool cache, std::string name)
+    -> std::optional<std::tuple<Texture, std::string>>
 {
     if (name.empty())
     {
@@ -223,7 +196,7 @@ std::optional<std::tuple<Texture, std::string>> Textures::loadRaw(
     return std::make_tuple(texture, name);
 }
 
-void Textures::unload(std::string name)
+auto Textures::unload(std::string name) -> void
 {
     if (!textureCache.contains(name))
     {
@@ -234,7 +207,7 @@ void Textures::unload(std::string name)
     textureCache.erase(name);
 }
 
-void Textures::unloadRaw(Texture texture)
+auto Textures::unloadRaw(Texture texture) -> void
 {
     vmaDestroyImage(backend->allocator, texture.image.image, texture.image.allocation);
     vkDestroyImageView(backend->device, texture.view, nullptr);

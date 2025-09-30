@@ -1,7 +1,7 @@
 #pragma once
 
 #include "renderGraph.h"
-#include "rhi/vulkan/utils/bindless.h"
+#include "rhi/vulkan/bindless.h"
 
 class VulkanBackend;
 

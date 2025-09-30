@@ -37,11 +37,6 @@ struct PipelineBuilder
     } layoutInfo;
     std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
 
-    VkPipelineLayout buildLayout();
-    VkPipeline buildGraphicsPipeline(VkPipelineLayout layout);
-    VkPipeline buildComputePipeline(VkPipelineLayout layout);
-    Pipeline build();
-
     VkPipelineInputAssemblyStateCreateInfo inputAssembly;
     VkPipelineRasterizationStateCreateInfo rasterizer;
     std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachments;
@@ -51,30 +46,30 @@ struct PipelineBuilder
     std::vector<VkFormat> colorAttachments;
     std::vector<VkDynamicState> dynamicStates;
 
-    PipelineBuilder(VulkanBackend& backend);
+    explicit PipelineBuilder(VulkanBackend& backend);
 
-    void reset();
+    auto reset() -> void;
 
-    PipelineBuilder& addDescriptorLayouts(std::initializer_list<VkDescriptorSetLayout>&& descriptorSetLayouts);
-    PipelineBuilder& addPushConstants(std::initializer_list<VkPushConstantRange>&& pushConstants);
-    PipelineBuilder& addShader(ShaderPath path, VkShaderStageFlagBits stage);
+    auto addDescriptorLayouts(std::initializer_list<VkDescriptorSetLayout>&& descriptorSetLayouts) -> PipelineBuilder&;
+    auto addPushConstants(std::initializer_list<VkPushConstantRange>&& pushConstants) -> PipelineBuilder&;
+    auto addShader(ShaderPath path, VkShaderStageFlagBits stage) -> PipelineBuilder&;
+    auto topology(VkPrimitiveTopology topology) -> PipelineBuilder&;
+    auto polyMode(VkPolygonMode polyMode) -> PipelineBuilder&;
+    auto cullMode(VkCullModeFlags cullMode, VkFrontFace frontFace) -> PipelineBuilder&;
+    auto disableMultisampling() -> PipelineBuilder&;
+    auto disableBlending() -> PipelineBuilder&;
+    auto enableAlphaBlending() -> PipelineBuilder&;
+    auto colorAttachmentFormat(VkFormat format) -> PipelineBuilder&;
+    auto depthFormat(VkFormat format) -> PipelineBuilder&;
+    auto enableDepthTest(bool depthWriteEnable, VkCompareOp compareOp) -> PipelineBuilder&;
+    auto disableDepthTest() -> PipelineBuilder&;
+    auto setDepthClamp(bool enable) -> PipelineBuilder&;
+    auto addDynamicState(VkDynamicState state) -> PipelineBuilder&;
+    auto addViewportScissorDynamicStates() -> PipelineBuilder&;
+    auto enableDepthBias() -> PipelineBuilder&;
 
-    PipelineBuilder& shaders(VkShaderModule vertexShader, VkShaderModule fragmentShader);
-    PipelineBuilder& shaders(VkShaderModule vertexShader, VkShaderModule geometryShader, VkShaderModule fragmentShader);
-    PipelineBuilder& topology(VkPrimitiveTopology topology);
-    PipelineBuilder& polyMode(VkPolygonMode polyMode);
-    PipelineBuilder& cullMode(VkCullModeFlags cullMode, VkFrontFace frontFace);
-    PipelineBuilder& disableMultisampling();
-    PipelineBuilder& disableBlending();
-    PipelineBuilder& enableAlphaBlending();
-    PipelineBuilder& colorAttachmentFormat(VkFormat format);
-    PipelineBuilder& depthFormat(VkFormat format);
-    PipelineBuilder& enableDepthTest(bool depthWriteEnable, VkCompareOp compareOp);
-    PipelineBuilder& disableDepthTest();
-    PipelineBuilder& setDepthClamp(bool enable);
-    PipelineBuilder& addDynamicState(VkDynamicState state);
-    PipelineBuilder& addViewportScissorDynamicStates();
-    PipelineBuilder& enableDepthBias();
-
-    VkPipeline build(VkDevice device, VkPipelineLayout layout);
+    auto buildLayout() -> VkPipelineLayout;
+    auto buildGraphicsPipeline(VkPipelineLayout layout) -> VkPipeline;
+    auto buildComputePipeline(VkPipelineLayout layout) -> VkPipeline;
+    auto build() -> Pipeline;
 };
