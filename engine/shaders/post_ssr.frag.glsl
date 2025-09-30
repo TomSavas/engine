@@ -31,9 +31,11 @@ const uint BLEND = 4;
 
 void main()
 {
-    //vec4 reflectedUv = texture(textures[constants.reflectionUvs], uv);
-    vec4 reflectedUv = mix(texture(textures[constants.reflectionUvs], uv),
+    vec4 clearReflectedUv = texture(textures[constants.reflectionUvs], uv);
+    vec4 reflectedUv = mix(clearReflectedUv,
         texture(textures[constants.blurredReflectionUvs], uv), constants.blurIntensity);
+    reflectedUv.b = clearReflectedUv.b;
+    reflectedUv.b = clamp(0.f, 1.f, constants.reflectionIntensity * reflectedUv.b);
 
     vec3 pos = texture(textures[constants.positions], uv).xyz;
     vec3 pointNormal = texture(textures[constants.normal], uv).xyz;
@@ -41,16 +43,11 @@ void main()
     const vec3 toFrag = -cameraDir;
     const vec3 reflectionDir = normalize(reflect(toFrag, pointNormal));
 
-
-    reflectedUv.b = clamp(0.f, 1.f, constants.reflectionIntensity * reflectedUv.b);
-
     vec3 reflectionNormal = texture(textures[constants.normal], reflectedUv.xy).xyz;
     if (dot(reflectionDir, pointNormal) > 0.95)
     {
         reflectedUv.b = 0.f;
     }
-
-    //reflectedUv.b = dot(pointNormal, reflectionNormal) < 0.1 ? reflectedUv.b : 0.f;
 
     if (constants.mode == REFLECTION_UVS)
     {
@@ -62,7 +59,6 @@ void main()
     }
     else if (constants.mode == COLOR)
     {
-        //outColor = vec4(texture(textures[constants.color], uv).rgb, 1.f);
         outColor = vec4(texture(textures[constants.normal], uv).rgb, 1.f);
 
         outColor = vec4(vec3(dot(pointNormal, reflectionNormal)), 1.f);
@@ -70,28 +66,18 @@ void main()
     else if (constants.mode == REFLECTIONS)
     {
         outColor = vec4(0.f, 0.f, 0.f, 1.f);
-        //if (reflectedUv.r != 0.f && reflectedUv.g != 0.f)
         if (reflectedUv.b != 0.f)
         {
-            //outColor = vec4(texture(textures[constants.color], uv).rgb, 1.f);
             outColor = vec4(texture(textures[constants.color], reflectedUv.rg).rgb, 1.f);
         }
     }
     else if (constants.mode == BLEND)
     {
-        //outColor = vec4(texture(textures[constants.color], reflectedUv.rg).rgb, 1.f);
-        //if (reflectedUv.r == 0.f && reflectedUv.g == 0)
-        //if (reflectedUv.b == 0)
-        //{
-        //    outColor = vec4(texture(textures[constants.color], uv).rgb, 1.f);
-        //}
-
         vec4 reflectedColor = vec4(texture(textures[constants.color], reflectedUv.rg).rgb, 1.f);
         vec4 color = vec4(texture(textures[constants.color], uv).rgb, 1.f);
 
         outColor = mix(color, reflectedColor, reflectedUv.b);
         outColor = vec4(color.rgb + reflectedColor.rgb * reflectedUv.b, color.a);
-        //outColor = vec4(vec3(reflectedUv.b), 1.f);
     }
     else
     {
