@@ -711,6 +711,22 @@ auto VulkanBackend::copyBufferWithStaging(void* data, size_t size, VkBuffer dst,
 {
     ZoneScopedCpuGpuAuto("Copy buffer with staging", currentFrame());
 
+    if (size == 0)
+    {
+        std::println("Attempting to copy buffer of size 0. Ignoring.");
+        return;
+    }
+
+    std::vector<u8> dummy;
+    if (data == nullptr)
+    {
+        dummy.reserve(size);
+        std::fill(dummy.begin(), dummy.end(), 0);
+        data = dummy.data();
+
+        std::println("Attempting to copy nullptr, replacing with dummy buffer.");
+    }
+
     auto bufInfo = vkutil::init::bufferCreateInfo(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
     AllocatedBuffer staging = allocateBuffer(bufInfo, VMA_MEMORY_USAGE_CPU_ONLY, VMA_ALLOCATION_CREATE_MAPPED_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);

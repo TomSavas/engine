@@ -608,8 +608,10 @@ void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 tran
 
 void Scene::createBuffers()
 {
-    const u32 vertexBufferSize = vertexData.size() * sizeof(decltype(vertexData)::value_type);
-    const u32 indexBufferSize = indices.size() * sizeof(decltype(indices)::value_type);
+    u32 vertexBufferSize = vertexData.size() * sizeof(decltype(vertexData)::value_type);
+    vertexBufferSize = vertexBufferSize == 0 ? 8 : vertexBufferSize;
+    u32 indexBufferSize = indices.size() * sizeof(decltype(indices)::value_type);
+    indexBufferSize = indexBufferSize == 0 ? 8 : indexBufferSize;
 
     std::println("Vert count: {}, element size: {}, total size: {}", vertexData.size(),
         sizeof(decltype(vertexData)::value_type), vertexBufferSize);
@@ -627,20 +629,18 @@ void Scene::createBuffers()
     indexBuffer = backend.allocateBuffer(info, VMA_MEMORY_USAGE_GPU_ONLY, VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    backend.copyBufferWithStaging(vertexData.data(), vertexBufferSize, vertexBuffer.buffer);
-    backend.copyBufferWithStaging(indices.data(), indexBufferSize, indexBuffer.buffer);
-
     auto modelData = gatherModelData(*this);
-    const u32 perModelBufferSize = modelData.size() * sizeof(decltype(modelData)::value_type);
+    u32 perModelBufferSize = modelData.size() * sizeof(decltype(modelData)::value_type);
+    perModelBufferSize = perModelBufferSize == 0 ? 8 : perModelBufferSize;
     info = vkutil::init::bufferCreateInfo(perModelBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                                                                   VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                                                                   VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
     perModelBuffer = backend.allocateBuffer(info, VMA_MEMORY_USAGE_GPU_ONLY,
         VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    backend.copyBufferWithStaging(modelData.data(), modelData.size() * sizeof(ModelData), perModelBuffer.buffer);
-
-    info = vkutil::init::bufferCreateInfo(sizeof(VkDrawIndexedIndirectCommand) * modelData.size(),
+    u32 modelDataSize = sizeof(VkDrawIndexedIndirectCommand) * modelData.size();
+    modelDataSize = modelDataSize == 0 ? 8 : modelDataSize;
+    info = vkutil::init::bufferCreateInfo(modelDataSize,
         VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
     indirectCommands = backend.allocateBuffer(info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
@@ -663,6 +663,10 @@ void Scene::createBuffers()
             cmds.push_back(command);
         }
     }
+
+    backend.copyBufferWithStaging(vertexData.data(), vertexBufferSize, vertexBuffer.buffer);
+    backend.copyBufferWithStaging(indices.data(), indexBufferSize, indexBuffer.buffer);
+    backend.copyBufferWithStaging(modelData.data(), modelData.size() * sizeof(ModelData), perModelBuffer.buffer);
     backend.copyBufferWithStaging(
         cmds.data(), sizeof(VkDrawIndexedIndirectCommand) * cmds.size(), indirectCommands.buffer);
 }
@@ -762,4 +766,9 @@ result::result<Scene, assetError> loadScene(VulkanBackend& backend, std::string 
     return scene;
 }
 
-Scene emptyScene(VulkanBackend& backend) { return Scene("empty", backend); }
+Scene emptyScene(VulkanBackend& backend)
+{
+    auto scene = Scene("empty", backend);
+    scene.createBuffers();
+    return scene;
+}
