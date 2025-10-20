@@ -89,6 +89,15 @@ void drawDebugUI(DebugUI& debugUi, VulkanBackend& backend, Scene& scene, f64 dt)
 
         ImGui::Text("Active camera: %s", (scene.activeCamera == &scene.mainCamera) ? "main" : "debug");
         ImGui::Text("Movement speed: %.2f", scene.activeCamera->moveSpeed);
+
+        ImGui::Separator();
+
+        VmaBudget budgets[8];
+        vmaGetHeapBudgets(backend.allocator, budgets);
+        ImGui::Text("Total VRAM: %lf", static_cast<f64>(budgets[0].budget) / (1024.f * 1024.f));
+        ImGui::Text("Using VRAM: %lf", static_cast<f64>(budgets[0].usage) / (1024.f * 1024.f));
+        f64 load = static_cast<f64>(budgets[0].usage) / static_cast<f64>(budgets[0].budget);
+        ImGui::Text("VRAM load: %lf %%", load * 100.0);
     }
     ImGui::End();
 
