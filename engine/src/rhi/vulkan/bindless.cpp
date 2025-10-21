@@ -143,3 +143,82 @@ auto addTransition<BindlessTexture>(VulkanBackend& backend, CompiledRenderGraph:
 
     node.imageBarriers.push_back(imageBarrier);
 }
+
+auto debugDrawBindlessTextures(BindlessResources& bindlessResources) -> void
+{
+    addDebugUI(debugUI, RESOURCES, [&]()
+    {
+        constexpr auto textureSize = 64;
+        const auto size = ImGui::GetContentRegionAvail();
+        auto columns = std::floor(size.x / textureSize);
+
+        ImGui::Text("Bindless texture capacity: %d", bindlessResources.capacity);
+        ImGui::Text("Total loaded: %d - %d = %d", bindlessResources.lastUsedIndex, bindlessResources.freeIndices.size(), bindlessResources.lastUsedIndex - bindlessResources.freeIndices.size());
+
+        auto drawImages = [&](const char* tableId, bool loadedFromFileFilter)
+        {
+            ImGui::BeginTable(tableId, std::max<u32>(1, columns));
+            ImGui::TableNextColumn();
+            for (u32 i = 0; i < bindlessResources.textures.size(); i++)
+            {
+                Texture& texture = bindlessResources.textures[i];
+                if (texture.loadedFromFile != loadedFromFileFilter)
+                {
+                    continue;
+                }
+
+                if (!texture.imguiDescriptorSet)
+                {
+                    texture.imguiDescriptorSet = ImGui_ImplVulkan_AddTexture(texture.sampler, texture.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                }
+
+                ImGui::Image(*texture.imguiDescriptorSet, ImVec2(textureSize, textureSize));
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNone))
+                {
+                    if (ImGui::BeginItemTooltip())
+                    {
+                        ImGui::Text("Name: %s", texture.name.c_str());
+                        ImGui::Text("Size: %d x %d x %d", texture.image.extent.width, texture.image.extent.height, texture.image.extent.depth);
+                        ImGui::Text("Mips: %d", texture.mipCount);
+                        ImGui::Text("Bindless index: %d", i);
+
+                        const auto isFree = bindlessResources.freeIndices.contains(i);
+                        if (isFree)
+                        {
+                            ImGui::SameLine();
+                            ImGui::TextColored(ImVec4(255, 0, 0, 255), "Free");
+                        }
+
+                        ImGui::Separator();
+                        const auto aspectRatio = static_cast<f32>(texture.image.extent.width) / static_cast<f32>(texture.image.extent.height);
+                        ImVec2 size;
+                        if (aspectRatio > 1.f)
+                        {
+                            size = ImVec2(512, 512.f / aspectRatio);
+                        }
+                        else
+                        {
+                           size = ImVec2(512.f * aspectRatio, 512);
+                        }
+                        ImGui::Image(*texture.imguiDescriptorSet, size);
+                        ImGui::EndTooltip();
+                    }
+                }
+                ImGui::Text("%d", i);
+                ImGui::TableNextColumn();
+            }
+            ImGui::EndTable();
+
+        };
+
+        if (ImGui::CollapsingHeader("Runtime resources", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            drawImages("Generated bindless resources", false);
+        }
+        if (ImGui::CollapsingHeader("Loaded resources", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            drawImages("Loaded bindless resources", true);
+        }
+
+    });
+}

@@ -20,6 +20,9 @@ constexpr const char* INSPECTOR_CSTR = INSPECTOR.c_str();
 constexpr std::string GRAPHICS_PASSES = "Render passes";
 constexpr const char* GRAPHICS_PASSES_CSTR = GRAPHICS_PASSES.c_str();
 
+constexpr std::string RESOURCES = "Resources";
+constexpr const char* RESOURCES_CSTR = RESOURCES.c_str();
+
 struct DebugUI
 {
     std::unordered_map<std::string, std::vector<std::function<void()>>> fns;

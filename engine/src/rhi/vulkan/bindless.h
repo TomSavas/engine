@@ -31,9 +31,14 @@ struct BindlessResources
     i32 capacity;
     std::unordered_set<BindlessTexture> freeIndices;  // All free indices that occur before lastUsedIndex
 
+    // TODO: this is bad, we're duplicating the texture cache essentially
+    std::unordered_map<std::string, BindlessTexture> cache;
+
     explicit BindlessResources(VulkanBackend& backend);
 
     auto addTexture(Texture texture) -> BindlessTexture;
     auto getTexture(BindlessTexture handle, BindlessTexture defaultTexture = kError) -> const Texture&;
     auto removeTexture(BindlessTexture handle) -> void;
 };
+
+auto debugDrawBindlessTextures(BindlessResources& bindlessResources) -> void;

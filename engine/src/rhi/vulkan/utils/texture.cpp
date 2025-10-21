@@ -1,13 +1,15 @@
 #include "rhi/vulkan/utils/texture.h"
 
-#include "inits.h"
-#include "rhi/vulkan/backend.h"
-
 #include <math.h>
+
 #include <print>
 #include <string>
 
-auto createTexture(VulkanBackend& backend, void* data, u32 size, u32 width, u32 height, bool generateMips) -> Texture
+#include "imgui_impl_vulkan.h"
+#include "inits.h"
+#include "rhi/vulkan/backend.h"
+
+auto createTexture(VulkanBackend& backend, std::string name, void* data, u32 size, u32 width, u32 height, bool generateMips) -> Texture
 {
     const VkDeviceSize imageSize = size;
     const VkFormat imageFormat = VK_FORMAT_R8G8B8A8_UNORM;
@@ -21,6 +23,7 @@ auto createTexture(VulkanBackend& backend, void* data, u32 size, u32 width, u32 
     backend.copyBufferWithStaging(data, imageSize, cpuImageBuffer.buffer);
 
     Texture texture;
+    texture.name = name;
 
     u32 mipCount = static_cast<u32>(std::floor(std::log2(std::min(width, height))) + 1);
     texture.mipCount = generateMips ? mipCount : 1;
@@ -110,6 +113,12 @@ auto createTexture(VulkanBackend& backend, void* data, u32 size, u32 width, u32 
         VK_FORMAT_R8G8B8A8_UNORM, texture.image.image, VK_IMAGE_ASPECT_COLOR_BIT, texture.mipCount);
     vkCreateImageView(backend.device, &imageViewInfo, nullptr, &texture.view);
 
+    VkSamplerCreateInfo samplerInfo = vkutil::init::samplerCreateInfo(
+        VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT, static_cast<f32>(texture.mipCount));
+    vkCreateSampler(backend.device, &samplerInfo, nullptr, &texture.sampler);
+
+    texture.imguiDescriptorSet = ImGui_ImplVulkan_AddTexture(texture.sampler, texture.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
     return texture;
 }
 
@@ -125,7 +134,7 @@ auto whiteTexture(VulkanBackend& backend, u32 dimension) -> Texture
         bytes.push_back(255);
         bytes.push_back(255);
     }
-    return createTexture(backend, bytes.data(), textureSize, dimension, dimension, false);
+    return createTexture(backend, "builtin_white", bytes.data(), textureSize, dimension, dimension, false);
 }
 
 auto blackTexture(VulkanBackend& backend, u32 dimension) -> Texture
@@ -140,7 +149,7 @@ auto blackTexture(VulkanBackend& backend, u32 dimension) -> Texture
         bytes.push_back(0);
         bytes.push_back(255);
     }
-    return createTexture(backend, bytes.data(), textureSize, dimension, dimension, false);
+    return createTexture(backend, "builtin_black", bytes.data(), textureSize, dimension, dimension, false);
 }
 
 auto errorTexture(VulkanBackend& backend, u32 dimension) -> Texture
@@ -163,7 +172,7 @@ auto errorTexture(VulkanBackend& backend, u32 dimension) -> Texture
             bytes.push_back(255);
         }
     }
-    return createTexture(backend, bytes.data(), textureSize, dimension, dimension, false);
+    return createTexture(backend, "builtin_error", bytes.data(), textureSize, dimension, dimension, false);
 }
 
 auto Textures::loadRaw(void* data, u32 size, u32 width, u32 height, bool generateMips, bool cache, std::string name)
@@ -186,7 +195,8 @@ auto Textures::loadRaw(void* data, u32 size, u32 width, u32 height, bool generat
     }
 
     //std::println("Not in cache, loading...");
-    Texture texture = createTexture(*backend, data, size, width, height, generateMips);
+    Texture texture = createTexture(*backend, name, data, size, width, height, generateMips);
+    texture.loadedFromFile = true;
 
     if (cache)
     {

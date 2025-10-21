@@ -301,4 +301,11 @@ void drawDebugUI(DebugUI& debugUi, VulkanBackend& backend, Scene& scene, f64 dt)
     //    ImGui::Image((ImTextureID)my_texture.DS, ImVec2(my_texture.Width, my_texture.Height));
     //}
     //ImGui::End();
+
+    static bool resourcesOpen = true;
+    if (ImGui::Begin(RESOURCES_CSTR, &graphicsOpen))
+    {
+        drawChildren(RESOURCES);
+    }
+    ImGui::End();
 }

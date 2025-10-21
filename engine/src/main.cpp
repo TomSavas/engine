@@ -99,6 +99,9 @@ struct WorldRenderer
 
         scene.update(dt, 0.f, backend.window);
 
+        // Debug UI
+        debugDrawBindlessTextures(backend.bindlessResources.value());
+
         drawDebugUI(debugUI, backend, scene, dt);
         debugUI.fns.clear();
 
