@@ -2,14 +2,13 @@
 
 #include "vulkan/pipelineBuilder.h"
 
-#include <vulkan/vulkan_core.h>
-
 #include <functional>
 #include <optional>
 #include <string>
 
 struct CompiledRenderGraph;
 struct Scene;
+struct RenderContext;
 
 struct RenderPass
 {
@@ -17,6 +16,6 @@ struct RenderPass
 
     std::optional<Pipeline> pipeline;
 
-    std::optional<std::function<void(VkCommandBuffer cmd, CompiledRenderGraph&)>> beginRendering = std::nullopt;
-    std::function<void(VkCommandBuffer cmd, CompiledRenderGraph&, RenderPass&, Scene&)> draw;
+    std::optional<std::function<void(const RenderContext&)>> beginRendering = std::nullopt;
+    std::function<void(const RenderContext&, RenderPass&)> draw;
 };

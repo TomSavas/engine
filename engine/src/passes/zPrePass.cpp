@@ -72,34 +72,29 @@ auto zPrePass(std::optional<ZPrePassRenderer>& renderer, VulkanBackend& backend,
     };
     culledDraws = readResource<Buffer>(graph, pass, culledDraws);
 
-    pass.pass.beginRendering = [data, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph)
+    pass.pass.beginRendering = [data, &backend](const RenderContext& ctx)
     {
-        const VkExtent2D swapchainSize = {
-            static_cast<u32>(backend.viewport.width),
-            static_cast<u32>(backend.viewport.height)
-        };
-        const auto& depthMap = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(graph,
+        const auto& depthMap = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(ctx.graph,
             data.depthMap));
         auto depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(depthMap.view);
-        const auto renderingInfo = vkutil::init::renderingInfo(swapchainSize, nullptr, 0, &depthAttachmentInfo);
-        vkCmdBeginRendering(cmd, &renderingInfo);
+        const auto renderingInfo = vkutil::init::renderingInfo(ctx.swapchain.size, nullptr, 0, &depthAttachmentInfo);
+        vkCmdBeginRendering(ctx.cmd, &renderingInfo);
     };
 
-    pass.pass.draw = [culledDraws, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass& pass,
-        Scene& scene)
+    pass.pass.draw = [culledDraws, &backend](const RenderContext& ctx, RenderPass& pass)
     {
         ZoneScopedCpuGpuAuto("Z Pre pass", backend.currentFrame());
 
         const ZPrePassPushConstants pushConstants = {
-            .vertexBufferAddr = backend.getBufferDeviceAddress(scene.vertexBuffer.buffer),
-            .perModelDataBufferAddr = backend.getBufferDeviceAddress(scene.perModelBuffer.buffer),
+            .vertexBufferAddr = backend.getBufferDeviceAddress(ctx.scene.vertexBuffer.buffer),
+            .perModelDataBufferAddr = backend.getBufferDeviceAddress(ctx.scene.perModelBuffer.buffer),
         };
-        vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(pushConstants),
+        vkCmdPushConstants(ctx.cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(pushConstants),
             &pushConstants);
-        vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1,
+        vkCmdBindDescriptorSets(ctx.cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1,
             &backend.bindlessResources->bindlessTexDesc, 0, nullptr);
-        vkCmdBindIndexBuffer(cmd, scene.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-        vkCmdDrawIndexedIndirect(cmd, *getResource<Buffer>(graph, culledDraws), 0, scene.meshes.size(),
+        vkCmdBindIndexBuffer(ctx.cmd, ctx.scene.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexedIndirect(ctx.cmd, *getResource<Buffer>(ctx.graph, culledDraws), 0, ctx.scene.meshes.size(),
             sizeof(VkDrawIndexedIndirectCommand));
     };
 

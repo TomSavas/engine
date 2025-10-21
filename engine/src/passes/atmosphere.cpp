@@ -84,26 +84,22 @@ auto atmospherePass(std::optional<AtmosphereRenderer>& atmosphere, VulkanBackend
         readResource<BindlessTexture>(graph, pass, input, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL),
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-    pass.pass.beginRendering = [output, depthMap, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph)
+    pass.pass.beginRendering = [output, depthMap, &backend](const RenderContext& ctx)
     {
-        VkExtent2D swapchainSize = {
-            static_cast<u32>(backend.viewport.width),
-            static_cast<u32>(backend.viewport.height)
-        };
-        const auto& outputTexture = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(graph, output));
+        const auto& outputTexture = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(ctx.graph, output));
         auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(outputTexture.view, nullptr,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         auto depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(
             backend.bindlessResources->getTexture(
-                *getResource<BindlessTexture>(graph, depthMap)
+                *getResource<BindlessTexture>(ctx.graph, depthMap)
             ).view,
             VK_ATTACHMENT_LOAD_OP_LOAD);
-        const auto renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, 1,
+        const auto renderingInfo = vkutil::init::renderingInfo(ctx.swapchain.size, &colorAttachmentInfo, 1,
             &depthAttachmentInfo);
-        vkCmdBeginRendering(cmd, &renderingInfo);
+        vkCmdBeginRendering(ctx.cmd, &renderingInfo);
     };
 
-    pass.pass.draw = [](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass& pass, Scene& scene)
+    pass.pass.draw = [](const RenderContext& ctx, RenderPass& pass)
     {
         static f32 time = 0.35f;
         static bool moveSun = false;
@@ -163,21 +159,21 @@ auto atmospherePass(std::optional<AtmosphereRenderer>& atmosphere, VulkanBackend
         {
             time += speed * sign;
         }
-        scene.lightDir = glm::normalize(glm::vec3(-sin(time), -cos(time), 0.f));
+        ctx.scene.lightDir = glm::normalize(glm::vec3(-sin(time), -cos(time), 0.f));
 
         ZoneScopedCpuGpuAuto("Atmosphere pass", backend.currentFrame());
         constexpr glm::vec4 depth = glm::vec4(1.f);
         const AtmospherePushConstants pushConstants = {
-            .sunDir = glm::vec4(-scene.lightDir.x, -scene.lightDir.y, scene.lightDir.z, sunIntensity),
+            .sunDir = glm::vec4(-ctx.scene.lightDir.x, -ctx.scene.lightDir.y, ctx.scene.lightDir.z, sunIntensity),
             .scatteringCoeffs = glm::vec4(rayleighCoeffs, mieCoeff),
             .earthAtmosphereScale = glm::vec4(earthScale, atmosphereScale, heightScale, scatteringScale),
         };
-        vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::vec4),
+        vkCmdPushConstants(ctx.cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::vec4),
             &depth);
-        vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(glm::vec4), sizeof(pushConstants),
+        vkCmdPushConstants(ctx.cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(glm::vec4), sizeof(pushConstants),
             &pushConstants);
 
-        vkCmdDraw(cmd, 3, 1, 0, 0);
+        vkCmdDraw(ctx.cmd, 3, 1, 0, 0);
     };
 
     return output;

@@ -12,6 +12,7 @@
 #include "rhi/vulkan/backend.h"
 #include "scene.h"
 #include "debugUI.h"
+#include "rhi/vulkan/utils/inits.h"
 
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
@@ -27,12 +28,15 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
+#include "passes/sceneData.h"
 
 struct WorldRenderer
 {
     VulkanBackend& backend;
 
     std::optional<CompiledRenderGraph> compiledRenderGraph;
+
+    std::optional<SceneDataUploader> sceneDataUploader;
 
     std::optional<GeometryCulling> culling;
     std::optional<ZPrePassRenderer> prePass;
@@ -47,6 +51,8 @@ struct WorldRenderer
     std::optional<BlurRenderer> blur;
     std::optional<BloomRenderer> bloom;
 
+    RenderGraphResource<BindlessTexture> output;
+
     explicit WorldRenderer(VulkanBackend& backend) : backend(backend) {}
 
     void compileRenderGraph(Scene& scene)
@@ -59,21 +65,23 @@ struct WorldRenderer
             .backend = backend
         };
 
-        // const auto [draws, lightList] = sceneUploadPass(sceneDataUploader, backend, graph);
+        // /*const auto [draws, lightList] =*/ sceneUploadPass(sceneDataUploader, backend, graph);
         const auto [culledDraws] = cpuFrustumCullingPass(culling, backend, graph);
         const auto [depthMap] = zPrePass(prePass, backend, graph, culledDraws);
         const auto [shadowMap, cascadeData] = csmPass(shadows, backend, graph, 4);
         auto lightData = tiledLightCullingPass(lightCulling, backend, graph, scene, depthMap,
             1.f / 20.f);
-        // auto [lightList, culledLightData] = clusteredLightCullingPass(lightCulling, backend, graph);
-        // auto [pointLightShadowAtlas] = pointLightShadowPass(pointLightShadows, backend, graph, lightList, lightIndexList, lightGrid);
         auto [colorOutput, normal, positions, reflections] = opaqueForwardPass(opaque, backend, graph, culledDraws, depthMap, cascadeData, shadowMap, lightData);
-        auto output = ssrPass(ss, blur, backend, graph, colorOutput, normal, positions, reflections);
+        output = ssrPass(ss, blur, backend, graph, colorOutput, normal, positions, reflections);
         output = atmospherePass(atmosphere, backend, graph, depthMap, output);
-
-        auto _ = bloomPass(bloom, blur, backend, graph, output);
+        output = bloomPass(bloom, blur, backend, graph, output);
         //output = reinhardTonemapPass(tonemapper, backend, graph, output);
         //smaaPass(antiAliaser, backend, graph, output);
+
+        // TODO: perhaps this can be removed once the rg is smart enough for marking the output buffer
+        backend.addOutputBlitPass(graph, output);
+        // Renders directly to swapchain, no resources required
+        backend.addImguiPass(graph);
 
         compiledRenderGraph = compile(backend, std::move(graph));
     }
@@ -100,7 +108,7 @@ struct WorldRenderer
         // command buffers. I.e.: cmds = backend.recordCommandBuffers(compiledRenderGraph); backend.submit(cmds);
         if (compiledRenderGraph)
         {
-            backend.render(frame, *compiledRenderGraph, scene);
+            backend.render(frame, *compiledRenderGraph, scene, output);
         }
     }
 };
@@ -109,8 +117,12 @@ i32 main()
 {
     VulkanBackend* backend = initVulkanBackend().expect("Failed initialising Vulkan backend");
 
+    // Scene scene = loadScene(*backend, "Sponza", "../assets/intelsponza/sponza.gltf", 64 - 1)
+    // Scene scene = loadScene(*backend, "Sponza", "../assets/Suzanne/Suzanne.gltf", 4096 - 1)
     Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf", 4096 - 1)
         .value_or(emptyScene(*backend));
+
+    // Scene scene = emptyScene(*backend);
 
     WorldRenderer worldRenderer(*backend);
     worldRenderer.compileRenderGraph(scene);

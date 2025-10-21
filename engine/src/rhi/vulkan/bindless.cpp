@@ -1,5 +1,10 @@
 #include "rhi/vulkan/bindless.h"
 
+#include <cmath>
+#include <random>
+
+#include "debugUI.h"
+#include "imgui_impl_vulkan.h"
 #include "renderGraph.h"
 #include "rhi/vulkan/backend.h"
 #include "rhi/vulkan/descriptors.h"
@@ -9,6 +14,7 @@
 BindlessResources::BindlessResources(VulkanBackend& backend) : backend(&backend)
 {
     constexpr u32 maxBindlessResourceCount = 10000;
+    capacity = maxBindlessResourceCount;
     {
         VkDescriptorPoolSize poolSizes[] = {
             VkDescriptorPoolSize{
@@ -46,14 +52,31 @@ BindlessResources::BindlessResources(VulkanBackend& backend) : backend(&backend)
 
 auto BindlessResources::addTexture(Texture texture) -> BindlessTexture
 {
-    // TODO: Updating the bindless texture data should be moved
-    VkSampler sampler;
-    VkSamplerCreateInfo samplerInfo = vkutil::init::samplerCreateInfo(
-        VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT, texture.mipCount);
-    vkCreateSampler(backend->device, &samplerInfo, nullptr, &sampler);
+    // TODO: move this out somewhere else:
+    if (texture.name.empty())
+    {
+        // Some nonsense to generate "unique" name
 
+        static std::random_device dev;
+        static std::mt19937 rng(dev());
+        std::uniform_int_distribution<int> dist(0, 9);
+
+        texture.name = "generated_";
+        texture.name.reserve(10 + 128);
+        for (u32 i = 0; i < 128; i++)
+        {
+            texture.name += std::to_string(dist(rng));
+        }
+    }
+
+    if (cache.contains(texture.name))
+    {
+        return cache[texture.name];
+    }
+
+    // TODO: Updating the bindless texture data should be moved
     VkDescriptorImageInfo descriptorImageInfo = vkutil::init::descriptorImageInfo(
-        sampler, texture.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        texture.sampler, texture.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     VkWriteDescriptorSet descriptorWrite = vkutil::init::writeDescriptorImage(
         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, bindlessTexDesc, &descriptorImageInfo, 0);
 
@@ -72,6 +95,8 @@ auto BindlessResources::addTexture(Texture texture) -> BindlessTexture
     descriptorWrite.dstArrayElement = index;
 
     vkUpdateDescriptorSets(backend->device, 1, &descriptorWrite, 0, nullptr);
+
+    cache[texture.name] = index;
 
     return index;
 }

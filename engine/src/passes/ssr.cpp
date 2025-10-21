@@ -92,23 +92,19 @@ auto ssrPass(std::optional<ScreenSpaceRenderer>& ssRenderer, std::optional<BlurR
     const auto output = writeResource<BindlessTexture>(graph, pass, importResource(graph, pass, &ssRenderer->output),
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-    pass.pass.beginRendering = [output, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph)
+    pass.pass.beginRendering = [output, &backend](const RenderContext& ctx)
     {
-        const VkExtent2D swapchainSize = {
-            static_cast<u32>(backend.viewport.width),
-            static_cast<u32>(backend.viewport.height)
-        };
         VkClearValue colorClear = {
             .color = {.uint32 = {0, 0, 0, 0}}
         };
-        const auto& outputTexture = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(graph, output));
+        const auto& outputTexture = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(ctx.graph, output));
         auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(outputTexture.view, &colorClear,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        auto renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, 1, nullptr);
-        vkCmdBeginRendering(cmd, &renderingInfo);
+        auto renderingInfo = vkutil::init::renderingInfo(ctx.swapchain.size, &colorAttachmentInfo, 1, nullptr);
+        vkCmdBeginRendering(ctx.cmd, &renderingInfo);
     };
 
-    pass.pass.draw = [colorOutput, normal, positions, reflectionUvs, blurredReflectionUvs, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass& pass, Scene& scene)
+    pass.pass.draw = [colorOutput, normal, positions, reflectionUvs, blurredReflectionUvs, &backend](const RenderContext& ctx, RenderPass& pass)
     {
         ZoneScopedCpuGpuAuto("SSR pass", backend.currentFrame());
 
@@ -143,22 +139,22 @@ auto ssrPass(std::optional<ScreenSpaceRenderer>& ssRenderer, std::optional<BlurR
 
         constexpr glm::vec4 depth = glm::vec4(0.f);
         const SsrPushConstants pushConstants = {
-            .color = *getResource<BindlessTexture>(graph, colorOutput),
-            .normal = *getResource<BindlessTexture>(graph, normal),
-            .positions = *getResource<BindlessTexture>(graph, positions),
-            .reflections = *getResource<BindlessTexture>(graph, reflectionUvs),
-            .blurredReflections = *getResource<BindlessTexture>(graph, blurredReflectionUvs),
+            .color = *getResource<BindlessTexture>(ctx.graph, colorOutput),
+            .normal = *getResource<BindlessTexture>(ctx.graph, normal),
+            .positions = *getResource<BindlessTexture>(ctx.graph, positions),
+            .reflections = *getResource<BindlessTexture>(ctx.graph, reflectionUvs),
+            .blurredReflections = *getResource<BindlessTexture>(ctx.graph, blurredReflectionUvs),
             .mode = static_cast<u32>(mode),
             .reflectionIntensity = reflectionIntensity,
             .blurIntensity = blurIntensity
         };
-        vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::vec4),
+        vkCmdPushConstants(ctx.cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::vec4),
             &depth);
-        vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(glm::vec4), sizeof(pushConstants),
+        vkCmdPushConstants(ctx.cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(glm::vec4), sizeof(pushConstants),
             &pushConstants);
-        vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1,
+        vkCmdBindDescriptorSets(ctx.cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1,
             &backend.bindlessResources->bindlessTexDesc, 0, nullptr);
-        vkCmdDraw(cmd, 3, 1, 0, 0);
+        vkCmdDraw(ctx.cmd, 3, 1, 0, 0);
     };
 
     return output;

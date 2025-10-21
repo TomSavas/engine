@@ -209,14 +209,6 @@ void updateLights(f32 dt, std::vector<PointLight>& pointLights)
     }
 }
 
-struct ModelData
-{
-    glm::vec4 textures;
-    glm::vec4 selected;
-    glm::vec4 metallicRoughnessFactors;
-    glm::mat4 model;
-};
-
 auto gatherModelData(Scene& scene) -> std::vector<ModelData>
 {
     std::vector<ModelData> modelData;

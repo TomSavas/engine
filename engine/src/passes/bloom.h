@@ -8,7 +8,6 @@ struct BloomRenderer
 {
     Pipeline pipeline;
 
-    // TEMP:
     BindlessTexture output;
     std::vector<BindlessTexture> intermediateTextures;
 };

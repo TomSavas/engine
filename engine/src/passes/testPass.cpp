@@ -38,20 +38,16 @@ auto testPass(std::optional<TestRenderer>& renderer, VulkanBackend& backend, Ren
     pass.pass.debugName = "Test pass";
     pass.pass.pipeline = renderer->pipeline;
 
-    pass.pass.beginRendering = [&backend](VkCommandBuffer cmd, CompiledRenderGraph&)
+    pass.pass.beginRendering = [&backend](const RenderContext& ctx)
     {
-        const VkExtent2D swapchainSize = {
-            static_cast<u32>(backend.viewport.width),
-            static_cast<u32>(backend.viewport.height)
-        };
         auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backend.backbufferImage.view, nullptr,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        const auto renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, 1, nullptr);
-        vkCmdBeginRendering(cmd, &renderingInfo);
+        const auto renderingInfo = vkutil::init::renderingInfo(ctx.swapchain.size, &colorAttachmentInfo, 1, nullptr);
+        vkCmdBeginRendering(ctx.cmd, &renderingInfo);
     };
 
-    pass.pass.draw = [](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass& pass, Scene& scene)
+    pass.pass.draw = [](const RenderContext& ctx, RenderPass&)
     {
-        vkCmdDraw(cmd, 3, 1, 0, 0);
+        vkCmdDraw(ctx.cmd, 3, 1, 0, 0);
     };
 }

@@ -1,11 +1,7 @@
 #pragma once
 
-#include <chrono>
-#include <functional>
-
-#include "VkBootstrap.h"
 #include "engine.h"
-#include "result.hpp"
+#include "renderGraph.h"
 #include "rhi/renderpass.h"
 #include "rhi/vulkan/bindless.h"
 #include "rhi/vulkan/descriptors.h"
@@ -13,9 +9,16 @@
 #include "rhi/vulkan/utils/buffer.h"
 #include "rhi/vulkan/utils/image.h"
 #include "rhi/vulkan/utils/texture.h"
+
+#include "VkBootstrap.h"
 #include "tracy/Tracy.hpp"
 #include "tracy/TracyVulkan.hpp"
 #include "vk_mem_alloc.h"
+#include "result.hpp"
+
+#include <chrono>
+#include <functional>
+
 
 struct Stats
 {
@@ -61,6 +64,24 @@ struct Frame
 {
     FrameStats stats;
     std::reference_wrapper<FrameCtx> ctx;
+};
+
+struct CurrentSwapchain
+{
+    VkExtent2D size;
+    VkFormat format;
+    VkImage image;
+    VkImageView view;
+};
+
+struct RenderContext
+{
+    // Frame& frame;
+    CompiledRenderGraph& graph;
+    VkCommandBuffer& cmd;
+    Scene& scene;
+
+    CurrentSwapchain swapchain;
 };
 
 struct VulkanBackend
@@ -133,7 +154,10 @@ struct VulkanBackend
     auto newFrame() -> Frame;
     auto endFrame(Frame&& frame) -> FrameStats;
 
-    auto render(const Frame& frame, CompiledRenderGraph& compiledRenderGraph, Scene& scene) -> void;
+    auto render(const Frame& frame, CompiledRenderGraph& compiledRenderGraph, Scene& scene, RenderGraphResource<BindlessTexture> output) -> void;
+
+    auto addOutputBlitPass(RenderGraph& graph, RenderGraphResource<BindlessTexture> output) -> void;
+    auto addImguiPass(RenderGraph& graph) -> void;
 
     auto immediateSubmit(std::function<void(VkCommandBuffer)>&& f) -> void;
     auto copyBuffer(VkBuffer src, VkBuffer dst, VkBufferCopy copyRegion) -> void;

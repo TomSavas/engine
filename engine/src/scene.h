@@ -176,3 +176,13 @@ struct Scene
 result::result<Scene, assetError> loadScene(VulkanBackend& backend, std::string name, std::string path,
     u32 lightCount);
 Scene emptyScene(VulkanBackend& backend);
+
+struct ModelData
+{
+    glm::vec4 textures;
+    glm::vec4 selected;
+    glm::vec4 metallicRoughnessFactors;
+    glm::mat4 model;
+};
+
+auto gatherModelData(Scene& scene) -> std::vector<ModelData>;

@@ -15,6 +15,11 @@ struct PushConstants
 
 auto initBloom(VulkanBackend& backend) -> BloomRenderer
 {
+    const auto outputImage = backend.allocateImage(vkutil::init::imageCreateInfo(VK_FORMAT_R16G16B16A16_SFLOAT,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        backend.backbufferImage.extent, 1), VMA_MEMORY_USAGE_GPU_ONLY, 0, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT);
+
     return BloomRenderer{
         .pipeline = PipelineBuilder(backend)
             .addDescriptorLayouts({
@@ -44,6 +49,13 @@ auto initBloom(VulkanBackend& backend) -> BloomRenderer
             .addViewportScissorDynamicStates()
             .disableDepthTest()
             .build(),
+        .output = backend.bindlessResources->addTexture(
+            Texture {
+                .image = outputImage,
+                .view = outputImage.view,
+                .mipCount = 1,
+            }
+        ),
     };
 }
 
@@ -67,23 +79,24 @@ auto bloomPass(std::optional<BloomRenderer>& bloom, std::optional<BlurRenderer>&
 
     input = readResource<BindlessTexture>(graph, pass, input, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     blurredInput = readResource<BindlessTexture>(graph, pass, blurredInput, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    const auto output = writeResource<BindlessTexture>(graph, pass, importResource(graph, pass, &bloom->output),
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-    pass.pass.beginRendering = [&backend](VkCommandBuffer cmd, CompiledRenderGraph& graph)
+    pass.pass.beginRendering = [&backend, output](const RenderContext& ctx)
     {
-        VkExtent2D swapchainSize = {
-            static_cast<u32>(backend.viewport.width),
-            static_cast<u32>(backend.viewport.height)
-        };
         VkClearValue colorClear = {
             .color = {.uint32 = {0, 0, 0, 0}}
         };
-        auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backend.backbufferImage.view, &colorClear,
+        const auto& outputTexture = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(ctx.graph, output));
+        auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(outputTexture.view, nullptr,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        const auto renderingInfo = vkutil::init::renderingInfo(swapchainSize, &colorAttachmentInfo, 1, nullptr);
-        vkCmdBeginRendering(cmd, &renderingInfo);
+        // auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backend.backbufferImage.view, &colorClear,
+        //     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        const auto renderingInfo = vkutil::init::renderingInfo(ctx.swapchain.size, &colorAttachmentInfo, 1, nullptr);
+        vkCmdBeginRendering(ctx.cmd, &renderingInfo);
     };
 
-    pass.pass.draw = [input, blurredInput, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass& pass, Scene& scene)
+    pass.pass.draw = [input, blurredInput, &backend](const RenderContext& ctx, RenderPass& pass)
     {
         ZoneScopedCpuGpuAuto("Bloom pass", backend.currentFrame());
 
@@ -99,20 +112,19 @@ auto bloomPass(std::optional<BloomRenderer>& bloom, std::optional<BlurRenderer>&
 
         const auto pushConstants = PushConstants {
             .strength = glm::vec4(bloomIntensity),
-            .blurredInput = *getResource<BindlessTexture>(graph, blurredInput),
-            .input = *getResource<BindlessTexture>(graph, input),
+            .blurredInput = *getResource<BindlessTexture>(ctx.graph, blurredInput),
+            .input = *getResource<BindlessTexture>(ctx.graph, input),
         };
         const auto depth = glm::vec4(0.f);
-        vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::vec4),
+        vkCmdPushConstants(ctx.cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::vec4),
             &depth);
-        vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(glm::vec4), sizeof(pushConstants),
+        vkCmdPushConstants(ctx.cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(glm::vec4), sizeof(pushConstants),
             &pushConstants);
 
-        vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1,
+        vkCmdBindDescriptorSets(ctx.cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1,
             &backend.bindlessResources->bindlessTexDesc, 0, nullptr);
-        vkCmdDraw(cmd, 3, 1, 0, 0);
+        vkCmdDraw(ctx.cmd, 3, 1, 0, 0);
     };
 
-    // TEMP: replace with actual resource
-    return 0;
+    return output;
 }

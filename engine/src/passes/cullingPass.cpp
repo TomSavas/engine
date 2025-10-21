@@ -58,16 +58,16 @@ auto cpuFrustumCullingPass(std::optional<GeometryCulling>& geometryCulling, Vulk
     CullingPassRenderGraphData data = {};
     data.culledDraws = importResource<Buffer>(graph, pass, &geometryCulling->culledDraws.buffer);
 
-    pass.pass.draw = [data, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass&, Scene& scene)
+    pass.pass.draw = [data, &backend](const RenderContext& ctx, RenderPass&)
     {
         ZoneScopedN("CPU Frustum culling");
         {
 
             const auto view = glm::inverse(
-                glm::translate(glm::mat4(1.f), scene.mainCamera.position) * scene.mainCamera.rotation);
-            const auto projection = glm::perspectiveFov<f32>(scene.mainCamera.verticalFov,
+                glm::translate(glm::mat4(1.f), ctx.scene.mainCamera.position) * ctx.scene.mainCamera.rotation);
+            const auto projection = glm::perspectiveFov<f32>(ctx.scene.mainCamera.verticalFov,
                 backend.backbufferImage.extent.width, backend.backbufferImage.extent.height,
-                scene.mainCamera.nearClippingPlaneDist, scene.mainCamera.farClippingPlaneDist);
+                ctx.scene.mainCamera.nearClippingPlaneDist, ctx.scene.mainCamera.farClippingPlaneDist);
             const auto viewProj = projection * view;
             const auto viewProjTranspose = glm::transpose(viewProj);
             const std::array frustumPlanes = {
@@ -80,8 +80,8 @@ auto cpuFrustumCullingPass(std::optional<GeometryCulling>& geometryCulling, Vulk
             };
 
             std::vector<VkDrawIndexedIndirectCommand> indirectCmds;
-            indirectCmds.reserve(scene.meshCount);
-            for (auto& mesh : scene.meshes)
+            indirectCmds.reserve(ctx.scene.meshCount);
+            for (auto& mesh : ctx.scene.meshes)
             {
                 for (auto& instance : mesh.second.instances)
                 {
@@ -98,7 +98,7 @@ auto cpuFrustumCullingPass(std::optional<GeometryCulling>& geometryCulling, Vulk
             }
 
             backend.copyBufferWithStaging(indirectCmds.data(), sizeof(VkDrawIndexedIndirectCommand) * indirectCmds.size(),
-                *getResource<Buffer>(graph, data.culledDraws));
+                *getResource<Buffer>(ctx.graph, data.culledDraws));
         }
     };
 

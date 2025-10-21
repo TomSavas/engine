@@ -164,28 +164,24 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
     };
 
-    pass.pass.beginRendering = [data, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph)
+    pass.pass.beginRendering = [data, &backend](const RenderContext& ctx)
     {
-        const VkExtent2D swapchainSize = {
-            static_cast<u32>(backend.viewport.width),
-            static_cast<u32>(backend.viewport.height)
-        };
         VkClearValue colorClear = {
             .color = {.uint32 = {0, 0, 0, 0}}
         };
-        const auto& colorImage = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(graph,
+        const auto& colorImage = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(ctx.graph,
             data.color));
         auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(colorImage.view, &colorClear,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        const auto& normalImage = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(graph,
+        const auto& normalImage = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(ctx.graph,
             data.normal));
         auto normalAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(normalImage.view, &colorClear,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        const auto& positionImage = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(graph,
+        const auto& positionImage = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(ctx.graph,
             data.positions));
         auto positionAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(positionImage.view, &colorClear,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        const auto& reflectionImage = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(graph,
+        const auto& reflectionImage = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(ctx.graph,
             data.reflections));
         auto reflectionAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(reflectionImage.view, &colorClear,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -197,15 +193,15 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
         };
         auto depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(
             backend.bindlessResources->getTexture(
-                *getResource<BindlessTexture>(graph, data.depthMap)).view,
+                *getResource<BindlessTexture>(ctx.graph, data.depthMap)).view,
                 // No clear -- we're using ZPrePass
                 VK_ATTACHMENT_LOAD_OP_LOAD);
-        auto renderingInfo = vkutil::init::renderingInfo(swapchainSize, attachments, std::size(attachments),
+        auto renderingInfo = vkutil::init::renderingInfo(ctx.swapchain.size, attachments, std::size(attachments),
             &depthAttachmentInfo);
-        vkCmdBeginRendering(cmd, &renderingInfo);
+        vkCmdBeginRendering(ctx.cmd, &renderingInfo);
     };
 
-    pass.pass.draw = [data, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass& pass, Scene& scene) -> void
+    pass.pass.draw = [data, &backend](const RenderContext& ctx, RenderPass& pass) -> void
     {
         ZoneScopedCpuGpuAuto("Forward opaque pass", backend.currentFrame());
 
@@ -229,21 +225,21 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
                 0.f,
                 0.f
             ),
-            .vertexBufferAddr = backend.getBufferDeviceAddress(scene.vertexBuffer.buffer),
-            .perModelDataBufferAddr = backend.getBufferDeviceAddress(scene.perModelBuffer.buffer),
-            .shadowData = backend.getBufferDeviceAddress(*getResource<Buffer>(graph, data.shadowData)),
-            .lightList = backend.getBufferDeviceAddress(*getResource<Buffer>(graph, data.lightList)),
-            .lightIndexList = backend.getBufferDeviceAddress(*getResource<Buffer>(graph, data.lightIndexList)),
-            .lightGrid = backend.getBufferDeviceAddress(*getResource<Buffer>(graph, data.lightGrid)),
-            .shadowMapIndex = *getResource<BindlessTexture>(graph, data.shadowMap),
-            .depthMapIndex = *getResource<BindlessTexture>(graph, data.depthMap),
+            .vertexBufferAddr = backend.getBufferDeviceAddress(ctx.scene.vertexBuffer.buffer),
+            .perModelDataBufferAddr = backend.getBufferDeviceAddress(ctx.scene.perModelBuffer.buffer),
+            .shadowData = backend.getBufferDeviceAddress(*getResource<Buffer>(ctx.graph, data.shadowData)),
+            .lightList = backend.getBufferDeviceAddress(*getResource<Buffer>(ctx.graph, data.lightList)),
+            .lightIndexList = backend.getBufferDeviceAddress(*getResource<Buffer>(ctx.graph, data.lightIndexList)),
+            .lightGrid = backend.getBufferDeviceAddress(*getResource<Buffer>(ctx.graph, data.lightGrid)),
+            .shadowMapIndex = *getResource<BindlessTexture>(ctx.graph, data.shadowMap),
+            .depthMapIndex = *getResource<BindlessTexture>(ctx.graph, data.depthMap),
         };
-        vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(pushConstants),
+        vkCmdPushConstants(ctx.cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(pushConstants),
             &pushConstants);
-        vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1,
+        vkCmdBindDescriptorSets(ctx.cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1,
             &backend.bindlessResources->bindlessTexDesc, 0, nullptr);
-        vkCmdBindIndexBuffer(cmd, scene.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-        vkCmdDrawIndexedIndirect(cmd, *getResource<Buffer>(graph, data.culledDraws), 0, scene.meshes.size(),
+        vkCmdBindIndexBuffer(ctx.cmd, ctx.scene.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexedIndirect(ctx.cmd, *getResource<Buffer>(ctx.graph, data.culledDraws), 0, ctx.scene.meshes.size(),
             sizeof(VkDrawIndexedIndirectCommand));
     };
 

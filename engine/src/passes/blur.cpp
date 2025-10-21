@@ -135,19 +135,19 @@ auto kawasePass(Pipeline& kawasePipeline, VulkanBackend& backend, RenderGraph& g
         hackToNotLooseResource),
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-    pass.pass.beginRendering = [outputResource, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph)
+    pass.pass.beginRendering = [outputResource, &backend](const RenderContext& ctx)
     {
-        const auto& outputTexture = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(graph, outputResource));
+        const auto& outputTexture = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(ctx.graph, outputResource));
         auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(outputTexture.view, nullptr,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         auto renderingInfo = vkutil::init::renderingInfo(outputTexture.image.extent, &colorAttachmentInfo, 1, nullptr);
-        vkCmdBeginRendering(cmd, &renderingInfo);
+        vkCmdBeginRendering(ctx.cmd, &renderingInfo);
     };
 
-    pass.pass.draw = [input, outputResource, positionOffsetMultiplier, colorMultiplier, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass& pass, Scene& scene)
+    pass.pass.draw = [input, outputResource, positionOffsetMultiplier, colorMultiplier, &backend](const RenderContext& ctx, RenderPass& pass)
     {
         ZoneScopedCpuGpuAuto("Dual Kawase Blur pass", backend.currentFrame());
-        const auto bindlessInputTexture = *getResource<BindlessTexture>(graph, input);
+        const auto bindlessInputTexture = *getResource<BindlessTexture>(ctx.graph, input);
         const auto& inputTexture = backend.bindlessResources->getTexture(bindlessInputTexture);
         const auto pushConstants = DualKawasePushConstants {
             .params = glm::vec4(
@@ -159,12 +159,12 @@ auto kawasePass(Pipeline& kawasePipeline, VulkanBackend& backend, RenderGraph& g
             .inputTexture = bindlessInputTexture
         };
         const auto depth = glm::vec4(0.f);
-        vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::vec4),
+        vkCmdPushConstants(ctx.cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::vec4),
             &depth);
-        vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(glm::vec4), sizeof(pushConstants),
+        vkCmdPushConstants(ctx.cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(glm::vec4), sizeof(pushConstants),
             &pushConstants);
 
-        const auto& outputTexture = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(graph, outputResource));
+        const auto& outputTexture = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(ctx.graph, outputResource));
         VkViewport viewport = {
             .x = 0,
             .y = 0,
@@ -176,12 +176,12 @@ auto kawasePass(Pipeline& kawasePipeline, VulkanBackend& backend, RenderGraph& g
             .offset = VkOffset2D{0, 0},
             .extent = VkExtent2D{outputTexture.image.extent.width, outputTexture.image.extent.height}
         };
-        vkCmdSetViewport(cmd, 0, 1, &viewport);
-        vkCmdSetScissor(cmd, 0, 1, &scissor);
+        vkCmdSetViewport(ctx.cmd, 0, 1, &viewport);
+        vkCmdSetScissor(ctx.cmd, 0, 1, &scissor);
 
-        vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1,
+        vkCmdBindDescriptorSets(ctx.cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1,
             &backend.bindlessResources->bindlessTexDesc, 0, nullptr);
-        vkCmdDraw(cmd, 3, 1, 0, 0);
+        vkCmdDraw(ctx.cmd, 3, 1, 0, 0);
     };
 
     return outputResource;

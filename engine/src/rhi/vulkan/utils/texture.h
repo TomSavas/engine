@@ -13,6 +13,12 @@ class VulkanBackend;
 // FIXME: remove this, and move mipCount to allocated Image
 struct Texture
 {
+    std::optional<VkDescriptorSet> imguiDescriptorSet = std::nullopt;
+    std::string name;
+
+    bool loadedFromFile = false;
+
+    VkSampler sampler;
     AllocatedImage image;
     VkImageView view;
 

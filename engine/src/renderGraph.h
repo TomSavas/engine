@@ -6,6 +6,7 @@
 #include <vulkan/vulkan_core.h>
 
 #include <functional>
+#include <limits>
 #include <vector>
 
 class VulkanBackend;
@@ -13,6 +14,8 @@ class VulkanBackend;
 using Handle = u32;
 // TODO: Make this non VK specific
 using Layout = VkImageLayout;
+
+constexpr Handle kInvalidHandle = std::numeric_limits<Handle>::max();
 
 // TODO: Make these non VK specific
 using ImageBarrier = VkImageMemoryBarrier2;

@@ -92,16 +92,16 @@ auto tiledLightCullingPass(std::optional<LightCulling>& lightCulling, VulkanBack
         .lightCount = writeResource<Buffer>(graph, pass, importResource(graph, pass, &lightCulling->lightCount.buffer)),
     };
 
-    pass.pass.draw = [data, tileCount, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass& pass, Scene& scene)
+    pass.pass.draw = [data, tileCount, &backend](const RenderContext& ctx, RenderPass& pass)
     {
         ZoneScopedCpuGpuAuto("Tiled light culling pass", backend.currentFrame());
 
         // TODO: this should live in a separate pass at the start, for uploading all the scene info.
-        u32 count = scene.pointLights.size();
-        backend.copyBufferWithStaging(&count, sizeof(count), *getResource<Buffer>(graph, data.lightList));
-        backend.copyBufferWithStaging(scene.pointLights.data(),
-            sizeof(decltype(scene.pointLights)::value_type) * scene.pointLights.size(),
-            *getResource<Buffer>(graph, data.lightList),
+        u32 count = ctx.scene.pointLights.size();
+        backend.copyBufferWithStaging(&count, sizeof(count), *getResource<Buffer>(ctx.graph, data.lightList));
+        backend.copyBufferWithStaging(ctx.scene.pointLights.data(),
+            sizeof(decltype(ctx.scene.pointLights)::value_type) * ctx.scene.pointLights.size(),
+            *getResource<Buffer>(ctx.graph, data.lightList),
             VkBufferCopy{
                 .srcOffset = 0,
                 .dstOffset = sizeof(glm::vec4),
@@ -110,22 +110,22 @@ auto tiledLightCullingPass(std::optional<LightCulling>& lightCulling, VulkanBack
 
         // TEMP:
         count = 0;
-        backend.copyBufferWithStaging(&count, sizeof(count), *getResource<Buffer>(graph, data.lightCount));
+        backend.copyBufferWithStaging(&count, sizeof(count), *getResource<Buffer>(ctx.graph, data.lightCount));
 
         const LightCullingPushConstants pushConstants = {
-            .depthMap = *getResource<BindlessTexture>(graph, data.depthMap),
-            .lightList = backend.getBufferDeviceAddress(*getResource<Buffer>(graph, data.lightList)),
-            .lightIndexList = backend.getBufferDeviceAddress(*getResource<Buffer>(graph, data.lightIndexList)),
-            .lightGrid = backend.getBufferDeviceAddress(*getResource<Buffer>(graph, data.lightGrid)),
+            .depthMap = *getResource<BindlessTexture>(ctx.graph, data.depthMap),
+            .lightList = backend.getBufferDeviceAddress(*getResource<Buffer>(ctx.graph, data.lightList)),
+            .lightIndexList = backend.getBufferDeviceAddress(*getResource<Buffer>(ctx.graph, data.lightIndexList)),
+            .lightGrid = backend.getBufferDeviceAddress(*getResource<Buffer>(ctx.graph, data.lightGrid)),
             // TEMP:
-            .lightCount = backend.getBufferDeviceAddress(*getResource<Buffer>(graph, data.lightCount)),
+            .lightCount = backend.getBufferDeviceAddress(*getResource<Buffer>(ctx.graph, data.lightCount)),
         };
 
-        vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushConstants),
+        vkCmdPushConstants(ctx.cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushConstants),
             &pushConstants);
-        vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1,
+        vkCmdBindDescriptorSets(ctx.cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1,
             &backend.bindlessResources->bindlessTexDesc, 0, nullptr);
-        vkCmdDispatch(cmd, tileCount[0], tileCount[1], 1);
+        vkCmdDispatch(ctx.cmd, tileCount[0], tileCount[1], 1);
     };
 
     return data;

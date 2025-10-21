@@ -466,7 +466,9 @@ auto VulkanBackend::initProfiler() -> void
 
 auto VulkanBackend::currentFrame() -> FrameCtx& { return frames[currentFrameNumber % MaxFramesInFlight]; }
 
-auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene& scene) -> void
+auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene& scene,
+    RenderGraphResource<BindlessTexture> output)
+    -> void
 {
     ZoneScoped;
     std::string profilerTag = std::format(
@@ -546,6 +548,21 @@ auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
         {
             ZoneScopedCpuGpuAuto("Render graph", frameCtx);
 
+            RenderContext renderCtx =
+            {
+               // .frame = frame,
+               .graph = graph,
+               .cmd = cmd,
+               .scene = scene,
+               .swapchain = CurrentSwapchain
+               {
+                   .size = swapchainSize,
+                   .format = swapchainImageFormat,
+                   .image = swapchainImages[swapchainImageIndex],
+                   .view = swapchainImageViews[swapchainImageIndex],
+               }     
+            };
+
             for (CompiledRenderGraph::Node& node : graph.nodes)
             {
                 RenderPass& pass = node.pass;
@@ -575,7 +592,7 @@ auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
                     if (pass.beginRendering)
                     {
                         ZoneScopedN("Begin rendering");
-                        (*pass.beginRendering)(cmd, graph);
+                        (*pass.beginRendering)(renderCtx);
                     }
 
                     vkCmdBindPipeline(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipeline);
@@ -593,7 +610,7 @@ auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
 
                     {
                         ZoneScopedN("Draw");
-                        pass.draw(cmd, graph, pass, scene);
+                        pass.draw(renderCtx, pass);
                     }
 
                     if (pass.beginRendering)
@@ -605,39 +622,9 @@ auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
                 else
                 {
                     ZoneScopedN("Draw without pipeline");
-                    pass.draw(cmd, graph, pass, scene);
+                    pass.draw(renderCtx, pass);
                 }
             }
-        }
-
-        VkExtent2D backbufferSize{backbufferImage.extent.width, backbufferImage.extent.height};
-        {
-            ZoneScopedCpuGpuAuto("Blit to swapchain", frameCtx);
-
-            vkutil::image::transitionImage(cmd, backbufferImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-            vkutil::image::transitionImage(cmd, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-            vkutil::image::blitImageToImage(
-                cmd, backbufferImage.image, backbufferSize, swapchainImages[swapchainImageIndex], swapchainSize);
-        }
-
-        {
-            ZoneScopedCpuGpuAuto("Render Imgui", frameCtx);
-
-            ImGui::Render();
-
-            vkutil::image::transitionImage(cmd, swapchainImages[swapchainImageIndex],
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-            VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(
-                swapchainImageViews[swapchainImageIndex], nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-            VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(
-                swapchainSize, &colorAttachmentInfo, 1, nullptr);
-
-            vkCmdBeginRendering(cmd, &renderingInfo);
-            ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
-            vkCmdEndRendering(cmd);
         }
 
         vkutil::image::transitionImage(cmd, swapchainImages[swapchainImageIndex],
@@ -673,6 +660,54 @@ auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
         auto submit = vkutil::init::submitInfo2(&cmdInfo, nullptr, nullptr);
         VK_CHECK(vkQueueSubmit2(graphicsQueue, 1, &submit, frameCtx.tracyRenderFence));
     }
+}
+
+auto VulkanBackend::addOutputBlitPass(RenderGraph& graph, RenderGraphResource<BindlessTexture> output) -> void
+{
+    auto& pass = createPass(graph);
+    pass.pass.debugName = std::format("Output blit pass");
+
+    output = readResource<BindlessTexture>(graph, pass, output, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+    pass.pass.draw = [this, output](const RenderContext& ctx, RenderPass& pass)
+    {
+        auto bindlessOutput = BindlessResources::kError;
+        if (output != kInvalidHandle)
+        {
+            bindlessOutput = *getResource<BindlessTexture>(ctx.graph, output);
+        }
+        const auto& outputTexture = bindlessResources->getTexture(bindlessOutput);
+
+        vkutil::image::transitionImage(ctx.cmd, ctx.swapchain.image, VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        vkutil::image::blitImageToImage(ctx.cmd, outputTexture.image.image,
+            VkExtent2D{outputTexture.image.extent.width, outputTexture.image.extent.height},
+            ctx.swapchain.image, ctx.swapchain.size);
+    };
+}
+
+auto VulkanBackend::addImguiPass(RenderGraph& graph) -> void
+{
+    auto& pass = createPass(graph);
+    pass.pass.debugName = std::format("Imgui pass");
+
+    pass.pass.draw = [this](const RenderContext& ctx, RenderPass&)
+    {
+        ImGui::Render();
+
+        // TODO: perhaps we can move swapchain as a resource into render graph
+        vkutil::image::transitionImage(ctx.cmd, ctx.swapchain.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+        VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(
+            ctx.swapchain.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(
+            ctx.swapchain.size, &colorAttachmentInfo, 1, nullptr);
+
+        vkCmdBeginRendering(ctx.cmd, &renderingInfo);
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), ctx.cmd);
+        vkCmdEndRendering(ctx.cmd);
+    };
 }
 
 auto VulkanBackend::immediateSubmit(std::function<void(VkCommandBuffer)>&& f) -> void

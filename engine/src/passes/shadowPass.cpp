@@ -218,10 +218,10 @@ auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backe
             importResource(graph, pass, &shadowRenderer->cascadeParams.buffer))
     };
 
-    pass.pass.beginRendering = [data, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph)
+    pass.pass.beginRendering = [data, &backend](const RenderContext& ctx)
     {
         const auto shadowMap = backend.bindlessResources->getTexture(
-            *getResource<BindlessTexture>(graph, data.shadowMap));
+            *getResource<BindlessTexture>(ctx.graph, data.shadowMap));
         const VkExtent2D size = {
             .width = shadowMap.image.extent.width,
             .height = shadowMap.image.extent.height
@@ -229,27 +229,26 @@ auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backe
 
         auto depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(shadowMap.view);
         auto renderingInfo = vkutil::init::renderingInfo(size, nullptr, 0, &depthAttachmentInfo);
-        vkCmdBeginRendering(cmd, &renderingInfo);
+        vkCmdBeginRendering(ctx.cmd, &renderingInfo);
     };
 
-    pass.pass.draw = [data, cascadeCount, &backend](VkCommandBuffer cmd, CompiledRenderGraph& graph, RenderPass& pass,
-        Scene& scene)
+    pass.pass.draw = [data, cascadeCount, &backend](const RenderContext& ctx, RenderPass& pass)
     {
         ZoneScopedCpuGpuAuto("CSM pass", backend.currentFrame());
 
         const auto shadowMap = backend.bindlessResources->getTexture(
-            *getResource<BindlessTexture>(graph, data.shadowMap));
+            *getResource<BindlessTexture>(ctx.graph, data.shadowMap));
         const auto singleCascadeSize = shadowMap.image.extent.height;
 
-        auto cascadeParams = csmCascadeParams(cascadeCount, scene.mainCamera, scene.lightDir, 0.5,
+        auto cascadeParams = csmCascadeParams(cascadeCount, ctx.scene.mainCamera, ctx.scene.lightDir, 0.5,
             static_cast<f32>(singleCascadeSize));
-        auto cascadeParamBuffer = *getResource<Buffer>(graph, data.cascadeParams);
+        auto cascadeParamBuffer = *getResource<Buffer>(ctx.graph, data.cascadeParams);
         backend.copyBufferWithStaging(&cascadeParams, sizeof(cascadeParams), cascadeParamBuffer);
 
         ShadowPushConstants pushConstants{
-            .vertexBufferAddr = backend.getBufferDeviceAddress(scene.vertexBuffer.buffer),
+            .vertexBufferAddr = backend.getBufferDeviceAddress(ctx.scene.vertexBuffer.buffer),
             .cascadeDataAddr = backend.getBufferDeviceAddress(cascadeParamBuffer),
-            .perModelDataBufferAddr = backend.getBufferDeviceAddress(scene.perModelBuffer.buffer),
+            .perModelDataBufferAddr = backend.getBufferDeviceAddress(ctx.scene.perModelBuffer.buffer),
         };
 
         VkViewport viewport = {
@@ -264,19 +263,19 @@ auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backe
             .extent = VkExtent2D{singleCascadeSize, singleCascadeSize}
         };
 
-        vkCmdBindIndexBuffer(cmd, scene.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(ctx.cmd, ctx.scene.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
         for (u32 i = 0; i < cascadeCount; ++i)
         {
             pushConstants.cascade = i;
-            vkCmdPushConstants(cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushConstants),
+            vkCmdPushConstants(ctx.cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushConstants),
                 &pushConstants);
 
             viewport.x = static_cast<f32>(i) * static_cast<f32>(singleCascadeSize);
             scissor.offset.x = viewport.x;
-            vkCmdSetViewport(cmd, 0, 1, &viewport);
-            vkCmdSetScissor(cmd, 0, 1, &scissor);
+            vkCmdSetViewport(ctx.cmd, 0, 1, &viewport);
+            vkCmdSetScissor(ctx.cmd, 0, 1, &scissor);
 
-            vkCmdDrawIndexedIndirect(cmd, scene.indirectCommands.buffer, 0, scene.meshes.size(),
+            vkCmdDrawIndexedIndirect(ctx.cmd, ctx.scene.indirectCommands.buffer, 0, ctx.scene.meshes.size(),
                 sizeof(VkDrawIndexedIndirectCommand));
         }
     };
