@@ -111,6 +111,8 @@ void main()
 	vec3 n = normalMappingEnabled ? normalize(tbn * (texNormal * vec3(2.f) - vec3(1.f))) : tbn[2];
 	outNormal = vec4(n, 1.f);
 
+	outPos = vec4(pos, 1.f);
+
     vec3 cameraDir = normalize(scene.cameraPos.xyz - pos);
 
     // Look up light tile
