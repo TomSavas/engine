@@ -92,14 +92,14 @@ auto tiledLightCullingPass(std::optional<LightCulling>& lightCulling, VulkanBack
         .lightCount = writeResource<Buffer>(graph, pass, importResource(graph, pass, &lightCulling->lightCount)),
     };
 
-    pass.pass.draw = [data, tileCount, &backend](const RenderContext& ctx, RenderPass& pass)
+    pass.pass.prepare = [&backend, data](const RenderContext& ctx)
     {
         ZoneScopedCpuGpuAuto("Tiled light culling pass", backend.currentFrame());
 
         // TODO: this should live in a separate pass at the start, for uploading all the scene info.
         u32 count = ctx.scene.pointLights.size();
-        backend.copyBufferWithStaging(&count, sizeof(count), getResource<Buffer>(ctx.graph, data.lightList)->buffer);
-        backend.copyBufferWithStaging(ctx.scene.pointLights.data(),
+        backend.copyBufferWithStaging(ctx.cmd, &count, sizeof(count), getResource<Buffer>(ctx.graph, data.lightList)->buffer);
+        backend.copyBufferWithStaging(ctx.cmd, ctx.scene.pointLights.data(),
             sizeof(decltype(ctx.scene.pointLights)::value_type) * ctx.scene.pointLights.size(),
             getResource<Buffer>(ctx.graph, data.lightList)->buffer,
             VkBufferCopy{
@@ -110,7 +110,12 @@ auto tiledLightCullingPass(std::optional<LightCulling>& lightCulling, VulkanBack
 
         // TEMP:
         count = 0;
-        backend.copyBufferWithStaging(&count, sizeof(count), getResource<Buffer>(ctx.graph, data.lightCount)->buffer);
+        backend.copyBufferWithStaging(ctx.cmd, &count, sizeof(count), getResource<Buffer>(ctx.graph, data.lightCount)->buffer);
+    };
+
+    pass.pass.draw = [data, tileCount, &backend](const RenderContext& ctx, RenderPass& pass)
+    {
+        ZoneScopedCpuGpuAuto("Tiled light culling pass", backend.currentFrame());
 
         const LightCullingPushConstants pushConstants = {
             .depthMap = *getResource<BindlessTexture>(ctx.graph, data.depthMap),

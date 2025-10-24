@@ -61,7 +61,7 @@ auto initForwardOpaque(VulkanBackend& backend) -> ForwardOpaqueRenderer
             .enableAlphaBlending()
             .depthFormat(VK_FORMAT_D32_SFLOAT) // TEMP: this should be taken from bindless
             .addViewportScissorDynamicStates()
-            .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
+            .enableDepthTest(false, VK_COMPARE_OP_LESS_OR_EQUAL)
             .build(),
         .color = backend.bindlessResources->addTexture(
             backend.allocateTexture(
@@ -135,7 +135,7 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
         .culledDraws = readResource<Buffer>(graph, pass, culledDraws),
         .shadowData = readResource<Buffer>(graph, pass, shadowData),
         .shadowMap = readResource<BindlessTexture>(graph, pass, shadowMap, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL),
-        .depthMap = readResource<BindlessTexture>(graph, pass, depthMap, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL),
+        .depthMap = readResource<BindlessTexture>(graph, pass, depthMap, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL),
         .lightList = readResource<Buffer>(graph, pass, lightData.lightList),
         .lightIndexList = readResource<Buffer>(graph, pass, lightData.lightIndexList),
         .lightGrid = readResource<Buffer>(graph, pass, lightData.lightGrid),

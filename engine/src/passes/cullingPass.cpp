@@ -56,9 +56,9 @@ auto cpuFrustumCullingPass(std::optional<GeometryCulling>& geometryCulling, Vulk
     pass.pass.debugName = "CPU frustum culling pass";
 
     CullingPassRenderGraphData data = {};
-    data.culledDraws = importResource<Buffer>(graph, pass, &geometryCulling->culledDraws);
+    data.culledDraws = writeResource<Buffer>(graph, pass, importResource(graph, pass, &geometryCulling->culledDraws));
 
-    pass.pass.draw = [data, &backend](const RenderContext& ctx, RenderPass&)
+    pass.pass.draw = [data, &backend](const RenderContext& ctx, RenderPass& pass)
     {
         ZoneScopedN("CPU Frustum culling");
         {
@@ -97,7 +97,7 @@ auto cpuFrustumCullingPass(std::optional<GeometryCulling>& geometryCulling, Vulk
                 }
             }
 
-            backend.copyBufferWithStaging(indirectCmds.data(), sizeof(VkDrawIndexedIndirectCommand) * indirectCmds.size(),
+            backend.copyBufferWithStaging(ctx.cmd, indirectCmds.data(), sizeof(VkDrawIndexedIndirectCommand) * indirectCmds.size(),
                 getResource<Buffer>(ctx.graph, data.culledDraws)->buffer);
         }
     };

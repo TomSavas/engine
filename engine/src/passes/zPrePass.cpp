@@ -69,7 +69,7 @@ auto zPrePass(std::optional<ZPrePassRenderer>& renderer, VulkanBackend& backend,
     pass.pass.pipeline = renderer->pipeline;
 
     ZPrePassRenderGraphData data = {
-        .depthMap = readResource<BindlessTexture>(graph, pass,
+        .depthMap = writeResource<BindlessTexture>(graph, pass,
             importResource(graph, pass, &renderer->depthMap), VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL),
     };
     culledDraws = readResource<Buffer>(graph, pass, culledDraws);

@@ -121,7 +121,7 @@ struct VulkanBackend
     AllocatedImage backbufferImage;
 
     // Frames
-    static constexpr i32 MaxFramesInFlight = 5;
+    static constexpr i32 MaxFramesInFlight = 1;
     FrameCtx frames[MaxFramesInFlight];
     u64 currentFrameNumber = 0;
 
@@ -147,6 +147,7 @@ struct VulkanBackend
     VkDescriptorSetLayout sceneDescriptorSetLayout;
 
     PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT;
+    PFN_vkCmdInsertDebugUtilsLabelEXT vkCmdInsertDebugUtilsLabelEXT;
     PFN_vkCmdBeginDebugUtilsLabelEXT vkCmdBeginDebugUtilsLabelEXT;
     PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabelEXT;
 
@@ -165,8 +166,10 @@ struct VulkanBackend
     auto addImguiPass(RenderGraph& graph) -> void;
 
     auto immediateSubmit(std::function<void(VkCommandBuffer)>&& f) -> void;
-    auto copyBuffer(VkBuffer src, VkBuffer dst, VkBufferCopy copyRegion) -> void;
-    auto copyBufferWithStaging(void* data, size_t size, VkBuffer dst, VkBufferCopy copyRegion = VkBufferCopy()) -> void;
+    auto copyBuffer(std::optional<VkCommandBuffer> cmd, VkBuffer src, VkBuffer dst, VkBufferCopy copyRegion) -> void;
+    auto copyBufferWithStaging(std::optional<VkCommandBuffer> cmd, void* data, size_t size, VkBuffer dst,
+        VkBufferCopy copyRegion = VkBufferCopy())
+        -> void;
 
     auto allocateBuffer(VkBufferCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags,
         VkMemoryPropertyFlags requiredFlags) -> AllocatedBuffer;

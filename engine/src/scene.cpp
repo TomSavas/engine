@@ -672,8 +672,8 @@ void Scene::createBuffers()
     //     }
     // }
 
-    backend.copyBufferWithStaging(vertexData.data(), vertexBufferSize, vertexBuffer.buffer);
-    backend.copyBufferWithStaging(indices.data(), indexBufferSize, indexBuffer.buffer);
+    backend.copyBufferWithStaging(std::nullopt, vertexData.data(), vertexBufferSize, vertexBuffer.buffer);
+    backend.copyBufferWithStaging(std::nullopt, indices.data(), indexBufferSize, indexBuffer.buffer);
     // backend.copyBufferWithStaging(
     //     cmds.data(), sizeof(VkDrawIndexedIndirectCommand) * cmds.size(), indirectCommands.buffer);
 }

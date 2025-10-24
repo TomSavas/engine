@@ -86,12 +86,12 @@ auto sceneUploadPass(std::optional<SceneDataUploader>& sceneUploader, VulkanBack
                 }
             }
 
-            backend.copyBufferWithStaging(cmds.data(), sizeof(VkDrawIndexedIndirectCommand) * cmds.size(), getResource<Buffer>(ctx.graph, data.allDraws)->buffer);
+            backend.copyBufferWithStaging(ctx.cmd, cmds.data(), sizeof(VkDrawIndexedIndirectCommand) * cmds.size(), getResource<Buffer>(ctx.graph, data.allDraws)->buffer);
         }
 
         // if (ctx.scene.modelDataDirty)
         {
-            backend.copyBufferWithStaging(modelData.data(), modelData.size() * sizeof(ModelData), getResource<Buffer>(ctx.graph, data.perModelData)->buffer);
+            backend.copyBufferWithStaging(ctx.cmd, modelData.data(), modelData.size() * sizeof(ModelData), getResource<Buffer>(ctx.graph, data.perModelData)->buffer);
         }
     };
 

@@ -182,6 +182,7 @@ auto VulkanBackend::initVulkan() -> void
 
     // Extension functions
     vkSetDebugUtilsObjectNameEXT = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT"));
+    vkCmdInsertDebugUtilsLabelEXT = reinterpret_cast<PFN_vkCmdInsertDebugUtilsLabelEXT>(vkGetDeviceProcAddr(device, "vkCmdInsertDebugUtilsLabelEXT"));
     vkCmdBeginDebugUtilsLabelEXT = reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(vkGetDeviceProcAddr(device, "vkCmdBeginDebugUtilsLabelEXT"));
     vkCmdEndDebugUtilsLabelEXT = reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(vkGetDeviceProcAddr(device, "vkCmdEndDebugUtilsLabelEXT"));
 }
@@ -522,15 +523,15 @@ auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
         auto cmdBeginInfo = vkutil::init::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
         VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
-        // TODO: this should go away once fully migrated over to render graph
-        {
-            ZoneScopedCpuGpuAuto("Transition resources", frameCtx);
-
-            vkutil::image::transitionImage(
-                cmd, backbufferImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-            vkutil::image::transitionImage(
-                cmd, backbufferImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        }
+        // // TODO: this should go away once fully migrated over to render graph
+        // {
+        //     ZoneScopedCpuGpuAuto("Transition resources", frameCtx);
+        //
+        //     vkutil::image::transitionImage(
+        //         cmd, backbufferImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+        //     vkutil::image::transitionImage(
+        //         cmd, backbufferImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        // }
 
         VkExtent2D swapchainSize{static_cast<u32>(viewport.width), static_cast<u32>(viewport.height)};
 
@@ -606,11 +607,16 @@ auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
 
                 if (pass.pipeline)
                 {
+                    if (pass.prepare)
+                    {
+                        pass.prepare.value()(renderCtx);
+                    }
+
                     ZoneScopedN("Render using pipeline");
                     if (pass.beginRendering)
                     {
                         ZoneScopedN("Begin rendering");
-                        (*pass.beginRendering)(renderCtx);
+                        pass.beginRendering.value()(renderCtx);
                     }
 
                     vkCmdBindPipeline(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipeline);
@@ -752,7 +758,16 @@ auto VulkanBackend::immediateSubmit(std::function<void(VkCommandBuffer)>&& f) ->
         auto cmdBeginInfo = vkutil::init::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
         VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
+        VkDebugUtilsLabelEXT labelInfo = {
+            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
+            .pNext = nullptr,
+            .pLabelName = "Immediate context"
+        };
+        vkCmdBeginDebugUtilsLabelEXT(cmd, &labelInfo);
+
         f(cmd);
+
+        vkCmdEndDebugUtilsLabelEXT(cmd);
 
         VK_CHECK(vkEndCommandBuffer(cmd));
 
@@ -765,13 +780,27 @@ auto VulkanBackend::immediateSubmit(std::function<void(VkCommandBuffer)>&& f) ->
     }
 }
 
-auto VulkanBackend::copyBuffer(VkBuffer src, VkBuffer dst, VkBufferCopy copyRegion) -> void
+auto VulkanBackend::copyBuffer(std::optional<VkCommandBuffer> cmd, VkBuffer src, VkBuffer dst, VkBufferCopy copyRegion)
+    -> void
 {
     ZoneScopedCpuGpuAuto("Copy buffer", currentFrame());
-    immediateSubmit([&](VkCommandBuffer cmd) { vkCmdCopyBuffer(cmd, src, dst, 1, &copyRegion); });
+
+    if (cmd)
+    {
+        vkCmdCopyBuffer(cmd.value(), src, dst, 1, &copyRegion);
+    }
+    else
+    {
+        immediateSubmit([&](VkCommandBuffer cmd)
+        {
+            vkCmdCopyBuffer(cmd, src, dst, 1, &copyRegion);
+        });
+    }
 }
 
-auto VulkanBackend::copyBufferWithStaging(void* data, size_t size, VkBuffer dst, VkBufferCopy copyRegion) -> void
+auto VulkanBackend::copyBufferWithStaging(std::optional<VkCommandBuffer> cmd, void* data, size_t size, VkBuffer dst,
+    VkBufferCopy copyRegion)
+    -> void
 {
     ZoneScopedCpuGpuAuto("Copy buffer with staging", currentFrame());
 
@@ -801,7 +830,7 @@ auto VulkanBackend::copyBufferWithStaging(void* data, size_t size, VkBuffer dst,
     memcpy(stagingData, data, size);
 
     copyRegion.size = size;
-    copyBuffer(staging.buffer, dst, copyRegion);
+    copyBuffer(cmd, staging.buffer, dst, copyRegion);
 
     // TODO: release staging data
 }
@@ -884,7 +913,7 @@ auto VulkanBackend::createTexture(const std::string& name, RawTexture rawTexture
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
         AllocatedBuffer cpuImageBuffer = allocateBuffer(info, VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
             VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-        copyBufferWithStaging(rawTexture.data, rawTexture.size, cpuImageBuffer.buffer);
+        copyBufferWithStaging(std::nullopt, rawTexture.data, rawTexture.size, cpuImageBuffer.buffer);
         immediateSubmit([&](VkCommandBuffer cmd)
             {
                 const auto imgBarrier = vkutil::init::imageMemoryBarrier(

@@ -16,6 +16,7 @@ struct RenderPass
 
     std::optional<Pipeline> pipeline;
 
+    std::optional<std::function<void(const RenderContext&)>> prepare = std::nullopt;
     std::optional<std::function<void(const RenderContext&)>> beginRendering = std::nullopt;
     std::function<void(const RenderContext&, RenderPass&)> draw;
 };

@@ -233,7 +233,7 @@ auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backe
         vkCmdBeginRendering(ctx.cmd, &renderingInfo);
     };
 
-    pass.pass.draw = [data, perModelData, allDraws, cascadeCount, &backend](const RenderContext& ctx, RenderPass& pass)
+    pass.pass.prepare = [data, cascadeCount, &backend](const RenderContext& ctx)
     {
         ZoneScopedCpuGpuAuto("CSM pass", backend.currentFrame());
 
@@ -244,7 +244,17 @@ auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backe
         auto cascadeParams = csmCascadeParams(cascadeCount, ctx.scene.mainCamera, ctx.scene.lightDir, 0.5,
             static_cast<f32>(singleCascadeSize));
         auto cascadeParamBuffer = getResource<Buffer>(ctx.graph, data.cascadeParams)->buffer;
-        backend.copyBufferWithStaging(&cascadeParams, sizeof(cascadeParams), cascadeParamBuffer);
+        backend.copyBufferWithStaging(ctx.cmd, &cascadeParams, sizeof(cascadeParams), cascadeParamBuffer);
+    };
+
+    pass.pass.draw = [data, perModelData, allDraws, cascadeCount, &backend](const RenderContext& ctx, RenderPass& pass)
+    {
+        ZoneScopedCpuGpuAuto("CSM pass", backend.currentFrame());
+
+        const auto shadowMap = backend.bindlessResources->getTexture(
+            *getResource<BindlessTexture>(ctx.graph, data.shadowMap));
+        const auto singleCascadeSize = shadowMap.image.extent.height;
+        auto cascadeParamBuffer = getResource<Buffer>(ctx.graph, data.cascadeParams)->buffer;
 
         ShadowPushConstants pushConstants{
             .vertexBufferAddr = backend.getBufferDeviceAddress(ctx.scene.vertexBuffer.buffer),
