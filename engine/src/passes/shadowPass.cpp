@@ -1,5 +1,8 @@
-#include "passes/shadows.h"
+#include <glm/glm.hpp>
+#include <optional>
 
+#include "debugUI.h"
+#include "passes/shadows.h"
 #include "rhi/renderpass.h"
 #include "rhi/vulkan/backend.h"
 #include "rhi/vulkan/pipelineBuilder.h"
@@ -7,9 +10,6 @@
 #include "rhi/vulkan/utils/inits.h"
 #include "rhi/vulkan/vulkan.h"
 #include "scene.h"
-
-#include <glm/glm.hpp>
-#include <optional>
 
 struct CascadeParams
 {
@@ -133,7 +133,7 @@ auto csmCascadeParams(u32 cascadeCount, Camera& camera, glm::vec3 lightDir, f32 
 
     csmLightViewProjMats(cascadeData.lightViewProjMatrices, cascadeData.cascadeDistances, cascadeCount,
         camera.view(), camera.proj(), lightDir, camera.nearClippingPlaneDist,
-        camera.farClippingPlaneDist, 0.5, resolution);
+        camera.farClippingPlaneDist, cascadeSplitLambda, resolution);
     for (u32 i = 0; i < cascadeCount; ++i)
     {
         cascadeData.invLightViewProjMatrices[i] = glm::inverse(cascadeData.lightViewProjMatrices[i]);
@@ -155,10 +155,10 @@ auto initCsm(VulkanBackend& backend, u32 cascadeCount) -> ShadowRenderer
     const auto info = vkutil::init::bufferCreateInfo(
         sizeof(CascadeParams), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                                        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-    const auto cascadeParams = backend.allocateBuffer(info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+    const auto cascadeParams = backend.allocateBuffer("CSM cascade params", info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    constexpr auto shadowMapSize = 4096;
+    constexpr auto shadowMapSize = 2048;
     constexpr auto kDepthFormat = VK_FORMAT_D32_SFLOAT;
 
     return ShadowRenderer{
@@ -241,7 +241,17 @@ auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backe
             *getResource<BindlessTexture>(ctx.graph, data.shadowMap));
         const auto singleCascadeSize = shadowMap.image.extent.height;
 
-        auto cascadeParams = csmCascadeParams(cascadeCount, ctx.scene.mainCamera, ctx.scene.lightDir, 0.5,
+        static f32 cascadeSplitLambda = 0.85f;
+        addDebugUI(debugUI, GRAPHICS_PASSES, [&]()
+        {
+            if (ImGui::TreeNode("CSM"))
+            {
+                ImGui::SliderFloat("Cascade split lambda", &cascadeSplitLambda, 0.0001f, 1.f, "%.4f");
+                ImGui::TreePop();
+            }
+        });
+
+        auto cascadeParams = csmCascadeParams(cascadeCount, ctx.scene.mainCamera, ctx.scene.lightDir, cascadeSplitLambda,
             static_cast<f32>(singleCascadeSize));
         auto cascadeParamBuffer = getResource<Buffer>(ctx.graph, data.cascadeParams)->buffer;
         backend.copyBufferWithStaging(ctx.cmd, &cascadeParams, sizeof(cascadeParams), cascadeParamBuffer);

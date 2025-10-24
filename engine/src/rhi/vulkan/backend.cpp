@@ -303,7 +303,7 @@ auto VulkanBackend::initDescriptors() -> void
 
     {
         auto bufInfo = vkutil::init::bufferCreateInfo(sizeof(SceneUniforms), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-        sceneUniformBuffer = allocateBuffer(bufInfo, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        sceneUniformBuffer = allocateBuffer("Scene uniform buffer", bufInfo, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
             VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     }
     {
@@ -821,7 +821,7 @@ auto VulkanBackend::copyBufferWithStaging(std::optional<VkCommandBuffer> cmd, vo
     }
 
     auto bufInfo = vkutil::init::bufferCreateInfo(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-    AllocatedBuffer staging = allocateBuffer(bufInfo, VMA_MEMORY_USAGE_CPU_ONLY, VMA_ALLOCATION_CREATE_MAPPED_BIT,
+    AllocatedBuffer staging = allocateBuffer("Staging buffer", bufInfo, VMA_MEMORY_USAGE_CPU_ONLY, VMA_ALLOCATION_CREATE_MAPPED_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     VmaAllocationInfo stagingInfo;
     vmaGetAllocationInfo(allocator, staging.allocation, &stagingInfo);
@@ -830,12 +830,14 @@ auto VulkanBackend::copyBufferWithStaging(std::optional<VkCommandBuffer> cmd, vo
     memcpy(stagingData, data, size);
 
     copyRegion.size = size;
-    copyBuffer(cmd, staging.buffer, dst, copyRegion);
+    // TODO: fix by introducing cmd cleanup
+    // copyBuffer(cmd, staging.buffer, dst, copyRegion);
+    copyBuffer(std::nullopt, staging.buffer, dst, copyRegion);
 
-    // TODO: release staging data
+    vmaDestroyBuffer(allocator, staging.buffer, staging.allocation);
 }
 
-auto VulkanBackend::allocateBuffer(VkBufferCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags,
+auto VulkanBackend::allocateBuffer(const std::string& name, VkBufferCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags,
     VkMemoryPropertyFlags requiredFlags) -> AllocatedBuffer
 {
     AllocatedBuffer buffer;
@@ -847,6 +849,18 @@ auto VulkanBackend::allocateBuffer(VkBufferCreateInfo info, VmaMemoryUsage usage
         .requiredFlags = requiredFlags,
     };
     VK_CHECK(vmaCreateBuffer(allocator, &info, &allocInfo, &buffer.buffer, &buffer.allocation, nullptr));
+
+    if (!name.empty())
+    {
+        const auto debugLabelInfo = VkDebugUtilsObjectNameInfoEXT {
+            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+            .pNext = nullptr,
+            .objectType = VK_OBJECT_TYPE_BUFFER,
+            .objectHandle = reinterpret_cast<u64>(buffer.buffer),
+            .pObjectName = name.c_str()
+        };
+        vkSetDebugUtilsObjectNameEXT(device, &debugLabelInfo);
+    }
 
     return buffer;
 }
@@ -871,14 +885,17 @@ auto VulkanBackend::allocateTexture(const std::string& name, VkImageCreateInfo i
     VK_CHECK(vkCreateImageView(device, &imgViewInfo, nullptr, &image.view));
 
     // TODO: this should probably only be done in debug builds
-    const auto debugLabelInfo = VkDebugUtilsObjectNameInfoEXT {
-        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-        .pNext = nullptr,
-        .objectType = VK_OBJECT_TYPE_IMAGE,
-        .objectHandle = reinterpret_cast<u64>(image.image),
-        .pObjectName = name.c_str()
-    };
-    vkSetDebugUtilsObjectNameEXT(device, &debugLabelInfo);
+    if (!name.empty())
+    {
+        const auto debugLabelInfo = VkDebugUtilsObjectNameInfoEXT {
+            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+            .pNext = nullptr,
+            .objectType = VK_OBJECT_TYPE_IMAGE,
+            .objectHandle = reinterpret_cast<u64>(image.image),
+            .pObjectName = name.c_str()
+        };
+        vkSetDebugUtilsObjectNameEXT(device, &debugLabelInfo);
+    }
 
     const auto samplerInfo = vkutil::init::samplerCreateInfo( VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT,
         mipOpts.count());
@@ -911,7 +928,7 @@ auto VulkanBackend::createTexture(const std::string& name, RawTexture rawTexture
     {
         const auto info = vkutil::init::bufferCreateInfo(rawTexture.size,
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-        AllocatedBuffer cpuImageBuffer = allocateBuffer(info, VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
+        AllocatedBuffer cpuImageBuffer = allocateBuffer("Temp cpu image buffer", info, VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
             VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
         copyBufferWithStaging(std::nullopt, rawTexture.data, rawTexture.size, cpuImageBuffer.buffer);
         immediateSubmit([&](VkCommandBuffer cmd)

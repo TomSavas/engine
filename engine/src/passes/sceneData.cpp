@@ -25,14 +25,14 @@ auto sceneUploadPass(std::optional<SceneDataUploader>& sceneUploader, VulkanBack
         auto info = vkutil::init::bufferCreateInfo(perModelBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                                                                       VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                                                                       VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-        sceneUploader->perModelBuffer = backend.allocateBuffer(info, VMA_MEMORY_USAGE_GPU_ONLY,
+        sceneUploader->perModelBuffer = backend.allocateBuffer("Per Model data", info, VMA_MEMORY_USAGE_GPU_ONLY,
             VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
         u32 modelDataSize = sizeof(VkDrawIndexedIndirectCommand) * modelData.size();
         modelDataSize = modelDataSize == 0 ? 8 : modelDataSize;
         info = vkutil::init::bufferCreateInfo(modelDataSize,
             VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-        sceneUploader->allDraws = backend.allocateBuffer(info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        sceneUploader->allDraws = backend.allocateBuffer("All draw commands", info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
             VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     }
 

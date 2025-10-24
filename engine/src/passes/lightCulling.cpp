@@ -41,20 +41,24 @@ auto initLightCulling(VulkanBackend& backend, Scene& scene, const u16 tileCount[
             .addShader(SHADER_PATH("tiledLightCulling.comp.glsl"), VK_SHADER_STAGE_COMPUTE_BIT)
             .build(),
         .lightList = backend.allocateBuffer(
+            "Light list",
             vkutil::init::bufferCreateInfo(sizeof(decltype(scene.pointLights)::value_type) * maxLights,
                 lightBufferFlags | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
             VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE, VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
         .lightIndexList = backend.allocateBuffer(
+            "Light index list",
             vkutil::init::bufferCreateInfo(sizeof(u64) * lightGridSize * maxLightsPerTile, lightBufferFlags),
             VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE, VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
         .lightGrid = backend.allocateBuffer(
+            "Light grid",
             vkutil::init::bufferCreateInfo(sizeof(u64) * 2 * 2 * lightGridSize, lightBufferFlags),
             VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE, VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
         // TEMP:
         .lightCount = backend.allocateBuffer(
+            "Light count",
             vkutil::init::bufferCreateInfo(sizeof(u64), lightBufferFlags | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
             VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE, VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)

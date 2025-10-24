@@ -637,12 +637,12 @@ void Scene::createBuffers()
     auto info = vkutil::init::bufferCreateInfo(vertexBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                                                                      VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                                                                      VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-    vertexBuffer = backend.allocateBuffer(info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+    vertexBuffer = backend.allocateBuffer("Vertex buffer", info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     info = vkutil::init::bufferCreateInfo(
         indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-    indexBuffer = backend.allocateBuffer(info, VMA_MEMORY_USAGE_GPU_ONLY, VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
+    indexBuffer = backend.allocateBuffer("Index buffer", info, VMA_MEMORY_USAGE_GPU_ONLY, VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     auto modelData = gatherModelData(*this);

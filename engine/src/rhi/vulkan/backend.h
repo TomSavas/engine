@@ -171,13 +171,8 @@ struct VulkanBackend
         VkBufferCopy copyRegion = VkBufferCopy())
         -> void;
 
-    auto allocateBuffer(VkBufferCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags,
+    auto allocateBuffer(const std::string& name , VkBufferCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags,
         VkMemoryPropertyFlags requiredFlags) -> AllocatedBuffer;
-    // auto allocateImage(VkImageCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags,
-    //     VkMemoryPropertyFlags requiredFlags, VkImageAspectFlags aspectFlags, const std::string& debugName = "") -> AllocatedImage;
-
-    auto allocateImage(VkImageCreateInfo imageInfo, VmaAllocationCreateInfo allocInfo, MipOptions mipOpts,
-        VkImageAspectFlagBits aspectFlags) -> AllocatedImage;
     auto allocateTexture(const std::string& name, VkImageCreateInfo imageInfo,
         VmaAllocationCreateInfo allocInfo, MipOptions mipOpts, VkImageAspectFlagBits aspectFlags) -> Texture;
     auto createTexture(const std::string& name, RawTexture rawTexture, VkImageCreateInfo imageInfo,

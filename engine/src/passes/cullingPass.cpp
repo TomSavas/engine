@@ -39,7 +39,7 @@ auto initCulling(VulkanBackend& backend) -> GeometryCulling
         VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 
     return GeometryCulling{
-        .culledDraws = backend.allocateBuffer(info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        .culledDraws = backend.allocateBuffer("Culled draw commands", info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
             VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
     };
 }
