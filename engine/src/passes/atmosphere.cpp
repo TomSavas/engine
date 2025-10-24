@@ -87,12 +87,12 @@ auto atmospherePass(std::optional<AtmosphereRenderer>& atmosphere, VulkanBackend
     pass.pass.beginRendering = [output, depthMap, &backend](const RenderContext& ctx)
     {
         const auto& outputTexture = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(ctx.graph, output));
-        auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(outputTexture.view, nullptr,
+        auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(outputTexture.image.view, nullptr,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         auto depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(
             backend.bindlessResources->getTexture(
                 *getResource<BindlessTexture>(ctx.graph, depthMap)
-            ).view,
+            ).image.view,
             VK_ATTACHMENT_LOAD_OP_LOAD);
         const auto renderingInfo = vkutil::init::renderingInfo(ctx.swapchain.size, &colorAttachmentInfo, 1,
             &depthAttachmentInfo);

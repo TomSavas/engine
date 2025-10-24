@@ -16,6 +16,8 @@ struct AllocatedImage
 
 namespace vkutil::image
 {
-auto transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout) -> void;
+auto transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout,
+    bool isDepth = false)
+    -> void;
 auto blitImageToImage(VkCommandBuffer cmd, VkImage src, VkExtent2D srcSize, VkImage dst, VkExtent2D dstSize) -> void;
 }  // namespace vkutil::image

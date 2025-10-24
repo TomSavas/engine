@@ -56,7 +56,7 @@ auto cpuFrustumCullingPass(std::optional<GeometryCulling>& geometryCulling, Vulk
     pass.pass.debugName = "CPU frustum culling pass";
 
     CullingPassRenderGraphData data = {};
-    data.culledDraws = importResource<Buffer>(graph, pass, &geometryCulling->culledDraws.buffer);
+    data.culledDraws = importResource<Buffer>(graph, pass, &geometryCulling->culledDraws);
 
     pass.pass.draw = [data, &backend](const RenderContext& ctx, RenderPass&)
     {
@@ -98,7 +98,7 @@ auto cpuFrustumCullingPass(std::optional<GeometryCulling>& geometryCulling, Vulk
             }
 
             backend.copyBufferWithStaging(indirectCmds.data(), sizeof(VkDrawIndexedIndirectCommand) * indirectCmds.size(),
-                *getResource<Buffer>(ctx.graph, data.culledDraws));
+                getResource<Buffer>(ctx.graph, data.culledDraws)->buffer);
         }
     };
 

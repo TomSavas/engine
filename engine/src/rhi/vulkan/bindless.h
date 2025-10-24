@@ -37,7 +37,7 @@ struct BindlessResources
     explicit BindlessResources(VulkanBackend& backend);
 
     auto addTexture(Texture texture) -> BindlessTexture;
-    auto getTexture(BindlessTexture handle, BindlessTexture defaultTexture = kError) -> const Texture&;
+    auto getTexture(BindlessTexture handle, BindlessTexture defaultTexture = kError) -> Texture&;
     auto removeTexture(BindlessTexture handle) -> void;
 };
 

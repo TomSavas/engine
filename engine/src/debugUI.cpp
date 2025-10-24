@@ -308,4 +308,6 @@ void drawDebugUI(DebugUI& debugUi, VulkanBackend& backend, Scene& scene, f64 dt)
         drawChildren(RESOURCES);
     }
     ImGui::End();
+
+    drawChildren(GLOBAL);
 }

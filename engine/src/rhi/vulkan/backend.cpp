@@ -104,16 +104,17 @@ auto VulkanBackend::initVulkan() -> void
 {
     vkb::InstanceBuilder builder;
     vkbInstance = builder
-                      .set_app_name("engine")
+        .set_app_name("engine")
 #ifdef DEBUG
-                      .request_validation_layers(true)
+        .request_validation_layers(true)
 #else   // DEBUG
-                      .request_validation_layers(false)
+        .request_validation_layers(false)
 #endif  // DEBUG
-                      .require_api_version(1, 3, 0)
-                      .use_default_debug_messenger()
-                      .build()
-                      .value();
+        .require_api_version(1, 3, 0)
+        .use_default_debug_messenger()
+        .enable_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME)
+        .build()
+        .value();
     instance = vkbInstance.instance;
     debugMessenger = vkbInstance.debug_messenger;
 
@@ -178,6 +179,11 @@ auto VulkanBackend::initVulkan() -> void
     allocatorInfo.instance = instance;
     allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
     vmaCreateAllocator(&allocatorInfo, &allocator);
+
+    // Extension functions
+    vkSetDebugUtilsObjectNameEXT = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT"));
+    vkCmdBeginDebugUtilsLabelEXT = reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(vkGetDeviceProcAddr(device, "vkCmdBeginDebugUtilsLabelEXT"));
+    vkCmdEndDebugUtilsLabelEXT = reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(vkGetDeviceProcAddr(device, "vkCmdEndDebugUtilsLabelEXT"));
 }
 
 auto VulkanBackend::initSwapchain() -> void
@@ -201,6 +207,8 @@ auto VulkanBackend::initSwapchain() -> void
     swapchainImages = vkbSwapchain.get_images().value();
     swapchainImageViews = vkbSwapchain.get_image_views().value();
     swapchainImageFormat = vkbSwapchain.image_format;
+
+    std::println("Swapchain image count: {}", swapchainImages.size());
 
     // Backbuffer
     backbufferImage.format = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -446,22 +454,22 @@ auto VulkanBackend::initImgui() -> void
 
 auto VulkanBackend::initProfiler() -> void
 {
-    auto commandPoolInfo = vkutil::init::commandPoolCreateInfo(
-        graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-    auto fenceCreateInfo = vkutil::init::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
-    for (i32 i = 0; i < MaxFramesInFlight; i++)
-    {
-        VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &frames[i].tracyCmdPool));
-
-        auto cmdAllocInfo = vkutil::init::commandBufferAllocateInfo(
-            1, VK_COMMAND_BUFFER_LEVEL_PRIMARY, frames[i].tracyCmdPool);
-        VK_CHECK(vkAllocateCommandBuffers(device, &cmdAllocInfo, &frames[i].tracyCmdBuffer));
-
-        VK_CHECK(vkCreateFence(device, &fenceCreateInfo, nullptr, &frames[i].tracyRenderFence));
-
-        frames[i].tracyCtx = TracyVkContextCalibrated(instance, gpu, device, graphicsQueue, frames[i].tracyCmdBuffer,
-            vkbInstance.fp_vkGetInstanceProcAddr, vkbInstance.fp_vkGetDeviceProcAddr);
-    }
+    // auto commandPoolInfo = vkutil::init::commandPoolCreateInfo(
+    //     graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+    // auto fenceCreateInfo = vkutil::init::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
+    // for (i32 i = 0; i < MaxFramesInFlight; i++)
+    // {
+    //     VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &frames[i].tracyCmdPool));
+    //
+    //     auto cmdAllocInfo = vkutil::init::commandBufferAllocateInfo(
+    //         1, VK_COMMAND_BUFFER_LEVEL_PRIMARY, frames[i].tracyCmdPool);
+    //     VK_CHECK(vkAllocateCommandBuffers(device, &cmdAllocInfo, &frames[i].tracyCmdBuffer));
+    //
+    //     VK_CHECK(vkCreateFence(device, &fenceCreateInfo, nullptr, &frames[i].tracyRenderFence));
+    //
+    //     frames[i].tracyCtx = TracyVkContextCalibrated(instance, gpu, device, graphicsQueue, frames[i].tracyCmdBuffer,
+    //         vkbInstance.fp_vkGetInstanceProcAddr, vkbInstance.fp_vkGetDeviceProcAddr);
+    // }
 }
 
 auto VulkanBackend::currentFrame() -> FrameCtx& { return frames[currentFrameNumber % MaxFramesInFlight]; }
@@ -496,15 +504,15 @@ auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
     }
 
     {
-        ZoneScopedN("Sync Tracy");
-
-        VK_CHECK(vkWaitForFences(device, 1, &frameCtx.tracyRenderFence, true, timeoutNs));
-        VK_CHECK(vkResetFences(device, 1, &frameCtx.tracyRenderFence));
-        {
-            VK_CHECK(vkResetCommandBuffer(frameCtx.tracyCmdBuffer, 0));
-            auto cmdBeginInfo = vkutil::init::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-            VK_CHECK(vkBeginCommandBuffer(frameCtx.tracyCmdBuffer, &cmdBeginInfo));
-        }
+        // ZoneScopedN("Sync Tracy");
+        //
+        // VK_CHECK(vkWaitForFences(device, 1, &frameCtx.tracyRenderFence, true, timeoutNs));
+        // VK_CHECK(vkResetFences(device, 1, &frameCtx.tracyRenderFence));
+        // {
+        //     VK_CHECK(vkResetCommandBuffer(frameCtx.tracyCmdBuffer, 0));
+        //     auto cmdBeginInfo = vkutil::init::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+        //     VK_CHECK(vkBeginCommandBuffer(frameCtx.tracyCmdBuffer, &cmdBeginInfo));
+        // }
     }
 
     {
@@ -569,6 +577,12 @@ auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
 
                 ZoneScoped;
                 ZoneName(pass.debugName.c_str(), pass.debugName.size());
+                VkDebugUtilsLabelEXT labelInfo = {
+                    .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
+                    .pNext = nullptr,
+                    .pLabelName = pass.debugName.c_str()
+                };
+                vkCmdBeginDebugUtilsLabelEXT(cmd, &labelInfo);
 
                 {
                     ZoneScopedN("Barriers");
@@ -584,6 +598,10 @@ auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
                         .pImageMemoryBarriers = node.imageBarriers.data(),
                     };
                     vkCmdPipelineBarrier2(cmd, &barriers);
+
+                    // std::println("memory barriers: {}", node.memoryBarriers.size());
+                    // std::println("buffer memory barriers: {}", node.bufferBarriers.size());
+                    // std::println("image memory barriers: {}", node.imageBarriers.size());
                 }
 
                 if (pass.pipeline)
@@ -624,6 +642,8 @@ auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
                     ZoneScopedN("Draw without pipeline");
                     pass.draw(renderCtx, pass);
                 }
+
+                vkCmdEndDebugUtilsLabelEXT(cmd);
             }
         }
 
@@ -652,14 +672,14 @@ auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
         VK_CHECK(vkQueuePresentKHR(graphicsQueue, &presentInfo));
     }
 
-    {
-        ZoneScopedCpuGpuAuto("Tracy", frameCtx);
-        TracyVkCollect(frameCtx.tracyCtx, frameCtx.tracyCmdBuffer);
-        VK_CHECK(vkEndCommandBuffer(frameCtx.tracyCmdBuffer));
-        auto cmdInfo = vkutil::init::commandBufferSubmitInfo(frameCtx.tracyCmdBuffer);
-        auto submit = vkutil::init::submitInfo2(&cmdInfo, nullptr, nullptr);
-        VK_CHECK(vkQueueSubmit2(graphicsQueue, 1, &submit, frameCtx.tracyRenderFence));
-    }
+    // {
+    //     ZoneScopedCpuGpuAuto("Tracy", frameCtx);
+    //     TracyVkCollect(frameCtx.tracyCtx, frameCtx.tracyCmdBuffer);
+    //     VK_CHECK(vkEndCommandBuffer(frameCtx.tracyCmdBuffer));
+    //     auto cmdInfo = vkutil::init::commandBufferSubmitInfo(frameCtx.tracyCmdBuffer);
+    //     auto submit = vkutil::init::submitInfo2(&cmdInfo, nullptr, nullptr);
+    //     VK_CHECK(vkQueueSubmit2(graphicsQueue, 1, &submit, frameCtx.tracyRenderFence));
+    // }
 }
 
 auto VulkanBackend::addOutputBlitPass(RenderGraph& graph, RenderGraphResource<BindlessTexture> output) -> void
@@ -703,6 +723,15 @@ auto VulkanBackend::addImguiPass(RenderGraph& graph) -> void
             ctx.swapchain.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(
             ctx.swapchain.size, &colorAttachmentInfo, 1, nullptr);
+
+        // TODO: we should probably leverage render graph for these transitions. However, currently we cannot identify
+        // images + there are some resources that are not injected into render graph resource system.
+        // Quite hacky, but needed for debug capabilities
+        for (auto& texture : bindlessResources->textures)
+        {
+            vkutil::image::transitionImage(ctx.cmd, texture.image.image, texture.layout,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, texture.image.format == VK_FORMAT_D32_SFLOAT);
+        }
 
         vkCmdBeginRendering(ctx.cmd, &renderingInfo);
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), ctx.cmd);
@@ -781,6 +810,7 @@ auto VulkanBackend::allocateBuffer(VkBufferCreateInfo info, VmaMemoryUsage usage
     VkMemoryPropertyFlags requiredFlags) -> AllocatedBuffer
 {
     AllocatedBuffer buffer;
+    buffer.size = info.size;
 
     VmaAllocationCreateInfo allocInfo{
         .flags = flags,
@@ -792,24 +822,149 @@ auto VulkanBackend::allocateBuffer(VkBufferCreateInfo info, VmaMemoryUsage usage
     return buffer;
 }
 
-auto VulkanBackend::allocateImage(VkImageCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags,
-    VkMemoryPropertyFlags requiredFlags, VkImageAspectFlags aspectFlags) -> AllocatedImage
+auto VulkanBackend::allocateTexture(const std::string& name, VkImageCreateInfo imageInfo,
+    VmaAllocationCreateInfo allocInfo, MipOptions mipOpts, VkImageAspectFlagBits aspectFlags)
+    -> Texture
 {
-    AllocatedImage image;
-    image.format = info.format;
-    image.extent = info.extent;
+    if (textureCache.contains(name))
+    {
+        return textureCache[name];
+    }
 
-    VmaAllocationCreateInfo allocInfo{
-        .flags = flags,
-        .usage = usage,
-        .requiredFlags = requiredFlags,
+    auto image = AllocatedImage {
+        .extent = imageInfo.extent,
+        .format = imageInfo.format,
     };
-    VK_CHECK(vmaCreateImage(allocator, &info, &allocInfo, &image.image, &image.allocation, nullptr));
 
-    auto imgViewInfo = vkutil::init::imageViewCreateInfo(image.format, image.image, aspectFlags);
+    VK_CHECK(vmaCreateImage(allocator, &imageInfo, &allocInfo, &image.image, &image.allocation, nullptr));
+    const auto imgViewInfo = vkutil::init::imageViewCreateInfo(image.format, image.image, aspectFlags,
+        mipOpts.startMip, mipOpts.count());
     VK_CHECK(vkCreateImageView(device, &imgViewInfo, nullptr, &image.view));
 
-    return image;
+    // TODO: this should probably only be done in debug builds
+    const auto debugLabelInfo = VkDebugUtilsObjectNameInfoEXT {
+        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+        .pNext = nullptr,
+        .objectType = VK_OBJECT_TYPE_IMAGE,
+        .objectHandle = reinterpret_cast<u64>(image.image),
+        .pObjectName = name.c_str()
+    };
+    vkSetDebugUtilsObjectNameEXT(device, &debugLabelInfo);
+
+    const auto samplerInfo = vkutil::init::samplerCreateInfo( VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        mipOpts.count());
+    VkSampler sampler;
+    VK_CHECK(vkCreateSampler(device, &samplerInfo, nullptr, &sampler));
+
+    auto texture = Texture {
+        .name = name,
+        .loadedFromFile = false,
+        .sampler = sampler,
+        .image = image,
+        .mipCount = imageInfo.mipLevels
+    };
+
+    textureCache[name] = texture;
+
+    return texture;
+}
+
+auto VulkanBackend::createTexture(const std::string& name, RawTexture rawTexture, VkImageCreateInfo imageInfo,
+    VmaAllocationCreateInfo allocInfo, MipOptions mipOpts, VkImageAspectFlagBits aspectFlag)
+    -> Texture
+{
+    auto texture = allocateTexture(name, imageInfo, allocInfo, mipOpts, aspectFlag);
+
+    // TODO: need to support downscaling a texture upon allocating it
+    assert(mipOpts.startMip == 0);
+
+    // Upload raw data
+    {
+        const auto info = vkutil::init::bufferCreateInfo(rawTexture.size,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+        AllocatedBuffer cpuImageBuffer = allocateBuffer(info, VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        copyBufferWithStaging(rawTexture.data, rawTexture.size, cpuImageBuffer.buffer);
+        immediateSubmit([&](VkCommandBuffer cmd)
+            {
+                const auto imgBarrier = vkutil::init::imageMemoryBarrier(
+                    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, texture.image.image, 0,
+                    VK_ACCESS_TRANSFER_WRITE_BIT, mipOpts.count());
+                vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0,
+                    nullptr, 0, nullptr, 1, &imgBarrier);
+
+                const auto copyRegion = VkBufferImageCopy {
+                    .bufferOffset = 0,
+                    .bufferRowLength = 0,
+                    .bufferImageHeight = 0,
+                    .imageSubresource = VkImageSubresourceLayers {
+                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                        .mipLevel = 0,
+                        .baseArrayLayer = 0,
+                        .layerCount = 1,
+                    },
+                    .imageOffset = VkOffset3D {
+                        .x = 0,
+                        .y = 0,
+                        .z = 0,
+                    },
+                    .imageExtent = texture.image.extent,
+                };
+
+                vkCmdCopyBufferToImage(cmd, cpuImageBuffer.buffer, texture.image.image,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+            });
+        vmaDestroyBuffer(allocator, cpuImageBuffer.buffer, cpuImageBuffer.allocation);
+    }
+    texture.loadedFromFile = true;
+
+    // Generate mips
+    immediateSubmit([&](VkCommandBuffer cmd)
+        {
+            // Mip generation
+            auto srcToShaderReadBarrier = vkutil::init::imageMemoryBarrier(
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, texture.image.image,
+                VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, 1);
+            auto dstToSrcBarrier = vkutil::init::imageMemoryBarrier(
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, texture.image.image,
+                VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, 1);
+
+            i32 mipWidth = rawTexture.extent.width * std::pow(1.f / 2.f, mipOpts.startMip);
+            i32 mipHeight = rawTexture.extent.height * std::pow(1.f / 2.f, mipOpts.startMip);
+            for (i32 mip = mipOpts.startMip + 1; mip <= mipOpts.endMip; ++mip)
+            {
+                auto lastMipWidth = mipWidth;
+                auto lastMipHeight = mipHeight;
+                mipWidth /= 2;
+                mipHeight /= 2;
+
+                // Transition the last mip to SRC_OPTIMAL
+                dstToSrcBarrier.subresourceRange.baseMipLevel = mip - 1;
+                vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr,
+                    0, nullptr, 1, &dstToSrcBarrier);
+
+                // Blit last mip to downsized current one
+                VkImageBlit blit = vkutil::init::imageBlit(mip - 1, {lastMipWidth, lastMipHeight, 1}, mip,
+                    {mipWidth, mipHeight, 1});
+                vkCmdBlitImage(cmd, texture.image.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, texture.image.image,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_LINEAR);
+
+                // Finally transition last mip to SHADER_READ_ONLY_OPTIMAL
+                srcToShaderReadBarrier.subresourceRange.baseMipLevel = mip - 1;
+                vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0,
+                    nullptr, 0, nullptr, 1, &srcToShaderReadBarrier);
+            }
+
+            // Transition the highest mip directly to SHADER_READ_ONLY_OPTIMAL
+            srcToShaderReadBarrier.subresourceRange.baseMipLevel = mipOpts.endMip;
+            srcToShaderReadBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            srcToShaderReadBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0,
+                nullptr, 0, nullptr, 1, &srcToShaderReadBarrier);
+        });
+    texture.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    return texture;
 }
 
 auto VulkanBackend::getBufferDeviceAddress(VkBuffer buffer) -> VkDeviceAddress

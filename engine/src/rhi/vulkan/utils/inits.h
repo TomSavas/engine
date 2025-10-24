@@ -1,8 +1,9 @@
 #pragma once
 
-#include "engine.h"
-
 #include <vulkan/vulkan.h>
+
+#include "engine.h"
+#include "vk_mem_alloc.h"
 
 namespace vkutil::init
 {
@@ -25,7 +26,7 @@ auto computePipelineCreateInfo(VkPipelineLayout pipelineLayout,
 
 auto imageCreateInfo(VkFormat format, VkImageUsageFlags usageFlags, VkExtent3D extent, u32 mipLevels = 1)
     -> VkImageCreateInfo;
-auto imageViewCreateInfo(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags, u32 mipLevels = 1)
+auto imageViewCreateInfo(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags, u8 baseMipLevel = 0, u8 mips = 1)
     -> VkImageViewCreateInfo;
 
 auto depthStencilCreateInfo(bool depthTest, bool depthWrite, VkCompareOp compareOp)
@@ -85,4 +86,15 @@ auto renderingInfo(VkExtent3D extent, VkRenderingAttachmentInfo* colorAttachment
     VkRenderingAttachmentInfo* depthAttachments) -> VkRenderingInfo;
 auto renderingInfo(VkExtent2D extent, VkRenderingAttachmentInfo* colorAttachments, i32 colorAttachmentCount,
     VkRenderingAttachmentInfo* depthAttachments) -> VkRenderingInfo;
+
+// TODO: get rid of the above
+constexpr VkFormat kDefaultColorFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+auto defaultTextureCreateInfo(VkFormat format, VkImageUsageFlags usageFlags, VkExtent3D extent, u8 mips = 1)
+    -> VkImageCreateInfo;
+auto defaultColorTextureCreateInfo(VkExtent3D extent, u8 mips = 1, VkFormat format = kDefaultColorFormat)
+    -> VkImageCreateInfo;
+auto defaultColorAttachmentTextureCreateInfo(VkExtent3D extent, u8 mips = 1, VkFormat format = kDefaultColorFormat)
+    -> VkImageCreateInfo;
+auto defaultTextureAllocationCreateInfo() -> VmaAllocationCreateInfo;
+
 }  // namespace vkutil::init

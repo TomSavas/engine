@@ -42,8 +42,9 @@ struct RenderGraph
 
     struct ResourceAccess
     {
-        Handle oldHandle;
-        Handle newHandle;
+        // Handle oldHandle;
+        // Handle newHandle;
+        Handle handle;
         std::function<void(VulkanBackend& backend, CompiledRenderGraph::Node&, void*, Layout, Layout)> transition;
     };
     struct Node
@@ -51,11 +52,20 @@ struct RenderGraph
         std::vector<ResourceAccess> reads;
         std::vector<ResourceAccess> writes;
         RenderPass pass;
+        u32 selfHandle;
+    };
+    struct Resource
+    {
+        Handle prevVersion = kInvalidHandle;
+        Handle nextVersion = kInvalidHandle;
+        // u32 ownerNode = std::numeric_limits<Handle>::max();
+        void* data;
     };
 
     std::vector<Node> nodes;
     // TODO: change void* to std::variant or better yet -- concepts
-    std::vector<void*> resources;
+    // std::vector<void*> resources;
+    std::vector<Resource> resources;
     std::vector<Layout> layouts;
 };
 
@@ -79,7 +89,9 @@ auto importResource(RenderGraph& graph, RenderGraph::Node& node, T* data, Layout
     -> RenderGraphResource<T>
 {
     auto handle = getHandle(graph);
-    graph.resources[handle] = data;
+    graph.resources[handle] = RenderGraph::Resource {
+        .data = data,
+    };
     graph.layouts[handle] = layout;
     return handle;
 }
@@ -89,13 +101,25 @@ auto readResource(RenderGraph& graph, RenderGraph::Node& node, RenderGraphResour
     Layout layout = VK_IMAGE_LAYOUT_UNDEFINED)
     -> RenderGraphResource<T>
 {
+    // Find latest handle
+    while (graph.resources[handle].nextVersion != kInvalidHandle)
+    {
+        handle = graph.resources[handle].nextVersion;
+    }
+
     auto newHandle = getHandle(graph);
-    graph.resources[newHandle] = graph.resources[handle];
+    graph.resources[handle].nextVersion = newHandle;
+    graph.resources[newHandle] = RenderGraph::Resource {
+        .prevVersion = handle,
+        .data = graph.resources[handle].data,
+        // .ownerNode = node.selfHandle,
+    };
     graph.layouts[newHandle] = layout;
 
     node.reads.push_back({
-        .oldHandle = handle,
-        .newHandle = newHandle,
+        // .oldHandle = handle,
+        // .newHandle = newHandle,
+        .handle = newHandle,
         .transition = [](VulkanBackend& backend, CompiledRenderGraph::Node& compiledNode, void* data, Layout oldLayout,
             Layout newLayout)
         {
@@ -111,13 +135,29 @@ auto writeResource(RenderGraph& graph, RenderGraph::Node& node, RenderGraphResou
     Layout layout = VK_IMAGE_LAYOUT_UNDEFINED)
     -> RenderGraphResource<T>
 {
+    // TODO: this WILL cause a bug. At this point we should be allocating a new resource
+
+    // Find latest handle
+    while (graph.resources[handle].nextVersion != kInvalidHandle)
+    {
+        handle = graph.resources[handle].nextVersion;
+    }
+
     auto newHandle = getHandle(graph);
-    graph.resources[newHandle] = graph.resources[handle];
+    // Don't set next version, as this should be treated as a completely new resource.
+    // BUG: WE SHOULD NOT BE SETTING THIS
+    graph.resources[handle].nextVersion = newHandle;
+    graph.resources[newHandle] = RenderGraph::Resource {
+        .prevVersion = handle,
+        .data = graph.resources[handle].data,
+        // .ownerNode = node.selfHandle,
+    };
     graph.layouts[newHandle] = layout;
 
     node.writes.push_back({
-        .oldHandle = handle,
-        .newHandle = newHandle,
+        .handle = newHandle,
+        // .oldHandle = handle,
+        // .newHandle = newHandle,
         .transition = [](VulkanBackend& backend, CompiledRenderGraph::Node& compiledNode, void* data, Layout oldLayout,
             Layout newLayout)
         {

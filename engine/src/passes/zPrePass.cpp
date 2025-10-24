@@ -14,11 +14,7 @@ struct ZPrePassPushConstants
 
 auto initZPrePass(VulkanBackend& backend) -> ZPrePassRenderer
 {
-    const auto depthImage = backend.allocateImage(vkutil::init::imageCreateInfo(VK_FORMAT_D32_SFLOAT,
-        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        backend.backbufferImage.extent, 1), VMA_MEMORY_USAGE_GPU_ONLY, 0, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        VK_IMAGE_ASPECT_DEPTH_BIT);
-
+    constexpr auto depthFormat = VK_FORMAT_D32_SFLOAT;
     return ZPrePassRenderer{
         .pipeline = PipelineBuilder(backend)
             .addDescriptorLayouts({
@@ -39,22 +35,28 @@ auto initZPrePass(VulkanBackend& backend) -> ZPrePassRenderer
             .cullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE)
             .disableMultisampling()
             .enableAlphaBlending()
-            .depthFormat(depthImage.format)
+            .depthFormat(depthFormat)
             .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
             .addViewportScissorDynamicStates()
             .build(),
         .depthMap = backend.bindlessResources->addTexture(
-            Texture{
-                .image = depthImage,
-                .view = depthImage.view,
-                .mipCount = 1,
-            }
-        ),
+            backend.allocateTexture(
+                "Z Prepass output",
+                vkutil::init::defaultTextureCreateInfo(
+                    depthFormat,
+                    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                    backend.backbufferImage.extent
+                ),
+                vkutil::init::defaultTextureAllocationCreateInfo(),
+                MipOptions::one(),
+                VK_IMAGE_ASPECT_DEPTH_BIT
+            )
+        )
     };
 }
 
 auto zPrePass(std::optional<ZPrePassRenderer>& renderer, VulkanBackend& backend, RenderGraph& graph,
-    RenderGraphResource<Buffer> culledDraws)
+    RenderGraphResource<Buffer> culledDraws, RenderGraphResource<Buffer> perModelData)
     -> ZPrePassRenderGraphData
 {
     if (!renderer)
@@ -71,30 +73,31 @@ auto zPrePass(std::optional<ZPrePassRenderer>& renderer, VulkanBackend& backend,
             importResource(graph, pass, &renderer->depthMap), VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL),
     };
     culledDraws = readResource<Buffer>(graph, pass, culledDraws);
+    perModelData = readResource<Buffer>(graph, pass, perModelData);
 
     pass.pass.beginRendering = [data, &backend](const RenderContext& ctx)
     {
         const auto& depthMap = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(ctx.graph,
             data.depthMap));
-        auto depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(depthMap.view);
+        auto depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(depthMap.image.view);
         const auto renderingInfo = vkutil::init::renderingInfo(ctx.swapchain.size, nullptr, 0, &depthAttachmentInfo);
         vkCmdBeginRendering(ctx.cmd, &renderingInfo);
     };
 
-    pass.pass.draw = [culledDraws, &backend](const RenderContext& ctx, RenderPass& pass)
+    pass.pass.draw = [culledDraws, perModelData, &backend](const RenderContext& ctx, RenderPass& pass)
     {
-        ZoneScopedCpuGpuAuto("Z Pre pass", backend.currentFrame());
+        ZoneScopedCpuGpuAuto("Z Pre pass", backend.currentFenrame());
 
         const ZPrePassPushConstants pushConstants = {
             .vertexBufferAddr = backend.getBufferDeviceAddress(ctx.scene.vertexBuffer.buffer),
-            .perModelDataBufferAddr = backend.getBufferDeviceAddress(ctx.scene.perModelBuffer.buffer),
+            .perModelDataBufferAddr = backend.getBufferDeviceAddress(getResource<Buffer>(ctx.graph, perModelData)->buffer),
         };
         vkCmdPushConstants(ctx.cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(pushConstants),
             &pushConstants);
         vkCmdBindDescriptorSets(ctx.cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1,
             &backend.bindlessResources->bindlessTexDesc, 0, nullptr);
         vkCmdBindIndexBuffer(ctx.cmd, ctx.scene.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-        vkCmdDrawIndexedIndirect(ctx.cmd, *getResource<Buffer>(ctx.graph, culledDraws), 0, ctx.scene.meshes.size(),
+        vkCmdDrawIndexedIndirect(ctx.cmd, getResource<Buffer>(ctx.graph, culledDraws)->buffer, 0, ctx.scene.meshes.size(),
             sizeof(VkDrawIndexedIndirectCommand));
     };
 

@@ -1,8 +1,5 @@
 #include "rhi/vulkan/bindless.h"
 
-#include <cmath>
-#include <random>
-
 #include "debugUI.h"
 #include "imgui_impl_vulkan.h"
 #include "renderGraph.h"
@@ -10,6 +7,10 @@
 #include "rhi/vulkan/descriptors.h"
 #include "rhi/vulkan/utils/inits.h"
 #include "rhi/vulkan/utils/texture.h"
+
+#include <cmath>
+#include <random>
+#include <print>
 
 BindlessResources::BindlessResources(VulkanBackend& backend) : backend(&backend)
 {
@@ -73,10 +74,18 @@ auto BindlessResources::addTexture(Texture texture) -> BindlessTexture
     {
         return cache[texture.name];
     }
+    //
+    // TEMP: this is really shitty and should be packaged somewhere else
+    if (texture.sampler == VK_NULL_HANDLE)
+    {
+        VkSamplerCreateInfo samplerInfo = vkutil::init::samplerCreateInfo(
+            VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT, static_cast<f32>(texture.mipCount));
+        vkCreateSampler(backend->device, &samplerInfo, nullptr, &texture.sampler);
+    }
 
     // TODO: Updating the bindless texture data should be moved
     VkDescriptorImageInfo descriptorImageInfo = vkutil::init::descriptorImageInfo(
-        texture.sampler, texture.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        texture.sampler, texture.image.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     VkWriteDescriptorSet descriptorWrite = vkutil::init::writeDescriptorImage(
         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, bindlessTexDesc, &descriptorImageInfo, 0);
 
@@ -101,7 +110,7 @@ auto BindlessResources::addTexture(Texture texture) -> BindlessTexture
     return index;
 }
 
-auto BindlessResources::getTexture(BindlessTexture handle, BindlessTexture defaultTexture) -> const Texture&
+auto BindlessResources::getTexture(BindlessTexture handle, BindlessTexture defaultTexture) -> Texture&
 {
     if (handle < textures.size() && !freeIndices.contains(handle)) return textures[handle];
 
@@ -110,15 +119,93 @@ auto BindlessResources::getTexture(BindlessTexture handle, BindlessTexture defau
 
 auto BindlessResources::removeTexture(BindlessTexture handle) -> void { assert(false); }
 
+auto imageLayoutToString(VkImageLayout layout) -> const char*
+{
+    switch (layout)
+    {
+        case VK_IMAGE_LAYOUT_UNDEFINED:
+            return "VK_IMAGE_LAYOUT_UNDEFINED";
+        case VK_IMAGE_LAYOUT_GENERAL:
+            return "VK_IMAGE_LAYOUT_GENERAL";
+        case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+            return "VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL";
+        case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+            return "VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL";
+        case VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL:
+            return "VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL";
+        case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+            return "VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL";
+        case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+            return "VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL";
+        case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+            return "VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL";
+        case VK_IMAGE_LAYOUT_PREINITIALIZED:
+            return "VK_IMAGE_LAYOUT_PREINITIALIZED";
+        case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL:
+            return "VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL";
+        case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL:
+            return "VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL";
+        case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL:
+            return "VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL";
+        case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL:
+            return "VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL";
+        case VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL:
+            return "VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL";
+        case VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL:
+            return "VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL";
+        case VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL:
+            return "VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL";
+        case VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL:
+            return "VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL";
+        case VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ:
+            return "VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ";
+        case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
+            return "VK_IMAGE_LAYOUT_PRESENT_SRC_KHR";
+        case VK_IMAGE_LAYOUT_VIDEO_DECODE_DST_KHR:
+            return "VK_IMAGE_LAYOUT_VIDEO_DECODE_DST_KHR";
+        case VK_IMAGE_LAYOUT_VIDEO_DECODE_SRC_KHR:
+            return "VK_IMAGE_LAYOUT_VIDEO_DECODE_SRC_KHR";
+        case VK_IMAGE_LAYOUT_VIDEO_DECODE_DPB_KHR:
+            return "VK_IMAGE_LAYOUT_VIDEO_DECODE_DPB_KHR";
+        case VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR:
+            return "VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR";
+        case VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT:
+            return "VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT";
+        case VK_IMAGE_LAYOUT_FRAGMENT_SHADING_RATE_ATTACHMENT_OPTIMAL_KHR:
+            return "VK_IMAGE_LAYOUT_FRAGMENT_SHADING_RATE_ATTACHMENT_OPTIMAL_KHR";
+        case VK_IMAGE_LAYOUT_VIDEO_ENCODE_DST_KHR:
+            return "VK_IMAGE_LAYOUT_VIDEO_ENCODE_DST_KHR";
+        case VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR:
+            return "VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR";
+        case VK_IMAGE_LAYOUT_VIDEO_ENCODE_DPB_KHR:
+            return "VK_IMAGE_LAYOUT_VIDEO_ENCODE_DPB_KHR";
+        case VK_IMAGE_LAYOUT_ATTACHMENT_FEEDBACK_LOOP_OPTIMAL_EXT:
+            return "VK_IMAGE_LAYOUT_ATTACHMENT_FEEDBACK_LOOP_OPTIMAL_EXT";
+        case VK_IMAGE_LAYOUT_VIDEO_ENCODE_QUANTIZATION_MAP_KHR:
+            return "VK_IMAGE_LAYOUT_VIDEO_ENCODE_QUANTIZATION_MAP_KHR";
+        case VK_IMAGE_LAYOUT_MAX_ENUM:
+            return "VK_IMAGE_LAYOUT_MAX_ENUM";
+        default:
+            return "Unknown layout";
+    }
+}
+
 template <>
 auto addTransition<BindlessTexture>(VulkanBackend& backend, CompiledRenderGraph::Node& node, BindlessTexture* resource,
     Layout oldLayout, Layout newLayout)
     -> void
 {
-    if (oldLayout == newLayout)
-    {
-        return;
-    }
+    auto texture = backend.bindlessResources->getTexture(*resource);
+    // if (oldLayout == newLayout)
+    // {
+    //     std::print("[SKIPPED] ");
+    // }
+    std::println("[{}] transitioning image {} (0x{:x}) {} -> {}", node.pass.debugName, texture.name, (u64)texture.image.image, imageLayoutToString(oldLayout), imageLayoutToString(newLayout));
+
+    // if (oldLayout == newLayout)
+    // {
+    //     return;
+    // }
 
     VkImageMemoryBarrier2 imageBarrier = {};
     imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -133,7 +220,7 @@ auto addTransition<BindlessTexture>(VulkanBackend& backend, CompiledRenderGraph:
     imageBarrier.oldLayout = oldLayout;
     imageBarrier.newLayout = newLayout;
 
-    const Texture& tex = backend.bindlessResources->getTexture(*resource);
+    auto& tex = backend.bindlessResources->getTexture(*resource);
     imageBarrier.image = tex.image.image;
 
     const bool isDepth = tex.image.format == VK_FORMAT_D32_SFLOAT;
@@ -141,11 +228,15 @@ auto addTransition<BindlessTexture>(VulkanBackend& backend, CompiledRenderGraph:
     VkImageAspectFlags aspectMask = isDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
     imageBarrier.subresourceRange = vkutil::init::imageSubresourceRange(aspectMask);
 
+    tex.layout = newLayout;
+
     node.imageBarriers.push_back(imageBarrier);
 }
 
 auto debugDrawBindlessTextures(BindlessResources& bindlessResources) -> void
 {
+    static std::vector<BindlessTexture> textureWindows;
+
     addDebugUI(debugUI, RESOURCES, [&]()
     {
         constexpr auto textureSize = 64;
@@ -169,7 +260,8 @@ auto debugDrawBindlessTextures(BindlessResources& bindlessResources) -> void
 
                 if (!texture.imguiDescriptorSet)
                 {
-                    texture.imguiDescriptorSet = ImGui_ImplVulkan_AddTexture(texture.sampler, texture.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                    texture.imguiDescriptorSet = ImGui_ImplVulkan_AddTexture(texture.sampler, texture.image.view,
+                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
                 }
 
                 ImGui::Image(*texture.imguiDescriptorSet, ImVec2(textureSize, textureSize));
@@ -204,6 +296,11 @@ auto debugDrawBindlessTextures(BindlessResources& bindlessResources) -> void
                         ImGui::EndTooltip();
                     }
                 }
+                if (ImGui::IsItemClicked() && !std::ranges::contains(textureWindows, i))
+                {
+                    textureWindows.push_back(i);
+                }
+
                 ImGui::Text("%d", i);
                 ImGui::TableNextColumn();
             }
@@ -219,6 +316,35 @@ auto debugDrawBindlessTextures(BindlessResources& bindlessResources) -> void
         {
             drawImages("Loaded bindless resources", true);
         }
+    });
 
+    addDebugUI(debugUI, GLOBAL, [&]()
+    {
+        for (u32 i = 0; i < textureWindows.size(); ++i)
+        {
+            const auto tex = textureWindows[i];
+            const auto& texture = bindlessResources.textures[tex];
+
+            bool open = true;
+            ImGui::SetNextWindowSize(ImVec2(256, 256), ImGuiCond_Once);
+            if (ImGui::Begin(texture.name.c_str(), &open, ImGuiWindowFlags_NoCollapse))
+            {
+                ImGui::Text("Name: %s", texture.name.c_str());
+                ImGui::Text("Size: %d x %d x %d", texture.image.extent.width, texture.image.extent.height, texture.image.extent.depth);
+                ImGui::Text("Mips: %d", texture.mipCount);
+                ImGui::Text("Bindless index: %d", tex);
+                ImGui::Separator();
+                ImGui::Image(*texture.imguiDescriptorSet, ImGui::GetContentRegionAvail());
+            }
+
+            if (!open)
+            {
+                textureWindows[i] = textureWindows.back();
+                textureWindows.pop_back();
+                i -= 1;
+            }
+
+            ImGui::End();
+        }
     });
 }

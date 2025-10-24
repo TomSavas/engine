@@ -15,11 +15,6 @@ struct PushConstants
 
 auto initBloom(VulkanBackend& backend) -> BloomRenderer
 {
-    const auto outputImage = backend.allocateImage(vkutil::init::imageCreateInfo(VK_FORMAT_R16G16B16A16_SFLOAT,
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        backend.backbufferImage.extent, 1), VMA_MEMORY_USAGE_GPU_ONLY, 0, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        VK_IMAGE_ASPECT_COLOR_BIT);
-
     return BloomRenderer{
         .pipeline = PipelineBuilder(backend)
             .addDescriptorLayouts({
@@ -50,11 +45,13 @@ auto initBloom(VulkanBackend& backend) -> BloomRenderer
             .disableDepthTest()
             .build(),
         .output = backend.bindlessResources->addTexture(
-            Texture {
-                .image = outputImage,
-                .view = outputImage.view,
-                .mipCount = 1,
-            }
+            backend.allocateTexture(
+                "Bloom output",
+                vkutil::init::defaultColorAttachmentTextureCreateInfo(backend.backbufferImage.extent),
+                vkutil::init::defaultTextureAllocationCreateInfo(),
+                MipOptions::one(),
+                VK_IMAGE_ASPECT_COLOR_BIT
+            )
         ),
     };
 }
@@ -66,7 +63,7 @@ auto bloomPass(std::optional<BloomRenderer>& bloom, std::optional<BlurRenderer>&
 {
     // Blur reflections
     // TODO: make this configurable from imgui. But that requires recompiling render graph every frame
-    auto blurredInput = dualKawaseBlur(blur, backend, graph, input, 4);
+    auto blurredInput = dualKawaseBlur("Bloom blur", blur, backend, graph, input, 4);
 
     if (!bloom)
     {
@@ -84,14 +81,9 @@ auto bloomPass(std::optional<BloomRenderer>& bloom, std::optional<BlurRenderer>&
 
     pass.pass.beginRendering = [&backend, output](const RenderContext& ctx)
     {
-        VkClearValue colorClear = {
-            .color = {.uint32 = {0, 0, 0, 0}}
-        };
         const auto& outputTexture = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(ctx.graph, output));
-        auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(outputTexture.view, nullptr,
+        auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(outputTexture.image.view, nullptr,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        // auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backend.backbufferImage.view, &colorClear,
-        //     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         const auto renderingInfo = vkutil::init::renderingInfo(ctx.swapchain.size, &colorAttachmentInfo, 1, nullptr);
         vkCmdBeginRendering(ctx.cmd, &renderingInfo);
     };

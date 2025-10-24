@@ -121,7 +121,7 @@ struct VulkanBackend
     AllocatedImage backbufferImage;
 
     // Frames
-    static constexpr i32 MaxFramesInFlight = 2;
+    static constexpr i32 MaxFramesInFlight = 5;
     FrameCtx frames[MaxFramesInFlight];
     u64 currentFrameNumber = 0;
 
@@ -140,10 +140,15 @@ struct VulkanBackend
     Stats stats;
 
     // Resources
+    std::unordered_map<std::string, Texture> textureCache;
     std::optional<Textures> textures;
     std::optional<BindlessResources> bindlessResources;
 
     VkDescriptorSetLayout sceneDescriptorSetLayout;
+
+    PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT;
+    PFN_vkCmdBeginDebugUtilsLabelEXT vkCmdBeginDebugUtilsLabelEXT;
+    PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabelEXT;
 
     explicit VulkanBackend() {}
     explicit VulkanBackend(GLFWwindow* window);
@@ -165,8 +170,16 @@ struct VulkanBackend
 
     auto allocateBuffer(VkBufferCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags,
         VkMemoryPropertyFlags requiredFlags) -> AllocatedBuffer;
-    auto allocateImage(VkImageCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags,
-        VkMemoryPropertyFlags requiredFlags, VkImageAspectFlags aspectFlags) -> AllocatedImage;
+    // auto allocateImage(VkImageCreateInfo info, VmaMemoryUsage usage, VmaAllocationCreateFlags flags,
+    //     VkMemoryPropertyFlags requiredFlags, VkImageAspectFlags aspectFlags, const std::string& debugName = "") -> AllocatedImage;
+
+    auto allocateImage(VkImageCreateInfo imageInfo, VmaAllocationCreateInfo allocInfo, MipOptions mipOpts,
+        VkImageAspectFlagBits aspectFlags) -> AllocatedImage;
+    auto allocateTexture(const std::string& name, VkImageCreateInfo imageInfo,
+        VmaAllocationCreateInfo allocInfo, MipOptions mipOpts, VkImageAspectFlagBits aspectFlags) -> Texture;
+    auto createTexture(const std::string& name, RawTexture rawTexture, VkImageCreateInfo imageInfo,
+        VmaAllocationCreateInfo allocInfo, MipOptions mipOpts, VkImageAspectFlagBits aspectFlags)
+        -> Texture;
 
     auto getBufferDeviceAddress(VkBuffer buffer) -> VkDeviceAddress;
 

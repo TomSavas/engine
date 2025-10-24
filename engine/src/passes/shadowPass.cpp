@@ -158,14 +158,8 @@ auto initCsm(VulkanBackend& backend, u32 cascadeCount) -> ShadowRenderer
     const auto cascadeParams = backend.allocateBuffer(info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    constexpr u32 shadowMapSize = 4096;
-    const auto shadowMapImage = backend.allocateImage(
-        vkutil::init::imageCreateInfo(VK_FORMAT_D32_SFLOAT,
-            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-            {cascadeCount * shadowMapSize, shadowMapSize, 1}),
-        VMA_MEMORY_USAGE_GPU_ONLY,
-        0,  // NOTE: this might cause issues
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+    constexpr auto shadowMapSize = 4096;
+    constexpr auto kDepthFormat = VK_FORMAT_D32_SFLOAT;
 
     return ShadowRenderer{
         .pipeline = PipelineBuilder(backend)
@@ -183,23 +177,28 @@ auto initCsm(VulkanBackend& backend, u32 cascadeCount) -> ShadowRenderer
             .cullMode(VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE)  // Front face!
             .disableMultisampling()
             .disableBlending()
-            .depthFormat(shadowMapImage.format)
+            .depthFormat(kDepthFormat)
             .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
             .setDepthClamp(true)
             .addViewportScissorDynamicStates()
             .build(),
         .cascadeParams = cascadeParams,
         .shadowMap = backend.bindlessResources->addTexture(
-            Texture{
-                .image = shadowMapImage,
-                .view = shadowMapImage.view,
-                .mipCount = 1,
-            }
+            backend.allocateTexture(
+                "CSM shadow map",
+                vkutil::init::defaultTextureCreateInfo(kDepthFormat,
+                    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                    {cascadeCount * shadowMapSize, shadowMapSize, 1}),
+                vkutil::init::defaultTextureAllocationCreateInfo(),
+                MipOptions::one(),
+                VK_IMAGE_ASPECT_DEPTH_BIT
+            )
         ),
     };
 }
 
-auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend, RenderGraph& graph, u8 cascadeCount)
+auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend, RenderGraph& graph, u8 cascadeCount,
+    RenderGraphResource<Buffer> perModelData, RenderGraphResource<Buffer> allDraws)
     ->ShadowPassRenderGraphData
 {
     if (!shadowRenderer)
@@ -217,6 +216,8 @@ auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backe
         .cascadeParams = writeResource<Buffer>(graph, pass,
             importResource(graph, pass, &shadowRenderer->cascadeParams.buffer))
     };
+    perModelData = readResource<Buffer>(graph, pass, perModelData);
+    allDraws = readResource<Buffer>(graph, pass, allDraws);
 
     pass.pass.beginRendering = [data, &backend](const RenderContext& ctx)
     {
@@ -227,12 +228,12 @@ auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backe
             .height = shadowMap.image.extent.height
         };
 
-        auto depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(shadowMap.view);
+        auto depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(shadowMap.image.view);
         auto renderingInfo = vkutil::init::renderingInfo(size, nullptr, 0, &depthAttachmentInfo);
         vkCmdBeginRendering(ctx.cmd, &renderingInfo);
     };
 
-    pass.pass.draw = [data, cascadeCount, &backend](const RenderContext& ctx, RenderPass& pass)
+    pass.pass.draw = [data, perModelData, allDraws, cascadeCount, &backend](const RenderContext& ctx, RenderPass& pass)
     {
         ZoneScopedCpuGpuAuto("CSM pass", backend.currentFrame());
 
@@ -242,13 +243,13 @@ auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backe
 
         auto cascadeParams = csmCascadeParams(cascadeCount, ctx.scene.mainCamera, ctx.scene.lightDir, 0.5,
             static_cast<f32>(singleCascadeSize));
-        auto cascadeParamBuffer = *getResource<Buffer>(ctx.graph, data.cascadeParams);
+        auto cascadeParamBuffer = getResource<Buffer>(ctx.graph, data.cascadeParams)->buffer;
         backend.copyBufferWithStaging(&cascadeParams, sizeof(cascadeParams), cascadeParamBuffer);
 
         ShadowPushConstants pushConstants{
             .vertexBufferAddr = backend.getBufferDeviceAddress(ctx.scene.vertexBuffer.buffer),
             .cascadeDataAddr = backend.getBufferDeviceAddress(cascadeParamBuffer),
-            .perModelDataBufferAddr = backend.getBufferDeviceAddress(ctx.scene.perModelBuffer.buffer),
+            .perModelDataBufferAddr = backend.getBufferDeviceAddress(getResource<Buffer>(ctx.graph, perModelData)->buffer),
         };
 
         VkViewport viewport = {
@@ -275,7 +276,10 @@ auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backe
             vkCmdSetViewport(ctx.cmd, 0, 1, &viewport);
             vkCmdSetScissor(ctx.cmd, 0, 1, &scissor);
 
-            vkCmdDrawIndexedIndirect(ctx.cmd, ctx.scene.indirectCommands.buffer, 0, ctx.scene.meshes.size(),
+            // vkCmdDrawIndexedIndirect(ctx.cmd, ctx.scene.indirectCommands.buffer, 0, ctx.scene.meshes.size(),
+            //     sizeof(VkDrawIndexedIndirectCommand));
+            // TODO: the buffer should contain size
+            vkCmdDrawIndexedIndirect(ctx.cmd, getResource<Buffer>(ctx.graph, allDraws)->buffer, 0, ctx.scene.meshes.size(),
                 sizeof(VkDrawIndexedIndirectCommand));
         }
     };

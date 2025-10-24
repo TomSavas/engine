@@ -55,10 +55,8 @@ struct Scene
     std::vector<tinygltf::Image> images;
     glm::vec3 lightDir = glm::vec3(0.6, -1.0, 0.175);
 
-    std::vector<BindlessTexture> bindlessImages;
     AllocatedBuffer vertexBuffer;
     AllocatedBuffer indexBuffer;
-    AllocatedBuffer perModelBuffer;
     AllocatedBuffer indirectCommands;
 
     // TEMP:
@@ -85,10 +83,8 @@ struct Scene
         indices = other.indices;
         images = other.images;
         lightDir = other.lightDir;
-        bindlessImages = other.bindlessImages;
         vertexBuffer = other.vertexBuffer;
         indexBuffer = other.indexBuffer;
-        perModelBuffer = other.perModelBuffer;
         indirectCommands = other.indirectCommands;
         meshCount = other.meshCount;
         sceneGraph = other.sceneGraph;
@@ -108,10 +104,8 @@ struct Scene
         indices = other.indices;
         images = other.images;
         lightDir = other.lightDir;
-        bindlessImages = other.bindlessImages;
         vertexBuffer = other.vertexBuffer;
         indexBuffer = other.indexBuffer;
-        perModelBuffer = other.perModelBuffer;
         indirectCommands = other.indirectCommands;
         meshCount = other.meshCount;
         sceneGraph = other.sceneGraph;
@@ -131,10 +125,8 @@ struct Scene
         indices = other.indices;
         images = other.images;
         lightDir = other.lightDir;
-        bindlessImages = other.bindlessImages;
         vertexBuffer = other.vertexBuffer;
         indexBuffer = other.indexBuffer;
-        perModelBuffer = other.perModelBuffer;
         indirectCommands = other.indirectCommands;
         meshCount = other.meshCount;
         sceneGraph = other.sceneGraph;
@@ -155,10 +147,8 @@ struct Scene
         indices = other.indices;
         images = other.images;
         lightDir = other.lightDir;
-        bindlessImages = other.bindlessImages;
         vertexBuffer = other.vertexBuffer;
         indexBuffer = other.indexBuffer;
-        perModelBuffer = other.perModelBuffer;
         indirectCommands = other.indirectCommands;
         meshCount = other.meshCount;
         sceneGraph = other.sceneGraph;

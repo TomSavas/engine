@@ -19,35 +19,28 @@ struct DualKawasePushConstants
 
 auto initDualKawase(VulkanBackend& backend, RenderGraph& graph) -> BlurRenderer
 {
-    // TODO: this should be retrieved from render graph
-    const auto outputImage = backend.allocateImage(vkutil::init::imageCreateInfo(VK_FORMAT_R16G16B16A16_SFLOAT,
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        backend.backbufferImage.extent, 1), VMA_MEMORY_USAGE_GPU_ONLY, 0, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        VK_IMAGE_ASPECT_COLOR_BIT);
-
     const auto minDimension = std::min(backend.backbufferImage.extent.width, backend.backbufferImage.extent.height);
     const auto maxLevels = static_cast<u8>(std::log2(static_cast<f32>(minDimension)));
     std::vector<BindlessTexture> intermediateTextures;
     intermediateTextures.reserve(maxLevels - 1);
     for (u8 i = 0; i < maxLevels - 1; i++)
     {
-        const auto resolution = VkExtent3D{
+        const auto resolution = VkExtent3D {
             .width = static_cast<u32>(backend.backbufferImage.extent.width / std::pow(2, i + 1)),
             .height = static_cast<u32>(backend.backbufferImage.extent.height / std::pow(2, i + 1)),
             .depth = backend.backbufferImage.extent.depth,
         };
         std::println("intermediate texture: {} x {}", resolution.width, resolution.height);
-        const auto intermediateImage = backend.allocateImage(vkutil::init::imageCreateInfo(VK_FORMAT_R16G16B16A16_SFLOAT,
-            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-            resolution, 1), VMA_MEMORY_USAGE_GPU_ONLY, 0, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            VK_IMAGE_ASPECT_COLOR_BIT);
         intermediateTextures.push_back(
             backend.bindlessResources->addTexture(
-                Texture{
-                    .image = intermediateImage,
-                    .view = intermediateImage.view,
-                    .mipCount = 1,
-                }
+                backend.allocateTexture(
+                    std::format("Kawase blur intermediate {}x{}x{}", resolution.width, resolution.height,
+                        resolution.depth),
+                    vkutil::init::defaultColorAttachmentTextureCreateInfo(resolution),
+                    vkutil::init::defaultTextureAllocationCreateInfo(),
+                    MipOptions::one(),
+                    VK_IMAGE_ASPECT_COLOR_BIT
+                )
             )
         );
     }
@@ -110,23 +103,25 @@ auto initDualKawase(VulkanBackend& backend, RenderGraph& graph) -> BlurRenderer
             .disableDepthTest()
             .build(),
         .output = backend.bindlessResources->addTexture(
-            Texture {
-                .image = outputImage,
-                .view = outputImage.view,
-                .mipCount = 1,
-            }
+            backend.allocateTexture(
+                "Blur output",
+                vkutil::init::defaultColorAttachmentTextureCreateInfo(backend.backbufferImage.extent),
+                vkutil::init::defaultTextureAllocationCreateInfo(),
+                MipOptions::one(),
+                VK_IMAGE_ASPECT_COLOR_BIT
+            )
         ),
         .intermediateTextures = std::move(intermediateTextures),
     };
 }
 
 [[nodiscard]]
-auto kawasePass(Pipeline& kawasePipeline, VulkanBackend& backend, RenderGraph& graph, f32 positionOffsetMultiplier,
+auto kawasePass(const std::string& passName, Pipeline& kawasePipeline, VulkanBackend& backend, RenderGraph& graph, f32 positionOffsetMultiplier,
     f32 colorMultiplier, RenderGraphResource<BindlessTexture> input, BindlessTexture output)
     -> RenderGraphResource<BindlessTexture>
 {
     auto& pass = createPass(graph);
-    pass.pass.debugName = std::format("Dual Kawase Blur pass");
+    pass.pass.debugName = passName;
     pass.pass.pipeline = kawasePipeline;
 
     input = readResource<BindlessTexture>(graph, pass, input, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -138,7 +133,7 @@ auto kawasePass(Pipeline& kawasePipeline, VulkanBackend& backend, RenderGraph& g
     pass.pass.beginRendering = [outputResource, &backend](const RenderContext& ctx)
     {
         const auto& outputTexture = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(ctx.graph, outputResource));
-        auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(outputTexture.view, nullptr,
+        auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(outputTexture.image.view, nullptr,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         auto renderingInfo = vkutil::init::renderingInfo(outputTexture.image.extent, &colorAttachmentInfo, 1, nullptr);
         vkCmdBeginRendering(ctx.cmd, &renderingInfo);
@@ -188,7 +183,7 @@ auto kawasePass(Pipeline& kawasePipeline, VulkanBackend& backend, RenderGraph& g
 }
 
 [[nodiscard]]
-auto dualKawaseBlur(std::optional<BlurRenderer>& blur, VulkanBackend& backend, RenderGraph& graph,
+auto dualKawaseBlur(const std::string& passName, std::optional<BlurRenderer>& blur, VulkanBackend& backend, RenderGraph& graph,
     RenderGraphResource<BindlessTexture> input, u8 downsampleCount, f32 positionOffsetMultiplier, f32 colorMultiplier)
     -> RenderGraphResource<BindlessTexture>
 {
@@ -200,18 +195,18 @@ auto dualKawaseBlur(std::optional<BlurRenderer>& blur, VulkanBackend& backend, R
     for (i8 i = 0; i < downsampleCount; i++)
     {
         const auto outputTexture = blur->intermediateTextures[i];
-        input = kawasePass(blur->dualKawaseDownPipeline, backend, graph, positionOffsetMultiplier, colorMultiplier,
+        input = kawasePass(std::format("{} downsample #{}", passName, i), blur->dualKawaseDownPipeline, backend, graph, positionOffsetMultiplier, colorMultiplier,
             input, outputTexture);
     }
 
     for (i8 i = downsampleCount - 2; i > 0; i--)
     {
         const auto outputTexture = blur->intermediateTextures[i];
-        input = kawasePass(blur->dualKawaseUpPipeline, backend, graph, positionOffsetMultiplier, colorMultiplier,
+        input = kawasePass(std::format("{} upsample #{}", passName, i), blur->dualKawaseUpPipeline, backend, graph, positionOffsetMultiplier, colorMultiplier,
             input, outputTexture);
     }
 
-    const auto output = kawasePass(blur->dualKawaseUpPipeline, backend, graph,
+    const auto output = kawasePass(std::format("{} upsample #{}", passName, downsampleCount - 1), blur->dualKawaseUpPipeline, backend, graph,
         positionOffsetMultiplier, colorMultiplier, input, blur->output);
 
     return output;

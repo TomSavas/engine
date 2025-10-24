@@ -17,5 +17,5 @@ struct ZPrePassRenderGraphData
 
 [[nodiscard]]
 auto zPrePass(std::optional<ZPrePassRenderer>& renderer, VulkanBackend& backend, RenderGraph& graph,
-    RenderGraphResource<Buffer> culledDraws)
+    RenderGraphResource<Buffer> culledDraws, RenderGraphResource<Buffer> perModelData)
     -> ZPrePassRenderGraphData;

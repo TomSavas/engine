@@ -23,6 +23,9 @@ constexpr const char* GRAPHICS_PASSES_CSTR = GRAPHICS_PASSES.c_str();
 constexpr std::string RESOURCES = "Resources";
 constexpr const char* RESOURCES_CSTR = RESOURCES.c_str();
 
+constexpr std::string GLOBAL = "Global";
+constexpr const char* GLOBAL_CSTR = GLOBAL.c_str();
+
 struct DebugUI
 {
     std::unordered_map<std::string, std::vector<std::function<void()>>> fns;

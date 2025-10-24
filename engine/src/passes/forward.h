@@ -29,5 +29,5 @@ struct ForwardRenderGraphData
 auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRenderer, VulkanBackend& backend,
     RenderGraph& graph, RenderGraphResource<Buffer> culledDraws, RenderGraphResource<BindlessTexture> depthMap,
     RenderGraphResource<Buffer> shadowData, RenderGraphResource<BindlessTexture> shadowMap,
-    LightData lightData)
+    LightData lightData, RenderGraphResource<Buffer> perModelData)
     -> ForwardRenderGraphData;

@@ -23,11 +23,6 @@ struct SsrPushConstants
 
 auto initScreenSpace(VulkanBackend& backend) -> ScreenSpaceRenderer
 {
-    const auto outputImage = backend.allocateImage(vkutil::init::imageCreateInfo(VK_FORMAT_R16G16B16A16_SFLOAT,
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        backend.backbufferImage.extent, 1), VMA_MEMORY_USAGE_GPU_ONLY, 0, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        VK_IMAGE_ASPECT_COLOR_BIT);
-
     return ScreenSpaceRenderer{
         .ssrPipeline = PipelineBuilder(backend)
             .addDescriptorLayouts({
@@ -58,11 +53,13 @@ auto initScreenSpace(VulkanBackend& backend) -> ScreenSpaceRenderer
             .disableDepthTest()
             .build(),
         .output = backend.bindlessResources->addTexture(
-            Texture {
-                .image = outputImage,
-                .view = outputImage.view,
-                .mipCount = 1,
-            }
+            backend.allocateTexture(
+                "SSR output",
+                vkutil::init::defaultColorAttachmentTextureCreateInfo(backend.backbufferImage.extent),
+                vkutil::init::defaultTextureAllocationCreateInfo(),
+                MipOptions::one(),
+                VK_IMAGE_ASPECT_COLOR_BIT
+            )
         ),
     };
 }
@@ -74,7 +71,7 @@ auto ssrPass(std::optional<ScreenSpaceRenderer>& ssRenderer, std::optional<BlurR
 {
     // Blur reflections
     // TODO: make this configurable from imgui. But that requires recompiling render graph every frame
-    auto blurredReflectionUvs = dualKawaseBlur(blur, backend, graph, reflectionUvs, 1);
+    auto blurredReflectionUvs = dualKawaseBlur("ssr reflection blur", blur, backend, graph, reflectionUvs, 1);
 
     if (!ssRenderer)
     {
@@ -98,7 +95,7 @@ auto ssrPass(std::optional<ScreenSpaceRenderer>& ssRenderer, std::optional<BlurR
             .color = {.uint32 = {0, 0, 0, 0}}
         };
         const auto& outputTexture = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(ctx.graph, output));
-        auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(outputTexture.view, &colorClear,
+        auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(outputTexture.image.view, &colorClear,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         auto renderingInfo = vkutil::init::renderingInfo(ctx.swapchain.size, &colorAttachmentInfo, 1, nullptr);
         vkCmdBeginRendering(ctx.cmd, &renderingInfo);

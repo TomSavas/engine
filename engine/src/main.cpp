@@ -30,6 +30,14 @@
 #include "imgui_impl_vulkan.h"
 #include "passes/sceneData.h"
 
+#include <print>
+
+template <typename T>
+concept Renderer = requires(T t)
+{
+    { t.enabled() } -> std::same_as<bool>;
+};
+
 struct WorldRenderer
 {
     VulkanBackend& backend;
@@ -65,13 +73,13 @@ struct WorldRenderer
             .backend = backend
         };
 
-        // /*const auto [draws, lightList] =*/ sceneUploadPass(sceneDataUploader, backend, graph);
+        const auto [draws, lightList, perModelData] = sceneUploadPass(sceneDataUploader, backend, graph, scene);
         const auto [culledDraws] = cpuFrustumCullingPass(culling, backend, graph);
-        const auto [depthMap] = zPrePass(prePass, backend, graph, culledDraws);
-        const auto [shadowMap, cascadeData] = csmPass(shadows, backend, graph, 4);
+        const auto [depthMap] = zPrePass(prePass, backend, graph, culledDraws, perModelData);
+        const auto [shadowMap, cascadeData] = csmPass(shadows, backend, graph, 4, perModelData, draws);
         auto lightData = tiledLightCullingPass(lightCulling, backend, graph, scene, depthMap,
             1.f / 20.f);
-        auto [colorOutput, normal, positions, reflections] = opaqueForwardPass(opaque, backend, graph, culledDraws, depthMap, cascadeData, shadowMap, lightData);
+        auto [colorOutput, normal, positions, reflections] = opaqueForwardPass(opaque, backend, graph, culledDraws, depthMap, cascadeData, shadowMap, lightData, perModelData);
         output = ssrPass(ss, blur, backend, graph, colorOutput, normal, positions, reflections);
         output = atmospherePass(atmosphere, backend, graph, depthMap, output);
         output = bloomPass(bloom, blur, backend, graph, output);

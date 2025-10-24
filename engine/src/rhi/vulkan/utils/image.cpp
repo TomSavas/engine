@@ -5,8 +5,36 @@
 namespace vkutil::image
 {
 
-auto transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout) -> void
+auto transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout, bool isDepth) -> void
 {
+    // VkImageMemoryBarrier2 imageBarrier = {};
+    // imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    // imageBarrier.pNext = nullptr;
+    //
+    // // TODO: we can improve this
+    // imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+    // imageBarrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
+    // imageBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+    // imageBarrier.dstAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT;
+    //
+    // imageBarrier.oldLayout = oldLayout;
+    // imageBarrier.newLayout = newLayout;
+    //
+    // VkImageAspectFlags aspectMask = isDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+    // // VkImageAspectFlags aspectMask = (newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) ? VK_IMAGE_ASPECT_DEPTH_BIT
+    // //                                                                                         : VK_IMAGE_ASPECT_COLOR_BIT;
+    // imageBarrier.subresourceRange = vkutil::init::imageSubresourceRange(aspectMask);
+    // imageBarrier.image = image;
+    //
+    // VkDependencyInfo depInfo = {};
+    // depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    // depInfo.pNext = nullptr;
+    //
+    // depInfo.imageMemoryBarrierCount = 1;
+    // depInfo.pImageMemoryBarriers = &imageBarrier;
+    //
+    // vkCmdPipelineBarrier2(cmd, &depInfo);
+
     VkImageMemoryBarrier2 imageBarrier = {};
     imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
     imageBarrier.pNext = nullptr;
@@ -19,29 +47,22 @@ auto transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout oldLayout
 
     imageBarrier.oldLayout = oldLayout;
     imageBarrier.newLayout = newLayout;
-
-    const bool isDepth = newLayout == VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL ||
-        newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL ||
-        newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL ||
-        newLayout == VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL ||
-        newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL ||
-        newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL ||
-        newLayout == VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
-
-    VkImageAspectFlags aspectMask = isDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
-    // VkImageAspectFlags aspectMask = (newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) ? VK_IMAGE_ASPECT_DEPTH_BIT
-    //                                                                                         : VK_IMAGE_ASPECT_COLOR_BIT;
-    imageBarrier.subresourceRange = vkutil::init::imageSubresourceRange(aspectMask);
     imageBarrier.image = image;
 
-    VkDependencyInfo depInfo = {};
-    depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    depInfo.pNext = nullptr;
+    VkImageAspectFlags aspectMask = isDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+    imageBarrier.subresourceRange = vkutil::init::imageSubresourceRange(aspectMask);
 
-    depInfo.imageMemoryBarrierCount = 1;
-    depInfo.pImageMemoryBarriers = &imageBarrier;
-
-    vkCmdPipelineBarrier2(cmd, &depInfo);
+    VkDependencyInfo barriers = {
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .pNext = nullptr,
+        .memoryBarrierCount = 0,
+        .pMemoryBarriers = nullptr,
+        .bufferMemoryBarrierCount = 0,
+        .pBufferMemoryBarriers = nullptr,
+        .imageMemoryBarrierCount = 1,
+        .pImageMemoryBarriers = &imageBarrier
+    };
+    vkCmdPipelineBarrier2(cmd, &barriers);
 }
 
 auto blitImageToImage(VkCommandBuffer cmd, VkImage src, VkExtent2D srcSize, VkImage dst, VkExtent2D dstSize) -> void

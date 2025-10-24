@@ -169,7 +169,7 @@ auto imageCreateInfo(VkFormat format, VkImageUsageFlags usageFlags, VkExtent3D e
     return info;
 }
 
-auto imageViewCreateInfo(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags, u32 mipLevels)
+auto imageViewCreateInfo(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags, u8 baseMipLevel, u8 mips)
     -> VkImageViewCreateInfo
 {
     VkImageViewCreateInfo info = {};
@@ -180,8 +180,8 @@ auto imageViewCreateInfo(VkFormat format, VkImage image, VkImageAspectFlags aspe
 
     info.image = image;
     info.format = format;
-    info.subresourceRange.baseMipLevel = 0;
-    info.subresourceRange.levelCount = mipLevels;
+    info.subresourceRange.baseMipLevel = baseMipLevel;
+    info.subresourceRange.levelCount = mips;
     info.subresourceRange.baseArrayLayer = 0;
     info.subresourceRange.layerCount = 1;
     info.subresourceRange.aspectMask = aspectFlags;
@@ -596,4 +596,56 @@ auto renderingInfo(VkExtent2D extent, VkRenderingAttachmentInfo* colorAttachment
 
     return info;
 }
+
+auto defaultTextureCreateInfo(VkFormat format, VkImageUsageFlags usageFlags, VkExtent3D extent, u8 mips)
+    -> VkImageCreateInfo
+{
+    return {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .pNext = nullptr,
+        // .flags = ,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = format,
+        .extent = extent,
+        .mipLevels = mips,
+        .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = usageFlags,
+        // .sharingMode = ,
+        // .queueFamilyIndexCount = ,
+        // .pQueueFamilyIndices = ,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    };
+}
+
+
+auto defaultColorTextureCreateInfo(VkExtent3D extent, u8 mips, VkFormat format) -> VkImageCreateInfo
+{
+    return defaultTextureCreateInfo(format,
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        extent, mips);
+}
+
+auto defaultColorAttachmentTextureCreateInfo(VkExtent3D extent, u8 mips, VkFormat format) -> VkImageCreateInfo
+{
+    return defaultTextureCreateInfo(format,
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        extent, mips);
+}
+
+auto defaultTextureAllocationCreateInfo() -> VmaAllocationCreateInfo
+{
+    return {
+        // .flags = ,
+        .usage = VMA_MEMORY_USAGE_GPU_ONLY,
+        .requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        // .preferredFlags = ,
+        // .memoryTypeBits = ,
+        // .pool = ,
+        // .pUserData = ,
+        // .priority = ,
+    };
+}
+
 }  // namespace vkutil::init

@@ -20,6 +20,6 @@ struct ShadowPassRenderGraphData
 };
 
 [[nodiscard]]
-auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend,
-    RenderGraph& graph, u8 cascadeCount = 4)
+auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backend, RenderGraph& graph, u8 cascadeCount,
+    RenderGraphResource<Buffer> perModelData, RenderGraphResource<Buffer> allDraws)
     -> ShadowPassRenderGraphData;

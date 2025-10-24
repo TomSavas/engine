@@ -19,6 +19,19 @@
 #include "stb_image_write.h"
 #include "tracy/Tracy.hpp"
 
+auto toRawTexture(tinygltf::Image& image) -> RawTexture
+{
+    return {
+        .data = image.image.data(),
+        .size = static_cast<u32>(image.image.size()),
+        .extent = VkExtent3D {
+            .width = static_cast<u32>(image.width),
+            .height = static_cast<u32>(image.height),
+            .depth = 1
+        }
+    };
+}
+
 glm::vec3 right(glm::mat4 mat) { return mat * glm::vec4(1.f, 0.f, 0.f, 0.f); }
 
 glm::vec3 up(glm::mat4 mat) { return mat * glm::vec4(0.f, 1.f, 0.f, 0.f); }
@@ -238,11 +251,6 @@ auto gatherModelData(Scene& scene) -> std::vector<ModelData>
 void Scene::update(f32 dt, f32 currentTimeMs, GLFWwindow* window)
 {
     updateSceneGraphTransforms(sceneGraph);
-    // TODO: move to a render pass
-    {
-        auto modelData = gatherModelData(*this);
-        backend.copyBufferWithStaging(modelData.data(), modelData.size() * sizeof(ModelData), perModelBuffer.buffer);
-    }
 
     static bool released = true;
 
@@ -513,35 +521,46 @@ void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 tran
         tinygltf::TextureInfo& albedoTextureInfo = pbr.baseColorTexture;
         if (albedoTextureInfo.index != -1)
         {
-            // TODO: metallicRoughnessTexture
             tinygltf::Texture& albedo = model.textures[albedoTextureInfo.index];
             // TODO: don't ignore sampler
             // TODO: don't ignore texCoord index
             tinygltf::Image& albedoImg = model.images[albedo.source];
 
-            // TODO: remove above
-            auto maybeTexture = backend.textures->loadRaw(albedoImg.image.data(), albedoImg.image.size(),
-                albedoImg.width, albedoImg.height, true, true, albedoImg.uri);
-            bindlessImages.push_back(backend.bindlessResources->addTexture(std::get<0>(*maybeTexture)));
-            m.albedoTexture = bindlessImages.back();
+            const auto rawTexture = toRawTexture(albedoImg);
+            const auto mips = MipOptions::generateAll(rawTexture);
+            m.albedoTexture = backend.bindlessResources->addTexture(
+                backend.createTexture(
+                    albedoImg.uri,
+                    rawTexture,
+                    vkutil::init::defaultColorTextureCreateInfo(rawTexture.extent, mips.count(), VK_FORMAT_R8G8B8A8_UNORM),
+                    vkutil::init::defaultTextureAllocationCreateInfo(),
+                    mips,
+                    VK_IMAGE_ASPECT_COLOR_BIT
+                )
+            );
         }
 
         tinygltf::TextureInfo& metallicRoughnessTextureInfo = pbr.metallicRoughnessTexture;
         if (metallicRoughnessTextureInfo.index != -1)
         {
-            // TODO: metallicRoughnessTexture
             tinygltf::Texture& metallicRoughness = model.textures[metallicRoughnessTextureInfo.index];
             // TODO: don't ignore sampler
             // TODO: don't ignore texCoord index
             tinygltf::Image& metallicRoughnessImg = model.images[metallicRoughness.source];
 
-            // TODO: remove above
-            auto maybeTexture = backend.textures->loadRaw(metallicRoughnessImg.image.data(), metallicRoughnessImg.image.size(),
-                metallicRoughnessImg.width, metallicRoughnessImg.height, true, true, metallicRoughnessImg.uri);
-            bindlessImages.push_back(backend.bindlessResources->addTexture(std::get<0>(*maybeTexture)));
-            m.metallicRoughnessTexture = bindlessImages.back();
+            const auto rawTexture = toRawTexture(metallicRoughnessImg);
+            const auto mips = MipOptions::generateAll(rawTexture);
+            m.metallicRoughnessTexture = backend.bindlessResources->addTexture(
+                backend.createTexture(
+                    metallicRoughnessImg.uri,
+                    rawTexture,
+                    vkutil::init::defaultColorTextureCreateInfo(rawTexture.extent, mips.count(), VK_FORMAT_R8G8B8A8_UNORM),
+                    vkutil::init::defaultTextureAllocationCreateInfo(),
+                    mips,
+                    VK_IMAGE_ASPECT_COLOR_BIT
+                )
+            );
         }
-        //m.metallicRoughnessTexture = BindlessResources::kWhite;
 
         tinygltf::NormalTextureInfo& normalTextureInfo = material.normalTexture;
         if (normalTextureInfo.index != -1)
@@ -551,14 +570,22 @@ void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 tran
             // TODO: don't ignore sampler
             tinygltf::Image& normalImg = model.images[normal.source];
 
-            // TODO: remove above
-            auto maybeTexture = backend.textures->loadRaw(normalImg.image.data(), normalImg.image.size(),
-                normalImg.width, normalImg.height, true, true, normalImg.uri);
-            bindlessImages.push_back(backend.bindlessResources->addTexture(std::get<0>(*maybeTexture)));
-            m.normalTexture = bindlessImages.back();
+            const auto rawTexture = toRawTexture(normalImg);
+            const auto mips = MipOptions::generateAll(rawTexture);
+            m.normalTexture = backend.bindlessResources->addTexture(
+                backend.createTexture(
+                    normalImg.uri,
+                    rawTexture,
+                    vkutil::init::defaultColorTextureCreateInfo(rawTexture.extent, mips.count(), VK_FORMAT_R8G8B8A8_UNORM),
+                    vkutil::init::defaultTextureAllocationCreateInfo(),
+                    mips,
+                    VK_IMAGE_ASPECT_COLOR_BIT
+                )
+            );
 
             std::string bumpFilename = "generatedBump_" + normalImg.uri + ".png";
             // TODO: allow specifying format
+            m.bumpTexture = BindlessResources::kWhite;
 
             i32 bumpWidth = normalImg.width;
             i32 bumpHeight = normalImg.height;
@@ -576,23 +603,19 @@ void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 tran
                 //stbi_write_png(bumpFilename.c_str(), bumpHeight, bumpWidth, 4, bumpMapData.data(), 0);
                 //maybeTexture = backend.textures->loadRaw(bumpMapData.data(), bumpMapData.size(), bumpWidth,
                 //    bumpHeight, true, true, bumpFilename);
-                bumpFilename = "empty_bump";
-                maybeTexture = std::tuple<Texture, std::string>(whiteTexture(backend, 2.f), bumpFilename);
             }
             else
             {
-                maybeTexture = backend.textures->loadRaw(loadRes, bumpWidth * bumpHeight * 4 * 1, bumpWidth,
-                    bumpHeight, true, true, bumpFilename);
-            }
-
-            if (maybeTexture)
-            {
-                bindlessImages.push_back(backend.bindlessResources->addTexture(std::get<0>(*maybeTexture)));
-                m.bumpTexture = bindlessImages.back();
-            }
-            else
-            {
-                m.bumpTexture = BindlessResources::kWhite;
+                m.bumpTexture = backend.bindlessResources->addTexture(
+                    backend.createTexture(
+                        normalImg.uri,
+                        rawTexture,
+                        vkutil::init::defaultColorTextureCreateInfo(rawTexture.extent, mips.count(), VK_FORMAT_R8G8B8A8_UNORM),
+                        vkutil::init::defaultTextureAllocationCreateInfo(),
+                        mips,
+                        VK_IMAGE_ASPECT_COLOR_BIT
+                    )
+                );
             }
         }
     }
@@ -622,45 +645,37 @@ void Scene::createBuffers()
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     auto modelData = gatherModelData(*this);
-    u32 perModelBufferSize = modelData.size() * sizeof(decltype(modelData)::value_type);
-    perModelBufferSize = perModelBufferSize == 0 ? 8 : perModelBufferSize;
-    info = vkutil::init::bufferCreateInfo(perModelBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                                                                  VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                                                                  VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-    perModelBuffer = backend.allocateBuffer(info, VMA_MEMORY_USAGE_GPU_ONLY,
-        VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    u32 modelDataSize = sizeof(VkDrawIndexedIndirectCommand) * modelData.size();
-    modelDataSize = modelDataSize == 0 ? 8 : modelDataSize;
-    info = vkutil::init::bufferCreateInfo(modelDataSize,
-        VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-    indirectCommands = backend.allocateBuffer(info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-        VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    // u32 modelDataSize = sizeof(VkDrawIndexedIndirectCommand) * modelData.size();
+    // modelDataSize = modelDataSize == 0 ? 8 : modelDataSize;
+    // info = vkutil::init::bufferCreateInfo(modelDataSize,
+    //     VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+    // indirectCommands = backend.allocateBuffer(info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+    //     VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    // TODO: do actual instancing
-    std::vector<VkDrawIndexedIndirectCommand> cmds;
-    cmds.reserve(modelData.size());
-    u32 i = 0;
-    for (auto& mesh : meshes)
-    {
-        for (auto& instance : mesh.second.instances)
-        {
-            VkDrawIndexedIndirectCommand command = {
-                .indexCount = static_cast<u32>(mesh.second.indexCount),
-                .instanceCount = 1,
-                .firstIndex = static_cast<u32>(mesh.second.indexOffset),
-                .vertexOffset = 0,
-                .firstInstance = i++
-            };
-            cmds.push_back(command);
-        }
-    }
+    // // TODO: do actual instancing
+    // std::vector<VkDrawIndexedIndirectCommand> cmds;
+    // cmds.reserve(modelData.size());
+    // u32 i = 0;
+    // for (auto& mesh : meshes)
+    // {
+    //     for (auto& instance : mesh.second.instances)
+    //     {
+    //         VkDrawIndexedIndirectCommand command = {
+    //             .indexCount = static_cast<u32>(mesh.second.indexCount),
+    //             .instanceCount = 1,
+    //             .firstIndex = static_cast<u32>(mesh.second.indexOffset),
+    //             .vertexOffset = 0,
+    //             .firstInstance = i++
+    //         };
+    //         cmds.push_back(command);
+    //     }
+    // }
 
     backend.copyBufferWithStaging(vertexData.data(), vertexBufferSize, vertexBuffer.buffer);
     backend.copyBufferWithStaging(indices.data(), indexBufferSize, indexBuffer.buffer);
-    backend.copyBufferWithStaging(modelData.data(), modelData.size() * sizeof(ModelData), perModelBuffer.buffer);
-    backend.copyBufferWithStaging(
-        cmds.data(), sizeof(VkDrawIndexedIndirectCommand) * cmds.size(), indirectCommands.buffer);
+    // backend.copyBufferWithStaging(
+    //     cmds.data(), sizeof(VkDrawIndexedIndirectCommand) * cmds.size(), indirectCommands.buffer);
 }
 
 result::result<Scene, assetError> loadScene(VulkanBackend& backend, std::string name, std::string path,
