@@ -570,7 +570,7 @@ void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 tran
             // TODO: don't ignore sampler
             tinygltf::Image& normalImg = model.images[normal.source];
 
-            const auto rawTexture = toRawTexture(normalImg);
+            auto rawTexture = toRawTexture(normalImg);
             const auto mips = MipOptions::generateAll(rawTexture);
             m.normalTexture = backend.bindlessResources->addTexture(
                 backend.createTexture(
@@ -591,6 +591,7 @@ void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 tran
             i32 bumpHeight = normalImg.height;
             i32 components;
             u8* loadRes = stbi_load(bumpFilename.c_str(), &bumpWidth, &bumpHeight, &components, STBI_rgb_alpha);
+            rawTexture.data = loadRes;
             if (loadRes == nullptr)
             {
                 //bumpWidth = normalImg.width;
@@ -608,7 +609,7 @@ void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 tran
             {
                 m.bumpTexture = backend.bindlessResources->addTexture(
                     backend.createTexture(
-                        normalImg.uri,
+                        bumpFilename,
                         rawTexture,
                         vkutil::init::defaultColorTextureCreateInfo(rawTexture.extent, mips.count(), VK_FORMAT_R8G8B8A8_UNORM),
                         vkutil::init::defaultTextureAllocationCreateInfo(),
