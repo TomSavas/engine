@@ -1,15 +1,17 @@
 #include "debugUI.h"
 
-#include <stack>
+#include "rhi/vulkan/backend.h"
+#include "scene.h"
 
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "glm/gtc/type_ptr.hpp"
 #include "glm/gtx/matrix_decompose.hpp"
 #include "imgui.h"
-#include "rhi/vulkan/backend.h"
-#include "scene.h"
+#include "GLFW/glfw3.h"
 
 #include <print>
+#include <stack>
+
 
 DebugUI debugUI;
 
@@ -18,8 +20,21 @@ auto addDebugUI(DebugUI& debugUi, std::string parentId, std::function<void()> fn
     debugUi.fns[parentId].push_back(fn);
 }
 
-void drawDebugUI(DebugUI& debugUi, VulkanBackend& backend, Scene& scene, f64 dt)
+auto drawDebugUI(DebugUI& debugUi, VulkanBackend& backend, Scene& scene, f64 dt) -> void
 {
+    static auto debugKeyWasPressed = false;
+    auto debugKeyPressed = glfwGetKey(backend.window, GLFW_KEY_F1) == GLFW_PRESS;
+    if (debugKeyWasPressed && !debugKeyPressed)
+    {
+        debugUi.enabled = !debugUi.enabled;
+    }
+    debugKeyWasPressed = debugKeyPressed;
+       
+    if (!debugUi.enabled)
+    {
+        return;
+    }
+    
     constexpr f32 padding = 10.0f;
 
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |

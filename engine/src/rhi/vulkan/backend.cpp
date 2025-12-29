@@ -67,20 +67,6 @@ auto VulkanBackend::endFrame(Frame&& frame) -> FrameStats
 
 VulkanBackend::VulkanBackend(GLFWwindow* window) : window(window)
 {
-    i32 width;
-    i32 height;
-    glfwGetFramebufferSize(window, &width, &height);
-
-    viewport.x = 0.f;
-    viewport.y = 0.f;
-    viewport.width = static_cast<f32>(width);
-    viewport.height = static_cast<f32>(height);
-    viewport.minDepth = 0.f;
-    viewport.maxDepth = 1.f;
-
-    scissor.offset = {0, 0};
-    scissor.extent = {static_cast<u32>(viewport.width), static_cast<u32>(viewport.height)};
-
     initVulkan();
     initSwapchain();
     initCommandBuffers();
@@ -189,6 +175,23 @@ auto VulkanBackend::initVulkan() -> void
 
 auto VulkanBackend::initSwapchain() -> void
 {
+    i32 width;
+    i32 height;
+    glfwGetFramebufferSize(window, &width, &height);
+
+    rawResolution = glm::uvec2(width, height);
+    scaledResolution = glm::uvec2(1920, 1080);
+
+    viewport.x = 0.f;
+    viewport.y = 0.f;
+    viewport.width = static_cast<f32>(scaledResolution.x);
+    viewport.height = static_cast<f32>(scaledResolution.y);
+    viewport.minDepth = 0.f;
+    viewport.maxDepth = 1.f;
+
+    scissor.offset = {0, 0};
+    scissor.extent = {static_cast<u32>(viewport.width), static_cast<u32>(viewport.height)};
+
     vkDeviceWaitIdle(device);
 
     vkb::SwapchainBuilder builder{gpu, device, surface};
@@ -199,8 +202,9 @@ auto VulkanBackend::initSwapchain() -> void
                                       //.set_desired_present_mode(VK_PRESENT_MODE_FIFO_RELAXED_KHR)
                                       //.set_desired_present_mode(VK_PRESENT_MODE_IMMEDIATE_KHR)
                                       .set_desired_min_image_count(MaxFramesInFlight)
-                                      .set_desired_extent(viewport.width, viewport.height)
+                                      .set_desired_extent(rawResolution.x, rawResolution.y)
                                       .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+                                      .set_old_swapchain(swapchain)
                                       .build()
                                       .value();
 
@@ -210,27 +214,8 @@ auto VulkanBackend::initSwapchain() -> void
     swapchainImageFormat = vkbSwapchain.image_format;
 
     std::println("Swapchain image count: {}", swapchainImages.size());
-
-    // Backbuffer
-    backbufferImage.format = VK_FORMAT_R16G16B16A16_SFLOAT;
-    backbufferImage.extent = {static_cast<u32>(viewport.width), static_cast<u32>(viewport.height), 1};
-    VkImageUsageFlags backbufferUsageFlags = {};
-    backbufferUsageFlags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-    backbufferUsageFlags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    backbufferUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;
-    backbufferUsageFlags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-    auto imgInfo = vkutil::init::imageCreateInfo(backbufferImage.format, backbufferUsageFlags, backbufferImage.extent);
-
-    VmaAllocationCreateInfo allocInfo = {};
-    // TODO: probably want this in tracy and on various debug tools in imgui
-    allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    allocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    vmaCreateImage(allocator, &imgInfo, &allocInfo, &backbufferImage.image, &backbufferImage.allocation, nullptr);
-
-    auto imgViewInfo = vkutil::init::imageViewCreateInfo(
-        backbufferImage.format, backbufferImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
-    VK_CHECK(vkCreateImageView(device, &imgViewInfo, nullptr, &backbufferImage.view));
+    std::println("Raw resolution: {}x{}", rawResolution.x, rawResolution.y);
+    std::println("Scaled resolution: {}x{}", scaledResolution.x, scaledResolution.y);
 }
 
 auto VulkanBackend::initCommandBuffers() -> void
@@ -497,9 +482,14 @@ auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
         VK_CHECK(vkWaitForFences(device, 1, &frameCtx.renderFence, true, timeoutNs));
         // TODO: move after swapchain regen... maybe?
 
-        VK_CHECK(
-            vkAcquireNextImageKHR(device, swapchain, timeoutNs, frameCtx.presentSem, nullptr, &swapchainImageIndex));
-        // TODO: if swapchain regen requested process, reacquire index and continue
+        auto swapchainStatus = vkAcquireNextImageKHR(device, swapchain, timeoutNs, frameCtx.presentSem,
+                                                      nullptr, &swapchainImageIndex);
+        while (swapchainStatus == VK_ERROR_OUT_OF_DATE_KHR || swapchainStatus == VK_SUBOPTIMAL_KHR)
+        {
+            initSwapchain();
+            swapchainStatus = vkAcquireNextImageKHR(device, swapchain, timeoutNs, frameCtx.presentSem,
+                                                    nullptr, &swapchainImageIndex);
+        }
 
         VK_CHECK(vkResetFences(device, 1, &frameCtx.renderFence));
     }
@@ -533,7 +523,6 @@ auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
         //         cmd, backbufferImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         // }
 
-        VkExtent2D swapchainSize{static_cast<u32>(viewport.width), static_cast<u32>(viewport.height)};
 
         // TODO: this should live as a separate pass in the render graph
         // Update scene descriptor set
@@ -565,7 +554,7 @@ auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
                .scene = scene,
                .swapchain = CurrentSwapchain
                {
-                   .size = swapchainSize,
+                   .size = VkExtent2D{static_cast<u32>(scaledResolution.x), static_cast<u32>(scaledResolution.y)},
                    .format = swapchainImageFormat,
                    .image = swapchainImages[swapchainImageIndex],
                    .view = swapchainImageViews[swapchainImageIndex],
@@ -675,7 +664,8 @@ auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
         ZoneScopedCpuGpuAuto("Present", frameCtx);
 
         auto presentInfo = vkutil::init::presentInfo(&swapchain, &frameCtx.renderSem, &swapchainImageIndex);
-        VK_CHECK(vkQueuePresentKHR(graphicsQueue, &presentInfo));
+        // VK_CHECK(vkQueuePresentKHR(graphicsQueue, &presentInfo));
+        vkQueuePresentKHR(graphicsQueue, &presentInfo);
     }
 
     // {
@@ -708,17 +698,29 @@ auto VulkanBackend::addOutputBlitPass(RenderGraph& graph, RenderGraphResource<Bi
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
         vkutil::image::blitImageToImage(ctx.cmd, outputTexture.image.image,
             VkExtent2D{outputTexture.image.extent.width, outputTexture.image.extent.height},
-            ctx.swapchain.image, ctx.swapchain.size);
+            ctx.swapchain.image, VkExtent2D{rawResolution.x, rawResolution.y});
     };
 }
 
-auto VulkanBackend::addImguiPass(RenderGraph& graph) -> void
+auto VulkanBackend::addImguiPass(RenderGraph& graph, RenderGraphResource<BindlessTexture> output) -> void
 {
     auto& pass = createPass(graph);
     pass.pass.debugName = std::format("Imgui pass");
 
-    pass.pass.draw = [this](const RenderContext& ctx, RenderPass&)
+    output = readResource<BindlessTexture>(graph, pass, output, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    pass.pass.draw = [this, output](const RenderContext& ctx, RenderPass&)
     {
+        const auto bindlessOutput = *getResource<BindlessTexture>(ctx.graph, output);
+        const auto& outputTexture = bindlessResources->getTexture(bindlessOutput);
+        if (ImGui::Begin("Render output", nullptr, ImGuiWindowFlags_NoDecoration))
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_ImageBorderSize, 0.f);
+            ImGui::Image(*outputTexture.imguiDescriptorSet, ImGui::GetContentRegionMax());
+            ImGui::PopStyleVar();
+        }
+        ImGui::End();
+        
         ImGui::Render();
 
         // TODO: perhaps we can move swapchain as a resource into render graph

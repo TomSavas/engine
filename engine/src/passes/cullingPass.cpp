@@ -66,7 +66,7 @@ auto cpuFrustumCullingPass(std::optional<GeometryCulling>& geometryCulling, Vulk
             const auto view = glm::inverse(
                 glm::translate(glm::mat4(1.f), ctx.scene.mainCamera.position) * ctx.scene.mainCamera.rotation);
             const auto projection = glm::perspectiveFov<f32>(ctx.scene.mainCamera.verticalFov,
-                backend.backbufferImage.extent.width, backend.backbufferImage.extent.height,
+                backend.scaledResolution.x, backend.scaledResolution.y,
                 ctx.scene.mainCamera.nearClippingPlaneDist, ctx.scene.mainCamera.farClippingPlaneDist);
             const auto viewProj = projection * view;
             const auto viewProjTranspose = glm::transpose(viewProj);

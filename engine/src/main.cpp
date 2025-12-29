@@ -65,10 +65,6 @@ struct WorldRenderer
 
     void compileRenderGraph(Scene& scene)
     {
-        // NOTE: Instead of the usual per-frame recompilation of render graph,
-        // it's enough to make it once and reuse the cached compiled render
-        // graph. Once we get into more complicated rendering we can start
-        // thinking about recompiling it every frame.
         RenderGraph graph = {
             .backend = backend
         };
@@ -86,16 +82,24 @@ struct WorldRenderer
         //output = reinhardTonemapPass(tonemapper, backend, graph, output);
         //smaaPass(antiAliaser, backend, graph, output);
 
-        // TODO: perhaps this can be removed once the rg is smart enough for marking the output buffer
-        backend.addOutputBlitPass(graph, output);
-        // Renders directly to swapchain, no resources required
-        backend.addImguiPass(graph);
+        if (debugUI.enabled)
+        {
+            // Renders directly to swapchain, no resources required
+            backend.addImguiPass(graph, output);
+        }
+        else
+        {
+            // TODO: perhaps this can be removed once the rg is smart enough for marking the output buffer
+            backend.addOutputBlitPass(graph, output);
+        }
 
         compiledRenderGraph = compile(backend, std::move(graph));
     }
 
     void render(Frame& frame, Scene& scene, f64 dt)
     {
+        compileRenderGraph(scene);
+        
         glfwPollEvents();
 
         ImGui_ImplVulkan_NewFrame();
@@ -121,6 +125,8 @@ struct WorldRenderer
         {
             backend.render(frame, *compiledRenderGraph, scene, output);
         }
+
+        ImGui::EndFrame();
     }
 };
 
@@ -128,15 +134,10 @@ i32 main()
 {
     VulkanBackend* backend = initVulkanBackend().expect("Failed initialising Vulkan backend");
 
-    // Scene scene = loadScene(*backend, "Sponza", "../assets/intelsponza/sponza.gltf", 64 - 1)
-    // Scene scene = loadScene(*backend, "Sponza", "../assets/Suzanne/Suzanne.gltf", 4096 - 1)
     Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf", 4096 - 1)
         .value_or(emptyScene(*backend));
 
-    // Scene scene = emptyScene(*backend);
-
     WorldRenderer worldRenderer(*backend);
-    worldRenderer.compileRenderGraph(scene);
 
     FrameStats lastFrameStats = backend->endFrame(backend->newFrame());
     while (!lastFrameStats.shutdownRequested)

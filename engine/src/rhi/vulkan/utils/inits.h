@@ -1,9 +1,10 @@
 #pragma once
 
-#include <vulkan/vulkan.h>
-
 #include "engine.h"
 #include "vk_mem_alloc.h"
+
+#include <glm/glm.hpp>
+#include <vulkan/vulkan.h>
 
 namespace vkutil::init
 {
@@ -94,6 +95,8 @@ auto defaultTextureCreateInfo(VkFormat format, VkImageUsageFlags usageFlags, VkE
 auto defaultColorTextureCreateInfo(VkExtent3D extent, u8 mips = 1, VkFormat format = kDefaultColorFormat)
     -> VkImageCreateInfo;
 auto defaultColorAttachmentTextureCreateInfo(VkExtent3D extent, u8 mips = 1, VkFormat format = kDefaultColorFormat)
+    -> VkImageCreateInfo;
+auto defaultColorAttachmentTextureCreateInfo(glm::uvec2 extent, u8 mips = 1, VkFormat format = kDefaultColorFormat)
     -> VkImageCreateInfo;
 auto defaultTextureAllocationCreateInfo() -> VmaAllocationCreateInfo;
 

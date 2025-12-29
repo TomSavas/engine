@@ -20,7 +20,7 @@ auto initTestRenderer(VulkanBackend& backend) -> TestRenderer
             .cullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE)
             .disableMultisampling()
             .enableAlphaBlending()
-            .colorAttachmentFormat(backend.backbufferImage.format)
+            .colorAttachmentFormat(backend.DEFAULT_FORMAT)
             .disableDepthTest()
             .addViewportScissorDynamicStates()
             .build()
@@ -40,10 +40,10 @@ auto testPass(std::optional<TestRenderer>& renderer, VulkanBackend& backend, Ren
 
     pass.pass.beginRendering = [&backend](const RenderContext& ctx)
     {
-        auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backend.backbufferImage.view, nullptr,
-            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        const auto renderingInfo = vkutil::init::renderingInfo(ctx.swapchain.size, &colorAttachmentInfo, 1, nullptr);
-        vkCmdBeginRendering(ctx.cmd, &renderingInfo);
+        // auto colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(backend.backbufferImage.view, nullptr,
+        //     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        // const auto renderingInfo = vkutil::init::renderingInfo(ctx.swapchain.size, &colorAttachmentInfo, 1, nullptr);
+        // vkCmdBeginRendering(ctx.cmd, &renderingInfo);
     };
 
     pass.pass.draw = [](const RenderContext& ctx, RenderPass&)

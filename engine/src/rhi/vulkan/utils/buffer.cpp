@@ -28,7 +28,7 @@ auto addTransition<Buffer>(VulkanBackend& backend, CompiledRenderGraph::Node& no
     bufferBarrier.offset = 0;
     bufferBarrier.size = resource->size;
 
-    std::println("transitioning buffer, size {}", resource->size);
+    // std::println("transitioning buffer, size {}", resource->size);
 
     node.bufferBarriers.push_back(bufferBarrier);
 }

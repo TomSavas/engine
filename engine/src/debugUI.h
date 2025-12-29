@@ -30,6 +30,8 @@ struct DebugUI
 {
     std::unordered_map<std::string, std::vector<std::function<void()>>> fns;
     std::string selectedNode;
+
+    bool enabled;
 };
 
 extern DebugUI debugUI;

@@ -66,7 +66,7 @@ auto initForwardOpaque(VulkanBackend& backend) -> ForwardOpaqueRenderer
         .color = backend.bindlessResources->addTexture(
             backend.allocateTexture(
                 "Forward color output",
-                vkutil::init::defaultColorAttachmentTextureCreateInfo(backend.backbufferImage.extent),
+                vkutil::init::defaultColorAttachmentTextureCreateInfo(backend.scaledResolution),
                 vkutil::init::defaultTextureAllocationCreateInfo(),
                 MipOptions::one(),
                 VK_IMAGE_ASPECT_COLOR_BIT
@@ -75,7 +75,7 @@ auto initForwardOpaque(VulkanBackend& backend) -> ForwardOpaqueRenderer
         .normal = backend.bindlessResources->addTexture(
             backend.allocateTexture(
                 "Forward normal output",
-                vkutil::init::defaultColorAttachmentTextureCreateInfo(backend.backbufferImage.extent),
+                vkutil::init::defaultColorAttachmentTextureCreateInfo(backend.scaledResolution),
                 vkutil::init::defaultTextureAllocationCreateInfo(),
                 MipOptions::one(),
                 VK_IMAGE_ASPECT_COLOR_BIT
@@ -84,7 +84,7 @@ auto initForwardOpaque(VulkanBackend& backend) -> ForwardOpaqueRenderer
         .positions = backend.bindlessResources->addTexture(
             backend.allocateTexture(
                 "Forward position output",
-                vkutil::init::defaultColorAttachmentTextureCreateInfo(backend.backbufferImage.extent),
+                vkutil::init::defaultColorAttachmentTextureCreateInfo(backend.scaledResolution),
                 vkutil::init::defaultTextureAllocationCreateInfo(),
                 MipOptions::one(),
                 VK_IMAGE_ASPECT_COLOR_BIT
@@ -93,7 +93,7 @@ auto initForwardOpaque(VulkanBackend& backend) -> ForwardOpaqueRenderer
         .reflections = backend.bindlessResources->addTexture(
             backend.allocateTexture(
                 "Forward SSR reflection output",
-                vkutil::init::defaultColorAttachmentTextureCreateInfo(backend.backbufferImage.extent),
+                vkutil::init::defaultColorAttachmentTextureCreateInfo(backend.scaledResolution),
                 vkutil::init::defaultTextureAllocationCreateInfo(),
                 MipOptions::one(),
                 VK_IMAGE_ASPECT_COLOR_BIT

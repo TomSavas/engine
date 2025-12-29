@@ -96,7 +96,7 @@ void csmLightViewProjMats(glm::mat4* viewProjMats, glm::vec4* cascadeDistances, 
             radius = glm::max(radius, distance);
         }
         //radius = std::ceil(radius / 2.0f) * 2.0f;
-        radius = std::ceil(radius * 16.0f) / 16.0f;
+        //radius = std::ceil(radius * 16.0f) / 16.0f;
 
         glm::vec3 lightDir = normalize(lightDirr); // NOTE: convert lightDir into light pos
 

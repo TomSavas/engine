@@ -19,16 +19,16 @@ struct DualKawasePushConstants
 
 auto initDualKawase(VulkanBackend& backend, RenderGraph& graph) -> BlurRenderer
 {
-    const auto minDimension = std::min(backend.backbufferImage.extent.width, backend.backbufferImage.extent.height);
+    const auto minDimension = std::min(backend.scaledResolution.x, backend.scaledResolution.y);
     const auto maxLevels = static_cast<u8>(std::log2(static_cast<f32>(minDimension)));
     std::vector<BindlessTexture> intermediateTextures;
     intermediateTextures.reserve(maxLevels - 1);
     for (u8 i = 0; i < maxLevels - 1; i++)
     {
         const auto resolution = VkExtent3D {
-            .width = static_cast<u32>(backend.backbufferImage.extent.width / std::pow(2, i + 1)),
-            .height = static_cast<u32>(backend.backbufferImage.extent.height / std::pow(2, i + 1)),
-            .depth = backend.backbufferImage.extent.depth,
+            .width = static_cast<u32>(backend.scaledResolution.x / std::pow(2, i + 1)),
+            .height = static_cast<u32>(backend.scaledResolution.y / std::pow(2, i + 1)),
+            .depth = 1,
         };
         std::println("intermediate texture: {} x {}", resolution.width, resolution.height);
         intermediateTextures.push_back(
@@ -70,7 +70,7 @@ auto initDualKawase(VulkanBackend& backend, RenderGraph& graph) -> BlurRenderer
             .cullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE)
             .disableMultisampling()
             .enableAlphaBlending()
-            .colorAttachmentFormat(backend.backbufferImage.format)
+            .colorAttachmentFormat(backend.DEFAULT_FORMAT)
             .addViewportScissorDynamicStates()
             .disableDepthTest()
             .build(),
@@ -98,14 +98,14 @@ auto initDualKawase(VulkanBackend& backend, RenderGraph& graph) -> BlurRenderer
             .cullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE)
             .disableMultisampling()
             .enableAlphaBlending()
-            .colorAttachmentFormat(backend.backbufferImage.format)
+            .colorAttachmentFormat(backend.DEFAULT_FORMAT)
             .addViewportScissorDynamicStates()
             .disableDepthTest()
             .build(),
         .output = backend.bindlessResources->addTexture(
             backend.allocateTexture(
                 "Blur output",
-                vkutil::init::defaultColorAttachmentTextureCreateInfo(backend.backbufferImage.extent),
+                vkutil::init::defaultColorAttachmentTextureCreateInfo(backend.scaledResolution),
                 vkutil::init::defaultTextureAllocationCreateInfo(),
                 MipOptions::one(),
                 VK_IMAGE_ASPECT_COLOR_BIT

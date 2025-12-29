@@ -709,7 +709,7 @@ auto addTransition<BindlessTexture>(VulkanBackend& backend, CompiledRenderGraph:
     // {
     //     std::print("[SKIPPED] ");
     // }
-    std::println("[{}] transitioning image {} (0x{:x}) {} -> {}", node.pass.debugName, texture.name, (u64)texture.image.image, imageLayoutToString(oldLayout), imageLayoutToString(newLayout));
+    // std::println("[{}] transitioning image {} (0x{:x}) {} -> {}", node.pass.debugName, texture.name, (u64)texture.image.image, imageLayoutToString(oldLayout), imageLayoutToString(newLayout));
 
     // if (oldLayout == newLayout)
     // {

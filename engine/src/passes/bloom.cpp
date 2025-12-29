@@ -40,14 +40,14 @@ auto initBloom(VulkanBackend& backend) -> BloomRenderer
             .cullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE)
             .disableMultisampling()
             .enableAlphaBlending()
-            .colorAttachmentFormat(backend.backbufferImage.format)
+            .colorAttachmentFormat(backend.DEFAULT_FORMAT)
             .addViewportScissorDynamicStates()
             .disableDepthTest()
             .build(),
         .output = backend.bindlessResources->addTexture(
             backend.allocateTexture(
                 "Bloom output",
-                vkutil::init::defaultColorAttachmentTextureCreateInfo(backend.backbufferImage.extent),
+                vkutil::init::defaultColorAttachmentTextureCreateInfo(backend.scaledResolution),
                 vkutil::init::defaultTextureAllocationCreateInfo(),
                 MipOptions::one(),
                 VK_IMAGE_ASPECT_COLOR_BIT

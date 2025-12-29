@@ -71,10 +71,10 @@ auto tiledLightCullingPass(std::optional<LightCulling>& lightCulling, VulkanBack
 {
     // TODO: This should inspect some GPU capabilities
     const u16 tileCount[2] = {
-        static_cast<u16>(std::ceil(static_cast<f32>(backend.backbufferImage.extent.width) * tileSizeAsPercentageOfScreen)),
-        static_cast<u16>(std::ceil(static_cast<f32>(backend.backbufferImage.extent.height) * tileSizeAsPercentageOfScreen))
+        static_cast<u16>(std::ceil(static_cast<f32>(backend.scaledResolution.x) * tileSizeAsPercentageOfScreen)),
+        static_cast<u16>(std::ceil(static_cast<f32>(backend.scaledResolution.y) * tileSizeAsPercentageOfScreen))
     };
-    std::println("Using {}x{} tiles for light culling.", tileCount[0], tileCount[1]);
+    // std::println("Using {}x{} tiles for light culling.", tileCount[0], tileCount[1]);
 
     if (!lightCulling)
     {

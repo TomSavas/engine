@@ -45,7 +45,7 @@ auto initZPrePass(VulkanBackend& backend) -> ZPrePassRenderer
                 vkutil::init::defaultTextureCreateInfo(
                     depthFormat,
                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                    backend.backbufferImage.extent
+                    VkExtent3D{backend.scaledResolution.x, backend.scaledResolution.y, 1}
                 ),
                 vkutil::init::defaultTextureAllocationCreateInfo(),
                 MipOptions::one(),

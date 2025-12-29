@@ -15,6 +15,7 @@
 #include "tracy/TracyVulkan.hpp"
 #include "vk_mem_alloc.h"
 #include "result.hpp"
+#include "glm/glm.hpp"
 
 #include <chrono>
 #include <functional>
@@ -106,8 +107,11 @@ struct VulkanBackend
     VkViewport viewport;
     VkRect2D scissor;
 
+    glm::uvec2 rawResolution;
+    glm::uvec2 scaledResolution;
+    static constexpr VkFormat DEFAULT_FORMAT = VK_FORMAT_R16G16B16A16_SFLOAT;
     // Swapchain
-    VkSwapchainKHR swapchain;
+    VkSwapchainKHR swapchain = VK_NULL_HANDLE;
     VkFormat swapchainImageFormat;
     std::vector<VkImage> swapchainImages;
     std::vector<VkImageView> swapchainImageViews;
@@ -116,9 +120,6 @@ struct VulkanBackend
     VkFence immediateFence;
     VkCommandPool immediateCmdPool;
     VkCommandBuffer immediateCmdBuffer;
-
-    // Backbuffer
-    AllocatedImage backbufferImage;
 
     // Frames
     static constexpr i32 MaxFramesInFlight = 1;
@@ -163,7 +164,7 @@ struct VulkanBackend
     auto render(const Frame& frame, CompiledRenderGraph& compiledRenderGraph, Scene& scene, RenderGraphResource<BindlessTexture> output) -> void;
 
     auto addOutputBlitPass(RenderGraph& graph, RenderGraphResource<BindlessTexture> output) -> void;
-    auto addImguiPass(RenderGraph& graph) -> void;
+    auto addImguiPass(RenderGraph& graph, RenderGraphResource<BindlessTexture> output) -> void;
 
     auto immediateSubmit(std::function<void(VkCommandBuffer)>&& f) -> void;
     auto copyBuffer(std::optional<VkCommandBuffer> cmd, VkBuffer src, VkBuffer dst, VkBufferCopy copyRegion) -> void;

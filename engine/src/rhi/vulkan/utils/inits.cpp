@@ -634,6 +634,13 @@ auto defaultColorAttachmentTextureCreateInfo(VkExtent3D extent, u8 mips, VkForma
         extent, mips);
 }
 
+auto defaultColorAttachmentTextureCreateInfo(glm::uvec2 size, u8 mips, VkFormat format) -> VkImageCreateInfo
+{
+    return defaultTextureCreateInfo(format,
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VkExtent3D{size.x, size.y, 1}, mips);
+}
+
 auto defaultTextureAllocationCreateInfo() -> VmaAllocationCreateInfo
 {
     return {

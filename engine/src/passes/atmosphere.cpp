@@ -58,7 +58,7 @@ auto initAtmosphere(VulkanBackend& backend) -> AtmosphereRenderer
             .cullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE)
             .disableMultisampling()
             .enableAlphaBlending()
-            .colorAttachmentFormat(backend.backbufferImage.format)
+            .colorAttachmentFormat(backend.DEFAULT_FORMAT)
             .depthFormat(VK_FORMAT_D32_SFLOAT)
             .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
             .addViewportScissorDynamicStates()
