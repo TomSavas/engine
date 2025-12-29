@@ -185,7 +185,8 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
             backend.bindlessResources->getTexture(
                 *getResource<BindlessTexture>(ctx.graph, data.depthMap)).image.view,
                 // No clear -- we're using ZPrePass
-                VK_ATTACHMENT_LOAD_OP_LOAD);
+                VK_ATTACHMENT_LOAD_OP_LOAD,
+                VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL);
         auto renderingInfo = vkutil::init::renderingInfo(ctx.swapchain.size, attachments, std::size(attachments),
             &depthAttachmentInfo);
         vkCmdBeginRendering(ctx.cmd, &renderingInfo);
