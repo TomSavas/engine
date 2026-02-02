@@ -16,7 +16,11 @@ struct BindlessResources
 {
     static constexpr BindlessTexture kWhite = 0;
     static constexpr BindlessTexture kBlack = 1;
-    static constexpr BindlessTexture kError = 2;
+    static constexpr BindlessTexture kRed = 2;
+    static constexpr BindlessTexture kGreen = 3;
+    static constexpr BindlessTexture kBlue = 4;
+    static constexpr BindlessTexture kError = 5;
+    static constexpr BindlessTexture kTransparency = 6;
 
     VulkanBackend* backend;
 
@@ -40,5 +44,8 @@ struct BindlessResources
     auto getTexture(BindlessTexture handle, BindlessTexture defaultTexture = kError) -> Texture&;
     auto removeTexture(BindlessTexture handle) -> void;
 };
+
+auto imageFormatToString(VkFormat format) -> const char*;
+auto imageLayoutToString(VkImageLayout layout) -> const char*;
 
 auto debugDrawBindlessTextures(BindlessResources& bindlessResources) -> void;

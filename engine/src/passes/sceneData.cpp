@@ -2,6 +2,7 @@
 
 #include <glm/vec4.hpp>
 #include <optional>
+#include <print>
 
 #include "renderGraph.h"
 #include "rhi/vulkan/backend.h"
@@ -28,7 +29,9 @@ auto sceneUploadPass(std::optional<SceneDataUploader>& sceneUploader, VulkanBack
         sceneUploader->perModelBuffer = backend.allocateBuffer("Per Model data", info, VMA_MEMORY_USAGE_GPU_ONLY,
             VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-        u32 modelDataSize = sizeof(VkDrawIndexedIndirectCommand) * modelData.size();
+        // u32 modelDataSize = sizeof(VkDrawIndexedIndirectCommand) * modelData.size();
+        u32 modelDataSize = sizeof(VkDrawIndexedIndirectCommand) * scene.models.models.size();
+        // u32 modelDataSize = sizeof(VkDrawIndexedIndirectCommand) * scene.models.models.size() * scene.models.models[0].instances;
         modelDataSize = modelDataSize == 0 ? 8 : modelDataSize;
         info = vkutil::init::bufferCreateInfo(modelDataSize,
             VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
@@ -43,7 +46,7 @@ auto sceneUploadPass(std::optional<SceneDataUploader>& sceneUploader, VulkanBack
         .perModelData = writeResource<Buffer>(graph, pass, importResource(graph, pass, &sceneUploader->perModelBuffer))
     };
 
-    pass.pass.draw = [&backend, data](const RenderContext& ctx, RenderPass&)
+    pass.pass.draw = [&backend, data, &scene](const RenderContext& ctx, RenderPass&)
     {
         // sceneUniforms.cameraPos = glm::vec4(scene.activeCamera->position, 1.f);
         // sceneUniforms.view = scene.activeCamera->view();
@@ -67,32 +70,61 @@ auto sceneUploadPass(std::optional<SceneDataUploader>& sceneUploader, VulkanBack
         }
 
         // if (ctx.scene.lightListDirty)
-        {
-            std::vector<VkDrawIndexedIndirectCommand> cmds;
-            cmds.reserve(modelData.size());
-            u32 i = 0;
-            for (auto& mesh : ctx.scene.meshes)
-            {
-                for (auto& instance : mesh.second.instances)
-                {
-                    VkDrawIndexedIndirectCommand command = {
-                        .indexCount = static_cast<u32>(mesh.second.indexCount),
-                        .instanceCount = 1,
-                        .firstIndex = static_cast<u32>(mesh.second.indexOffset),
-                        .vertexOffset = 0,
-                        .firstInstance = i++
-                    };
-                    cmds.push_back(command);
-                }
-            }
+        // {
+        //     std::vector<VkDrawIndexedIndirectCommand> cmds;
+        //     cmds.reserve(modelData.size());
+        //     u32 i = 0;
+        //     for (auto& mesh : ctx.scene.meshes)
+        //     {
+        //         for (auto& instance : mesh.second.instances)
+        //         {
+        //             VkDrawIndexedIndirectCommand command = {
+        //                 .indexCount = static_cast<u32>(mesh.second.indexCount),
+        //                 .instanceCount = 1,
+        //                 .firstIndex = static_cast<u32>(mesh.second.indexOffset),
+        //                 .vertexOffset = 0,
+        //                 .firstInstance = 0
+        //             };
+        //             cmds.push_back(command);
+        //         }
+        //     }
 
-            backend.copyBufferWithStaging(ctx.cmd, cmds.data(), sizeof(VkDrawIndexedIndirectCommand) * cmds.size(), getResource<Buffer>(ctx.graph, data.allDraws)->buffer);
+        //     backend.copyBufferWithStaging(ctx.cmd, cmds.data(), sizeof(VkDrawIndexedIndirectCommand) * cmds.size(), getResource<Buffer>(ctx.graph, data.allDraws)->buffer);
+        // }
+        
+        std::vector<VkDrawIndexedIndirectCommand> cmds;
+        cmds.reserve(scene.models.models.size());
+        // u32 i = 0;
+        for (auto& model : scene.models.models)
+        {
+            // for (size_t i{}; i < model.instances; i++)
+            // {
+            //     VkDrawIndexedIndirectCommand command = {
+            //         .indexCount = static_cast<u32>(model.indexCount),
+            //         .instanceCount = 1,
+            //         .firstIndex = static_cast<u32>(model.indexOffset),
+            //         .vertexOffset = static_cast<u32>(model.vertexOffset),
+            //         .firstInstance = model.firstInstance + i
+            //     };
+            //     cmds.push_back(command);
+            // }
+
+            VkDrawIndexedIndirectCommand command = {
+                .indexCount = static_cast<u32>(model.indexCount),
+                .instanceCount = model.instances,
+                .firstIndex = static_cast<u32>(model.indexOffset),
+                .vertexOffset = static_cast<u32>(model.vertexOffset),
+                .firstInstance = model.firstInstance
+            };
+            cmds.push_back(command);
         }
+
+        backend.copyBufferWithStaging(ctx.cmd, cmds.data(), sizeof(VkDrawIndexedIndirectCommand) * cmds.size(), getResource<Buffer>(ctx.graph, data.allDraws)->buffer);
 
         // if (ctx.scene.modelDataDirty)
-        {
-            backend.copyBufferWithStaging(ctx.cmd, modelData.data(), modelData.size() * sizeof(ModelData), getResource<Buffer>(ctx.graph, data.perModelData)->buffer);
-        }
+        // {
+        //     backend.copyBufferWithStaging(ctx.cmd, modelData.data(), modelData.size() * sizeof(ModelData), getResource<Buffer>(ctx.graph, data.perModelData)->buffer);
+        // }
     };
 
     return data;

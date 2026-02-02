@@ -10,6 +10,7 @@ struct ZPrePassPushConstants
 {
     VkDeviceAddress vertexBufferAddr;
     VkDeviceAddress perModelDataBufferAddr;
+    VkDeviceAddress instanceData;
 };
 
 auto initZPrePass(VulkanBackend& backend) -> ZPrePassRenderer
@@ -89,16 +90,18 @@ auto zPrePass(std::optional<ZPrePassRenderer>& renderer, VulkanBackend& backend,
         ZoneScopedCpuGpuAuto("Z Pre pass", backend.currentFenrame());
 
         const ZPrePassPushConstants pushConstants = {
-            .vertexBufferAddr = backend.getBufferDeviceAddress(ctx.scene.vertexBuffer.buffer),
+            // .vertexBufferAddr = backend.getBufferDeviceAddress(ctx.scene.vertexBuffer.buffer),
+            .vertexBufferAddr = backend.getBufferDeviceAddress(ctx.scene.models.vertexBuffer.buffer),
             .perModelDataBufferAddr = backend.getBufferDeviceAddress(getResource<Buffer>(ctx.graph, perModelData)->buffer),
+            .instanceData = backend.getBufferDeviceAddress(ctx.scene.models.instanceBuffer.buffer),
         };
         vkCmdPushConstants(ctx.cmd, pass.pipeline->pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(pushConstants),
             &pushConstants);
         vkCmdBindDescriptorSets(ctx.cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1,
             &backend.bindlessResources->bindlessTexDesc, 0, nullptr);
-        vkCmdBindIndexBuffer(ctx.cmd, ctx.scene.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-        vkCmdDrawIndexedIndirect(ctx.cmd, getResource<Buffer>(ctx.graph, culledDraws)->buffer, 0, ctx.scene.meshes.size(),
-            sizeof(VkDrawIndexedIndirectCommand));
+        vkCmdBindIndexBuffer(ctx.cmd, ctx.scene.models.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+        // vkCmdDrawIndexedIndirect(ctx.cmd, getResource<Buffer>(ctx.graph, culledDraws)->buffer, 0, ctx.scene.models.models.size(),
+        //     sizeof(VkDrawIndexedIndirectCommand));
     };
 
     return data;

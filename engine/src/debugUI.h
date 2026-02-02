@@ -26,16 +26,20 @@ constexpr const char* RESOURCES_CSTR = RESOURCES.c_str();
 constexpr std::string GLOBAL = "Global";
 constexpr const char* GLOBAL_CSTR = GLOBAL.c_str();
 
+constexpr std::string OUTPUT = "Output";
+constexpr const char* OUTPUT_CSTR = OUTPUT.c_str();
+
 struct DebugUI
 {
     std::unordered_map<std::string, std::vector<std::function<void()>>> fns;
     std::string selectedNode;
 
     bool enabled;
+    bool outputFocused;
 };
 
 extern DebugUI debugUI;
 
-auto addDebugUI(DebugUI& debugUI, std::string parentId, std::function<void()> fn) -> void;
+auto addDebugUI(DebugUI& debugUI, std::string parentId, std::function<void()> fn, bool prepend = false) -> void;
 
 auto drawDebugUI(DebugUI& debugUI, VulkanBackend& backend, Scene& scene, f64 dt) -> void;

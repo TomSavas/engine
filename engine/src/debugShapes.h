@@ -1,0 +1,15 @@
+#pragma once
+
+#include "scene.h"
+
+#include "glm/glm.hpp"
+
+class VulkanBackend;
+struct Scene;
+
+auto cubeModelData() -> Models::ModelData;
+// auto sphereModelData(u8 verticalSubdivisions = 8, u8 horizontalSubdivisions = 8) -> Models::ModelData;
+auto sphereModelData() -> Models::ModelData;
+
+auto debugDrawCube(Scene& scene, glm::vec3 center, glm::vec3 scale, glm::vec3 color) -> void;
+auto debugDrawSphere(Scene& scene, glm::vec3 center, glm::vec3 scale, glm::vec3 color) -> void;

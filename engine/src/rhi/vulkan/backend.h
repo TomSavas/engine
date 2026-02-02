@@ -48,6 +48,8 @@ class GLFWwindow;
 struct Scene;
 struct Mesh;
 struct CompiledRenderGraph;
+// TEMP: remove when imgui pass is moved out
+struct DebugUI;
 
 class VulkanBackend;
 enum class backendError {};
@@ -116,6 +118,9 @@ struct VulkanBackend
     std::vector<VkImage> swapchainImages;
     std::vector<VkImageView> swapchainImageViews;
 
+    ImVec2 imguiPos;
+    ImVec2 imguiSize;
+
     // Immediate ctx
     VkFence immediateFence;
     VkCommandPool immediateCmdPool;
@@ -164,7 +169,7 @@ struct VulkanBackend
     auto render(const Frame& frame, CompiledRenderGraph& compiledRenderGraph, Scene& scene, RenderGraphResource<BindlessTexture> output) -> void;
 
     auto addOutputBlitPass(RenderGraph& graph, RenderGraphResource<BindlessTexture> output) -> void;
-    auto addImguiPass(RenderGraph& graph, RenderGraphResource<BindlessTexture> output) -> void;
+    auto addImguiPass(RenderGraph& graph, RenderGraphResource<BindlessTexture> output, DebugUI& debugUI) -> void;
 
     auto immediateSubmit(std::function<void(VkCommandBuffer)>&& f) -> void;
     auto copyBuffer(std::optional<VkCommandBuffer> cmd, VkBuffer src, VkBuffer dst, VkBufferCopy copyRegion) -> void;

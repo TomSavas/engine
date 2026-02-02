@@ -1,12 +1,8 @@
 #include "scene.h"
 
-#include <algorithm>
-#include <atomic>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/transform.hpp>
-#include <print>
-#include <random>
 
 #include "GLFW/glfw3.h"
 #include "debugUI.h"
@@ -18,6 +14,13 @@
 #include "stb_image.h"
 #include "stb_image_write.h"
 #include "tracy/Tracy.hpp"
+
+#include <algorithm>
+#include <atomic>
+#include <optional>
+#include <print>
+#include <random>
+#include <cassert>
 
 auto toRawTexture(tinygltf::Image& image) -> RawTexture
 {
@@ -41,7 +44,7 @@ glm::vec3 forward(glm::mat4 mat) { return mat * glm::vec4(0.f, 0.f, -1.f, 0.f); 
 static std::atomic<f64> yOffsetAtomic;
 void scrollCallback(GLFWwindow* window, f64 xoffset, f64 yOffset) { yOffsetAtomic.store(yOffset); }
 
-void updateFreeCamera(f32 dt, GLFWwindow* window, Camera& camera)
+void updateFreeCamera(f32 dt, GLFWwindow* window, Camera& camera, bool shouldHandleInput)
 {
     ZoneScoped;
 
@@ -56,7 +59,7 @@ void updateFreeCamera(f32 dt, GLFWwindow* window, Camera& camera)
     camera.moveSpeed = std::max(0.f, camera.moveSpeed + scrollWheelChange);
 
     static glm::dvec2 lastMousePos = glm::vec2(-1.f - 1.f);
-    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
+    if (shouldHandleInput && glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
     {
         static f64 radToVertical = .0;
         static f64 radToHorizon = .0;
@@ -92,29 +95,29 @@ void updateFreeCamera(f32 dt, GLFWwindow* window, Camera& camera)
     }
 
     glm::vec3 dir(0.f, 0.f, 0.f);
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+    if (shouldHandleInput && glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
     {
         dir += forward(camera.rotation);
     }
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+    if (shouldHandleInput && glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
     {
         dir -= forward(camera.rotation);
     }
 
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+    if (shouldHandleInput && glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
     {
         dir += right(camera.rotation);
     }
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+    if (shouldHandleInput && glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
     {
         dir -= right(camera.rotation);
     }
 
-    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+    if (shouldHandleInput && glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
     {
         dir += up(camera.rotation);
     }
-    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
+    if (shouldHandleInput && glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
     {
         dir -= up(camera.rotation);
     }
@@ -248,13 +251,35 @@ auto gatherModelData(Scene& scene) -> std::vector<ModelData>
 }
 
 
-void Scene::update(f32 dt, f32 currentTimeMs, GLFWwindow* window)
+void Scene::update(f32 dt, f32 currentTimeMs, GLFWwindow* window, bool shouldHandleInput)
 {
+    // TODO: these copies are wrecking the framerate
+    // Copy instance data
+    {
+        for (auto& node : sceneGraph.nodes)
+        {
+            if (!node.model || !node.instance)
+                continue;
+            models.instances[*node.model][*node.instance].transform = node.globalTransform;
+        }
+   
+        std::vector<Models::InstanceData> flattenedInstances;
+        for (ModelHandle i{}; i < models.models.size(); ++i)
+        {
+            Models::Model& model = models.models[i];
+            flattenedInstances.insert(flattenedInstances.end(), models.instances[i].begin(), models.instances[i].end());
+        }
+        const auto size = flattenedInstances.size() * sizeof(decltype(flattenedInstances)::value_type);
+        backend.copyBufferWithStaging(std::nullopt, flattenedInstances.data(), size, models.instanceBuffer.buffer);
+    }
+    // Update materials
+    backend.copyBufferWithStaging(std::nullopt, materials.materials.data(), materials.materials.size() * sizeof(DefaultMaterial), materials.buffer.buffer);
+    
     updateSceneGraphTransforms(sceneGraph);
 
     static bool released = true;
 
-    if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS && released)
+    if (shouldHandleInput && glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS && released)
     {
         released = false;
         activeCamera = (activeCamera == &mainCamera) ? &debugCamera : &mainCamera;
@@ -265,12 +290,12 @@ void Scene::update(f32 dt, f32 currentTimeMs, GLFWwindow* window)
             isMain, (u64)&debugCamera, isDebug);
     }
 
-    if (glfwGetKey(window, GLFW_KEY_C) == GLFW_RELEASE)
+    if (shouldHandleInput && glfwGetKey(window, GLFW_KEY_C) == GLFW_RELEASE)
     {
         released = true;
     }
 
-    updateFreeCamera(dt, window, *activeCamera);
+    updateFreeCamera(dt, window, *activeCamera, shouldHandleInput);
     updateLights(dt, pointLights);
 
     //glm::mat4 invProj = glm::inverse(activeCamera->proj());
@@ -363,8 +388,8 @@ void Scene::addNodes(tinygltf::Model& model, tinygltf::Node& node, glm::mat4 tra
 void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 transform, SceneGraph::Node& parent)
 {
     // Matches Vertex definition
-    const char* position = "POSITION";
-    const std::pair<const char*, i32> attributes[] = {
+    constexpr char* position = "POSITION";
+    constexpr std::pair<const char*, i32> attributes[] = {
         {position, 4},
         {"TEXCOORD_0", 4},
         {"NORMAL", 4},
@@ -390,7 +415,6 @@ void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 tran
 
         meshCount++;
         auto debugName = std::format("{}_{}", mesh.name.empty() ? "unnamed" : mesh.name, primitiveCount++);
-        //std::println("{} uses material {}", debugName, primitive.material);
 
         if (auto it = meshes.find(debugName); it != meshes.end())
         {
@@ -619,6 +643,287 @@ void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 tran
                 );
             }
         }
+    }
+}
+
+auto Scene::addScene(const char* path, std::vector<glm::mat4> transforms) -> void
+{
+    tinygltf::Model model;
+    tinygltf::TinyGLTF loader;
+    std::string err;
+    std::string warn;
+
+    if (!loader.LoadASCIIFromFile(&model, &err, &warn, path))
+    {
+        std::println("{}", err);
+        std::println("{}", warn);
+        return;
+    }
+
+    std::println("Successfully loaded {}", path);
+
+    std::vector<SceneGraph::NodeHandle> nodes(transforms.size(), SceneGraph::kRootHandle);
+    for (auto& node : model.nodes)
+    {
+        addNodes(model, node, transforms, nodes);
+    }
+}
+
+auto Scene::addNodes(tinygltf::Model& model, tinygltf::Node& node, std::vector<glm::mat4> transforms, std::vector<SceneGraph::NodeHandle>& parentNodes) -> void
+{
+    assert(transforms.size() == parentNodes.size());
+
+    glm::mat4 localTransform = glm::mat4(1.0f);
+    if (node.matrix.empty())
+    {
+        localTransform = (node.translation.empty() ? glm::mat4(1.f) : glm::translate(glm::vec3(node.translation[0], node.translation[1], node.translation[2]))) *
+            (node.rotation.empty() ? glm::mat4(1.f) : glm::toMat4(glm::quat(node.rotation[3], node.rotation[0], node.rotation[1], node.rotation[2]))) *
+            (node.scale.empty() ? glm::mat4(1.f) : glm::scale(glm::vec3(node.scale[0], node.scale[1], node.scale[2])));
+    }
+    else
+    {
+        localTransform = glm::mat4(glm::make_mat4(node.matrix.data()));
+    }
+    // transform = transform * localTransform;
+    std::vector<glm::mat4> childTransforms(transforms.size());
+    for (size_t i{}; i < transforms.size(); ++i)
+    {
+        // childTransforms[i] = transforms[i] * localTransform;
+        childTransforms[i] = localTransform;
+    }
+
+    auto nodes = sceneGraph.addChildNodes(parentNodes, transforms, node.name);
+    
+    if (node.mesh != -1)
+    {
+        addMesh(model, model.meshes[node.mesh], childTransforms, nodes);
+    }
+
+    for (auto& child : node.children)
+    {
+        addNodes(model, model.nodes[child], childTransforms, nodes);
+    }
+}
+
+template<>
+struct std::hash<Vertex>
+{
+    std::size_t operator()(const Vertex& v) const noexcept
+    {
+        auto hash = static_cast<u64>(v.raw[0]);
+        for (u32 i = 1; i < 16; i++)
+        {
+            hash ^= static_cast<u64>(v.raw[i]) + static_cast<u64>(0x9e3779b9) + (hash << 6) + (hash >> 2);
+        }
+        return hash;
+    }
+};
+
+auto Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<glm::mat4> transforms, std::vector<SceneGraph::NodeHandle>& parentNodes) -> void
+{
+    assert(transforms.size() == parentNodes.size());
+    // 
+    // Matches Vertex definition
+    const char* position = "POSITION";
+    const std::pair<const char*, i32> attributes[] = {
+        {position, 4},
+        {"TEXCOORD_0", 4},
+        {"NORMAL", 4},
+        {"TANGENT", 4},
+    };
+
+    // TEMP: avoid decals in intel sponza for now
+    if (mesh.name.contains("decal"))
+    {
+        return;
+    }
+
+    for (tinygltf::Primitive& primitive : mesh.primitives)
+    {
+        // Material
+        if (primitive.material == -1)
+        {
+            continue;
+        }
+
+        Models::ModelData modelData;
+
+        i32 vertexAttributeOffset = 0;
+        for (const auto& [attribute, attributeCount] : attributes)
+        {
+            //std::println("\tAttribute {}...", attribute);
+            if (primitive.attributes.find(attribute) == primitive.attributes.end())
+            {
+                continue;
+            }
+
+            tinygltf::Accessor accessor = model.accessors[primitive.attributes[std::string(attribute)]];
+            tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
+            tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
+            f32* rawData = reinterpret_cast<f32*>(&buffer.data[bufferView.byteOffset + accessor.byteOffset]);
+
+            for (i32 i = 0; i < accessor.count; i++)
+            {
+                i32 vertexIndex = i;
+                if (modelData.vertices.size() <= vertexIndex)
+                {
+                    modelData.vertices.emplace_back();
+                }
+                Vertex& vertex = modelData.vertices[vertexIndex];
+
+                const i32 componentCount = tinygltf::GetNumComponentsInType(accessor.type);
+                for (i32 j = 0; j < componentCount; j++)
+                {
+                    vertex.raw[vertexAttributeOffset + j] = rawData[i * componentCount + j];
+                }
+            }
+            vertexAttributeOffset += attributeCount;
+        }
+
+        tinygltf::Accessor indexAccessor = model.accessors[primitive.indices];
+        tinygltf::BufferView& indexBufferView = model.bufferViews[indexAccessor.bufferView];
+        tinygltf::Buffer& indexBuffer = model.buffers[indexBufferView.buffer];
+        const unsigned short* indexData = reinterpret_cast<unsigned short*>(
+            &indexBuffer.data[indexBufferView.byteOffset + indexAccessor.byteOffset]);
+        for (size_t i = 0; i < indexAccessor.count; i++)
+        {
+            modelData.indices.push_back(indexData[i]);
+        }
+        
+        // TODO: extract separately
+        for (const auto& vertex : modelData.vertices)
+        {
+            modelData.hash ^= std::hash<Vertex>{}(vertex) + static_cast<u64>(0x9e3779b9) + (modelData.hash << 6) + (modelData.hash >> 2);
+        }
+        for (const auto& index : modelData.indices)
+        {
+            modelData.hash ^= static_cast<u64>(index) + static_cast<u64>(0x9e3779b9) + (modelData.hash << 6) + (modelData.hash >> 2);
+        }
+
+        const auto loadTexture = [](VulkanBackend& backend, tinygltf::Model& model, u32 textureIndex) -> BindlessTexture
+        {
+            if (textureIndex == -1)
+            {
+                return BindlessResources::kError;
+            }
+
+            tinygltf::Texture& texture = model.textures[textureIndex];
+            // TODO: don't ignore sampler
+            // TODO: don't ignore texCoord index
+            tinygltf::Image& image = model.images[texture.source];
+
+            const auto rawTexture = toRawTexture(image);
+            const auto mips = MipOptions::generateAll(rawTexture);
+            return backend.bindlessResources->addTexture(
+                backend.createTexture(
+                    image.uri,
+                    rawTexture,
+                    vkutil::init::defaultColorTextureCreateInfo(rawTexture.extent, mips.count(), VK_FORMAT_R8G8B8A8_UNORM),
+                    vkutil::init::defaultTextureAllocationCreateInfo(),
+                    mips,
+                    VK_IMAGE_ASPECT_COLOR_BIT
+                )
+            );
+        };
+
+        tinygltf::Material& material = model.materials[primitive.material];
+        tinygltf::PbrMetallicRoughness& pbr = material.pbrMetallicRoughness;
+
+        std::array mats {
+            DefaultMaterial {
+                .albedo = loadTexture(backend, model, pbr.baseColorTexture.index),
+                .normalTexture = loadTexture(backend, model, material.normalTexture.index),
+                .metallicRoughnessTexture = loadTexture(backend, model, pbr.metallicRoughnessTexture.index),
+                .bumpTexture = BindlessResources::kWhite,
+                .baseColor = {pbr.baseColorFactor[0], pbr.baseColorFactor[1], pbr.baseColorFactor[2], pbr.baseColorFactor[3]},
+                .features = DefaultMaterial::Features::DEFAULT,
+                .padding = 0,
+            }
+        };
+        const auto defaultMaterials = addMaterials<DefaultMaterial>(backend, materials, std::span(mats));
+
+        std::array modelDatas { modelData };
+        static i32 genMeshNameCount = 0;
+        std::array modelDebugs {
+            Models::ModelDebug {mesh.name.empty() ? std::format("genMesh{}", genMeshNameCount++) : mesh.name}
+        };
+        auto modelHandle = loadModels(backend, models, modelDatas, modelDebugs).back();
+
+        std::vector<Models::InstanceData> instances;
+        instances.reserve(transforms.size());
+        for (size_t i{}; i < transforms.size(); ++i)
+        {
+            instances.emplace_back(transforms[i], glm::vec4(defaultMaterials.back()));
+        }
+        auto instanceHandles = addInstances(backend, models, modelHandle, instances);
+
+        auto newNodes = sceneGraph.addEmptyChildNodes(parentNodes);
+        for (size_t i{}; i < newNodes.size(); ++i)
+        {
+            std::println("Adding material: {}", defaultMaterials.back());
+
+            sceneGraph.nodes[newNodes[i]] = SceneGraph::NewNode {
+                .name = std::format("{}_primitive{}", models.instanceDebug[modelHandle][instanceHandles[i]].name, i),
+
+                // .parent = sceneGraph.nodes[nodes[i]].parent,
+                .parent = parentNodes[i],
+                .dirty = SceneGraph::NewNode::TransformDirtiness::GLOBAL_DIRTY,
+                // .dirty = SceneGraph::NewNode::TransformDirtiness::CLEAN,
+
+                .localTransform = transforms[i],
+                // .localTransform = glm::mat4(1.f),
+                .globalTransform = glm::mat4(1.f),
+                // .globalTransform = transforms[i],
+    
+                .model = modelHandle,
+                .instance = instanceHandles[i],
+            };
+        }
+
+        // instance = {
+        //     Models::InstanceData {
+        //         .transform = glm::translate(transform, glm::vec3(0.f, 0.f, 3000.f)),
+        //         .material = glm::vec4(defaultMaterials.back())
+        //     }
+        // };
+        // instanceHandle = addInstances(backend, models, modelHandle, instance);
+        
+        //     std::string bumpFilename = "generatedBump_" + normalImg.uri + ".png";
+        //     // TODO: allow specifying format
+        //     m.bumpTexture = BindlessResources::kWhite;
+
+        //     i32 bumpWidth = normalImg.width;
+        //     i32 bumpHeight = normalImg.height;
+        //     i32 components;
+        //     u8* loadRes = stbi_load(bumpFilename.c_str(), &bumpWidth, &bumpHeight, &components, STBI_rgb_alpha);
+        //     rawTexture.data = loadRes;
+        //     if (loadRes == nullptr)
+        //     {
+        //         //bumpWidth = normalImg.width;
+        //         //bumpHeight = normalImg.height;
+
+        //         //std::println("Generating bump map: {}... ", bumpFilename);
+        //         //std::vector<u8> bumpMapData = tangentNormalMapToBumpMap(normalImg.image.data(), normalImg.width,
+        //         //    normalImg.height);
+
+        //         //stbi_write_png(bumpFilename.c_str(), bumpHeight, bumpWidth, 4, bumpMapData.data(), 0);
+        //         //maybeTexture = backend.textures->loadRaw(bumpMapData.data(), bumpMapData.size(), bumpWidth,
+        //         //    bumpHeight, true, true, bumpFilename);
+        //     }
+        //     else
+        //     {
+        //         m.bumpTexture = backend.bindlessResources->addTexture(
+        //             backend.createTexture(
+        //                 bumpFilename,
+        //                 rawTexture,
+        //                 vkutil::init::defaultColorTextureCreateInfo(rawTexture.extent, mips.count(), VK_FORMAT_R8G8B8A8_UNORM),
+        //                 vkutil::init::defaultTextureAllocationCreateInfo(),
+        //                 mips,
+        //                 VK_IMAGE_ASPECT_COLOR_BIT
+        //             )
+        //         );
+        //     }
+        // }
     }
 }
 

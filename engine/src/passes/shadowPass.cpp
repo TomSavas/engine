@@ -145,6 +145,7 @@ auto csmCascadeParams(u32 cascadeCount, Camera& camera, glm::vec3 lightDir, f32 
 struct ShadowPushConstants
 {
     VkDeviceAddress vertexBufferAddr;
+    VkDeviceAddress instanceBufferAddr;
     VkDeviceAddress cascadeDataAddr;
     VkDeviceAddress perModelDataBufferAddr;
     u32 cascade;
@@ -267,7 +268,9 @@ auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backe
         auto cascadeParamBuffer = getResource<Buffer>(ctx.graph, data.cascadeParams)->buffer;
 
         ShadowPushConstants pushConstants{
-            .vertexBufferAddr = backend.getBufferDeviceAddress(ctx.scene.vertexBuffer.buffer),
+            // .vertexBufferAddr = backend.getBufferDeviceAddress(ctx.scene.vertexBuffer.buffer),
+            .vertexBufferAddr = backend.getBufferDeviceAddress(ctx.scene.models.vertexBuffer.buffer),
+            .instanceBufferAddr = backend.getBufferDeviceAddress(ctx.scene.models.instanceBuffer.buffer),
             .cascadeDataAddr = backend.getBufferDeviceAddress(cascadeParamBuffer),
             .perModelDataBufferAddr = backend.getBufferDeviceAddress(getResource<Buffer>(ctx.graph, perModelData)->buffer),
         };
@@ -284,7 +287,8 @@ auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backe
             .extent = VkExtent2D{singleCascadeSize, singleCascadeSize}
         };
 
-        vkCmdBindIndexBuffer(ctx.cmd, ctx.scene.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+        // vkCmdBindIndexBuffer(ctx.cmd, ctx.scene.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(ctx.cmd, ctx.scene.models.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
         for (u32 i = 0; i < cascadeCount; ++i)
         {
             pushConstants.cascade = i;
@@ -299,7 +303,9 @@ auto csmPass(std::optional<ShadowRenderer>& shadowRenderer, VulkanBackend& backe
             // vkCmdDrawIndexedIndirect(ctx.cmd, ctx.scene.indirectCommands.buffer, 0, ctx.scene.meshes.size(),
             //     sizeof(VkDrawIndexedIndirectCommand));
             // TODO: the buffer should contain size
-            vkCmdDrawIndexedIndirect(ctx.cmd, getResource<Buffer>(ctx.graph, allDraws)->buffer, 0, ctx.scene.meshes.size(),
+            // vkCmdDrawIndexedIndirect(ctx.cmd, getResource<Buffer>(ctx.graph, allDraws)->buffer, 0, ctx.scene.meshes.size(),
+            //     sizeof(VkDrawIndexedIndirectCommand));
+            vkCmdDrawIndexedIndirect(ctx.cmd, getResource<Buffer>(ctx.graph, allDraws)->buffer, 0, ctx.scene.models.models.size(),
                 sizeof(VkDrawIndexedIndirectCommand));
         }
     };

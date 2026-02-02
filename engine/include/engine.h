@@ -3,7 +3,8 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
 
-#include <stdint.h>
+#include <cstdint>
+#include <functional>
 
 #if defined(DEBUG)
     #if defined(__linux__)
@@ -31,3 +32,9 @@ using u64 = uint64_t;
 
 using f32 = float;
 using f64 = double;
+
+template<typename T>
+concept Hashable = requires(T a)
+{
+    { std::hash<T>{}(a) } -> std::convertible_to<std::size_t>;
+};

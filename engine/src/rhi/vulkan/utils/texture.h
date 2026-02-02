@@ -66,9 +66,11 @@ struct Texture
     // VkImageLayout currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 };
 
-Texture whiteTexture(VulkanBackend& backend, u32 dimension);
-Texture blackTexture(VulkanBackend& backend, u32 dimension);
-Texture errorTexture(VulkanBackend& backend, u32 dimension);
+auto whiteTexture(VulkanBackend& backend, u32 dimension) -> Texture;
+auto blackTexture(VulkanBackend& backend, u32 dimension) -> Texture;
+auto errorTexture(VulkanBackend& backend, u32 dimension) -> Texture;
+auto transparencyTexture(VulkanBackend& backend, u32 dimension) -> Texture;
+auto rgbTextures(VulkanBackend& backend, u32 dimension) -> std::array<Texture, 3>;
 
 template <typename T>
 struct CacheResult

@@ -2,6 +2,8 @@
 #extension GL_EXT_buffer_reference : require
 #extension GL_EXT_nonuniform_qualifier : require
 #extension GL_ARB_shader_draw_parameters : require
+#extension GL_KHR_shader_subgroup_ballot : require
+#extension GL_ARB_shading_language_include : require
 
 #include "debug_utils.glsl"
 #include "lights.glsl"
@@ -28,6 +30,8 @@ layout(push_constant) uniform Constants
 	VertexBuffer vertexBuffer;
 	ModelDataBuffer modelData;
 	ShadowPassData shadowData;
+	Instances instances;
+	Materials materials;
 	Lights lights;
 	LightIds lightIds;
 	LightTileData lightTiles;
@@ -35,13 +39,8 @@ layout(push_constant) uniform Constants
 	int depthMapIndex;
 } constants;
 
-layout (location = 4) in vec2 vert_uv;
-layout (location = 5) in flat int index;
-layout (location = 6) in vec3 viewPos;
-layout (location = 7) in vec3 pos;
-layout (location = 8) in mat3 tbn;
-layout (location = 3) in vec3 tangentCameraPos;
-layout (location = 2) in vec3 tangentFragPos;
+layout (location = 10) in MESH_VS_OUT fsIn;
+layout (location = 21) in vec3 barycentric;
 
 layout (location = 0) out vec4 outColor;
 layout (location = 1) out vec4 outNormal;
@@ -52,7 +51,7 @@ layout (location = 3) out vec4 outReflection;
 
 #define PCF_TAPS_PER_AXIS 15
 
-float shadowIntensity(mat4 viewProj, uint cascadeIndex, float cascadeCount)
+float shadowIntensity(mat4 viewProj, uint cascadeIndex, float cascadeCount, vec3 pos)
 {
     vec4 lightSpacePos = viewProj * vec4(pos, 1.f);
     lightSpacePos = lightSpacePos / lightSpacePos.w;
@@ -82,17 +81,34 @@ float shadowIntensity(mat4 viewProj, uint cascadeIndex, float cascadeCount)
 
 void main()
 {
-    const vec4 textureIndices = constants.modelData.data[index].textures;
+    vec3 baryDeltas = fwidth(barycentric);
+    vec3 bary = smoothstep(0.5 * baryDeltas, baryDeltas, barycentric);
+    float minBary = min(bary.x, min(bary.y, bary.z));
+
+    const DefaultMaterial material = constants.materials.materials[nonuniformEXT(fsIn.materialIndex)];
+    const uvec4 textureIndices = material.textures;
+
+    if ((uint(material.features.x) & WIREFRAME) != 0)
+    {
+        if (minBary > 0)
+        {
+            discard;
+        }
+    }
 
     const bool parallaxMappingEnabled = constants.enabledFeatures.y != 0.f;
-    vec2 uv = parallaxMappingEnabled ? parallaxOcclusionMapBinarySearch(vert_uv, int(textureIndices.z)) : vert_uv;
-    //vec2 uv = vert_uv;
+    vec2 uv = parallaxMappingEnabled ? parallaxOcclusionMapBinarySearch(fsIn.uv, int(textureIndices.w), fsIn.tangentCameraPos, fsIn.tangentFragPos) : fsIn.uv;
 
-    vec3 albedo = texture(textures[int(textureIndices.x)], uv).rgb;
-    vec3 texNormal = texture(textures[int(textureIndices.y)], uv).rgb;
+    vec4 sampledAlbedo = texture(textures[nonuniformEXT(textureIndices.x)], uv);
+    vec3 albedo = material.baseColor.rgb * sampledAlbedo.rgb;
+    if (sampledAlbedo.a == 0.0)
+    {
+        discard;
+    }
+    vec3 texNormal = texture(textures[nonuniformEXT(textureIndices.y)], uv).rgb;
 
-    vec2 metallicRoughnessFactors = constants.modelData.data[index].metallicRoughnessFactors.rg;
-    vec2 metallicRoughness = texture(textures[int(textureIndices.w)], uv).bg;
+    vec2 metallicRoughnessFactors = vec2(1.0, 1.0);
+    vec2 metallicRoughness = texture(textures[nonuniformEXT(textureIndices.z)], uv).bg;
     metallicRoughness = clamp(vec2(0.f), vec2(1.f), metallicRoughness * metallicRoughnessFactors);
 
     vec3 f0 = vec3(0.04);
@@ -100,20 +116,20 @@ void main()
 
 	uint cascadeIndex = 0;
 	for(uint i = 0; i < constants.shadowData.cascadeCount - 1; ++i) {
-		if(viewPos.z < constants.shadowData.cascadeDistances[i].x) {
+		if(fsIn.viewPos.z < constants.shadowData.cascadeDistances[i].x) {
 			cascadeIndex = i + 1;
 		}
 	}
 
-	float shadow = shadowIntensity(constants.shadowData.lightViewProj[cascadeIndex], cascadeIndex, float(constants.shadowData.cascadeCount));
+	float shadow = shadowIntensity(constants.shadowData.lightViewProj[cascadeIndex], cascadeIndex, float(constants.shadowData.cascadeCount), fsIn.pos);
 
     const bool normalMappingEnabled = constants.enabledFeatures.x != 0.f;
-	vec3 n = normalMappingEnabled ? normalize(tbn * (texNormal * vec3(2.f) - vec3(1.f))) : tbn[2];
+	vec3 n = normalMappingEnabled ? normalize(fsIn.tbn * (texNormal * vec3(2.f) - vec3(1.f))) : fsIn.tbn[2];
 	outNormal = vec4(n, 1.f);
 
-	outPos = vec4(pos, 1.f);
+	outPos = vec4(fsIn.pos, 1.f);
 
-    vec3 cameraDir = normalize(scene.cameraPos.xyz - pos);
+    vec3 cameraDir = normalize(scene.cameraPos.xyz - fsIn.pos);
 
     // Look up light tile
     vec2 fragmentPos = gl_FragCoord.xy / vec2(1920.f, 1080.f);
@@ -127,7 +143,7 @@ void main()
     {
         uint lightIndex = constants.lightIds.ids[i + lightOffset];
         PointLight light = constants.lights.pointLights[lightIndex];
-        vec3 lightDir = light.pos.xyz - pos;
+        vec3 lightDir = light.pos.xyz - fsIn.pos;
         vec3 normLightDir = normalize(lightDir);
         float dist = length(lightDir);
         float radius = light.range.x;
@@ -186,10 +202,10 @@ void main()
     vec3 color = ambient + Lo;
 
     // Selection highlight
-    if (constants.modelData.data[index].selected.x > 0.f)
-    {
-        color = mix(color, vec3(1.f, 1.f, 1.f), cos(scene.time.x * 5.f) * 0.5f + 0.5f);
-    }
+    // if (constants.modelData.data[index].selected.x > 0.f)
+    // {
+    //     color = mix(color, vec3(1.f, 1.f, 1.f), cos(scene.time.x * 5.f) * 0.5f + 0.5f);
+    // }
 
     // SSR v2.0
     {
@@ -201,7 +217,7 @@ void main()
         const vec3 toFrag = -cameraDir;
         const vec3 reflectionDir = normalize(reflect(toFrag, n));
 
-        const vec4 startWS = vec4(pos, 1.f);
+        const vec4 startWS = vec4(fsIn.pos, 1.f);
         const vec4 startVS = scene.view * startWS;
         const vec4 startCS = scene.proj * startVS;
         const vec4 endWS = vec4(startWS.xyz + reflectionDir * maxDist, 1.f);
@@ -321,7 +337,21 @@ void main()
     }
 
     //outColor = vec4(color * heatmapGradient(float(lightCount) / 32.f), 1.f);
-    outColor = vec4(color, 1.f);
 
-    //outColor = vec4(texture(textures[int(textureIndices.w)], uv).rgb, 1.f);
+    outColor = vec4(albedo, 1.f);
+    if ((uint(material.features.x) & LIT) != 0)
+    {
+        outColor = vec4(color, 1.f);
+    }
+
+    if ((uint(material.features.x) & WIREFRAME) != 0)
+    {
+        outColor.a *= 1.f - ceil(minBary);
+    }
+
+    // TODO: nearly zero
+    if (outColor.a == 0.0)
+    {
+        discard;
+    }
 }

@@ -48,7 +48,12 @@ BindlessResources::BindlessResources(VulkanBackend& backend) : backend(&backend)
     // Default textures. No need to deallocate -- we need these to always exist
     addTexture(whiteTexture(backend, 1));
     addTexture(blackTexture(backend, 1));
+    for (const auto& tex : rgbTextures(backend, 1))
+    {
+        addTexture(tex);
+    }
     addTexture(errorTexture(backend, 64));
+    addTexture(transparencyTexture(backend, 64));
 }
 
 auto BindlessResources::addTexture(Texture texture) -> BindlessTexture
@@ -811,7 +816,7 @@ auto debugDrawBindlessTextures(BindlessResources& bindlessResources) -> void
                     textureWindows.push_back(i);
                 }
 
-                ImGui::Text("%d", i);
+                ImGui::Text("%d (0x%X)", i, texture.image.image);
                 ImGui::TableNextColumn();
             }
             ImGui::EndTable();
@@ -837,16 +842,33 @@ auto debugDrawBindlessTextures(BindlessResources& bindlessResources) -> void
 
             bool open = true;
             ImGui::SetNextWindowSize(ImVec2(256, 256), ImGuiCond_Once);
-            if (ImGui::Begin(texture.name.c_str(), &open, ImGuiWindowFlags_NoCollapse))
+            if (ImGui::Begin("Texture info", &open))
             {
                 ImGui::Text("Name: %s", texture.name.c_str());
                 ImGui::Text("Size: %d x %d x %d", texture.image.extent.width, texture.image.extent.height, texture.image.extent.depth);
                 ImGui::Text("Format: %s", imageFormatToString(texture.image.format));
                 ImGui::Text("Mips: %d", texture.mipCount);
                 ImGui::Text("Bindless index: %d", tex);
-                ImGui::Separator();
-                ImGui::Image(*texture.imguiDescriptorSet, ImGui::GetContentRegionAvail());
             }
+            ImGui::End();
+
+            if (ImGui::Begin(texture.name.c_str(), &open, ImGuiWindowFlags_NoCollapse))
+            {
+                const auto padding = ImGui::GetCursorPos();
+                const auto windowSize = ImGui::GetWindowContentRegionMax();
+                const auto size = ImVec2(windowSize.x + padding.x, windowSize.y + padding.y);
+
+                auto backgroundTextureTiles = ImVec2(windowSize.x / 64, windowSize.y / 64);
+
+                ImGui::SetCursorPos(ImVec2(0, 0));
+                // ImGui::Image(*outputTexture.imguiDescriptorSet, size);
+                // ImGui::Image(*bindlessResources.textures[BindlessResources::kError].imguiDescriptorSet, size, ImVec2(0, 0), ImVec2(20, 20));
+                ImGui::Image(*bindlessResources.textures[BindlessResources::kTransparency].imguiDescriptorSet, size, ImVec2(0, 0), backgroundTextureTiles);
+                // ImGui::ImageWithBg(*texture.imguiDescriptorSet, size, ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 1));
+                ImGui::SetCursorPos(ImVec2(0, 0));
+                ImGui::Image(*texture.imguiDescriptorSet, size);
+            }
+            ImGui::End();
 
             if (!open)
             {
@@ -855,7 +877,6 @@ auto debugDrawBindlessTextures(BindlessResources& bindlessResources) -> void
                 i -= 1;
             }
 
-            ImGui::End();
         }
     });
 }

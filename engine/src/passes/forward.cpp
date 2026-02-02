@@ -23,6 +23,8 @@ struct ForwardPushConstants
     VkDeviceAddress vertexBufferAddr;
     VkDeviceAddress perModelDataBufferAddr;
     VkDeviceAddress shadowData;
+    VkDeviceAddress instanceData;
+    VkDeviceAddress materialData;
     VkDeviceAddress lightList;
     VkDeviceAddress lightIndexList;
     VkDeviceAddress lightGrid;
@@ -46,6 +48,7 @@ auto initForwardOpaque(VulkanBackend& backend) -> ForwardOpaqueRenderer
                 }
             })
             .addShader(SHADER_PATH("mesh.vert.glsl"), VK_SHADER_STAGE_VERTEX_BIT)
+            .addShader(SHADER_PATH("mesh.geom.glsl"), VK_SHADER_STAGE_GEOMETRY_BIT)
             .addShader(SHADER_PATH("mesh.frag.glsl"), VK_SHADER_STAGE_FRAGMENT_BIT)
             .topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
             .polyMode(VK_POLYGON_MODE_FILL)
@@ -61,7 +64,7 @@ auto initForwardOpaque(VulkanBackend& backend) -> ForwardOpaqueRenderer
             .enableAlphaBlending()
             .depthFormat(VK_FORMAT_D32_SFLOAT) // TEMP: this should be taken from bindless
             .addViewportScissorDynamicStates()
-            .enableDepthTest(false, VK_COMPARE_OP_LESS_OR_EQUAL)
+            .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
             .build(),
         .color = backend.bindlessResources->addTexture(
             backend.allocateTexture(
@@ -136,6 +139,7 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
         .shadowData = readResource<Buffer>(graph, pass, shadowData),
         .shadowMap = readResource<BindlessTexture>(graph, pass, shadowMap, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL),
         .depthMap = readResource<BindlessTexture>(graph, pass, depthMap, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL),
+        // .depthMap = readResource<BindlessTexture>(graph, pass, depthMap, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL),
         .lightList = readResource<Buffer>(graph, pass, lightData.lightList),
         .lightIndexList = readResource<Buffer>(graph, pass, lightData.lightIndexList),
         .lightGrid = readResource<Buffer>(graph, pass, lightData.lightGrid),
@@ -157,7 +161,7 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
     pass.pass.beginRendering = [data, &backend](const RenderContext& ctx)
     {
         VkClearValue colorClear = {
-            .color = {.uint32 = {0, 0, 0, 0}}
+            .color = {.uint32 = {0, 0, 0, 255}}
         };
         const auto& colorImage = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(ctx.graph,
             data.color));
@@ -186,6 +190,8 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
                 *getResource<BindlessTexture>(ctx.graph, data.depthMap)).image.view,
                 // No clear -- we're using ZPrePass
                 VK_ATTACHMENT_LOAD_OP_LOAD,
+                // VK_ATTACHMENT_LOAD_OP_CLEAR,
+                // VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
                 VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL);
         auto renderingInfo = vkutil::init::renderingInfo(ctx.swapchain.size, attachments, std::size(attachments),
             &depthAttachmentInfo);
@@ -194,6 +200,20 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
 
     pass.pass.draw = [data, &backend](const RenderContext& ctx, RenderPass& pass) -> void
     {
+        // VkBufferMemoryBarrier barrier{};
+        // barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        // barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT; // Or VK_ACCESS_HOST_WRITE_BIT
+        // barrier.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT; // CRITICAL
+        // barrier.buffer = getResource<Buffer>(ctx.graph, data.culledDraws)->buffer;
+        // barrier.size = VK_WHOLE_SIZE;
+
+        // vkCmdPipelineBarrier(
+        //     ctx.cmd,
+        //     VK_QUEUE_TRANSFER_BIT,       // Or VK_STAGE_HOST_BIT
+        //     VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,  // CRITICAL
+        //     0, 0, nullptr, 1, &barrier, 0, nullptr
+        // );
+        
         ZoneScopedCpuGpuAuto("Forward opaque pass", backend.currentFrame());
 
         static bool normalMappingEnabled = true;
@@ -216,9 +236,13 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
                 0.f,
                 0.f
             ),
-            .vertexBufferAddr = backend.getBufferDeviceAddress(ctx.scene.vertexBuffer.buffer),
+            // .vertexBufferAddr = backend.getBufferDeviceAddress(ctx.scene.vertexBuffer.buffer),
+            .vertexBufferAddr = backend.getBufferDeviceAddress(ctx.scene.models.vertexBuffer.buffer),
+
             .perModelDataBufferAddr = backend.getBufferDeviceAddress(getResource<Buffer>(ctx.graph, data.perModelData)->buffer),
             .shadowData = backend.getBufferDeviceAddress(getResource<Buffer>(ctx.graph, data.shadowData)->buffer),
+            .instanceData = backend.getBufferDeviceAddress(ctx.scene.models.instanceBuffer.buffer),
+            .materialData = backend.getBufferDeviceAddress(ctx.scene.materials.buffer.buffer),
             .lightList = backend.getBufferDeviceAddress(getResource<Buffer>(ctx.graph, data.lightList)->buffer),
             .lightIndexList = backend.getBufferDeviceAddress(getResource<Buffer>(ctx.graph, data.lightIndexList)->buffer),
             .lightGrid = backend.getBufferDeviceAddress(getResource<Buffer>(ctx.graph, data.lightGrid)->buffer),
@@ -229,8 +253,12 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
             &pushConstants);
         vkCmdBindDescriptorSets(ctx.cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1,
             &backend.bindlessResources->bindlessTexDesc, 0, nullptr);
-        vkCmdBindIndexBuffer(ctx.cmd, ctx.scene.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-        vkCmdDrawIndexedIndirect(ctx.cmd, getResource<Buffer>(ctx.graph, data.culledDraws)->buffer, 0, ctx.scene.meshes.size(),
+        // vkCmdBindIndexBuffer(ctx.cmd, ctx.scene.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(ctx.cmd, ctx.scene.models.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+        // vkCmdDrawIndexedIndirect(ctx.cmd, getResource<Buffer>(ctx.graph, data.culledDraws)->buffer, 0, ctx.scene.meshes.size(),
+        //     sizeof(VkDrawIndexedIndirectCommand));
+        vkCmdDrawIndexedIndirect(ctx.cmd, getResource<Buffer>(ctx.graph, data.culledDraws)->buffer, 0, ctx.scene.models.models.size(),
+        // vkCmdDrawIndexedIndirect(ctx.cmd, getResource<Buffer>(ctx.graph, data.culledDraws)->buffer, 0, ctx.scene.models.models.size() * ctx.scene.models.models[0].instances,
             sizeof(VkDrawIndexedIndirectCommand));
     };
 

@@ -1,6 +1,7 @@
 #version 460
 #extension GL_EXT_buffer_reference : require
 #extension GL_EXT_nonuniform_qualifier : require
+#extension GL_ARB_shading_language_include : require
 layout (local_size_x = 32, local_size_y = 32) in;
 
 #include "lights.glsl"

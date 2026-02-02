@@ -1,6 +1,8 @@
 #version 460
 #extension GL_EXT_buffer_reference : require
+#extension GL_EXT_nonuniform_qualifier : require
 #extension GL_ARB_shader_draw_parameters : require
+#extension GL_ARB_shading_language_include : require
 
 #include "scene.glsl"
 #include "bindless.glsl"
@@ -20,24 +22,21 @@ layout(push_constant) uniform Constants
 	VertexBuffer vertexBuffer;
 	ModelDataBuffer modelData;
 	ShadowPassData shadowData;
-	int shadowMapIndex;
+	Instances instances;
+	Materials materials;
 } constants;
 
-layout (location = 4) out vec2 uv;
-layout (location = 5) out flat int index;
-layout (location = 6) out vec3 viewPos;
-layout (location = 7) out vec3 pos;
-layout (location = 8) out mat3 tbn;
-layout (location = 3) out vec3 tangentCameraPos;
-layout (location = 2) out vec3 tangentFragPos;
+layout (location = 0) out MESH_VS_OUT vsOut;
 
 void main()
 {
-    mat4 model = constants.modelData.data[gl_DrawID].model;
+    const Instance instance = constants.instances.instances[nonuniformEXT(gl_InstanceIndex)];
+    const mat4 model = instance.transform;
 
 	Vertex vert = constants.vertexBuffer.vertices[gl_VertexIndex];
 	gl_Position = scene.proj * scene.view * model * vec4(vert.position.xyz, 1.f);
-    index = gl_DrawID;
+
+    vsOut.materialIndex = int(instance.material.x);
 
     mat3 normalRecalculationMatrix = transpose(inverse(mat3(model)));
 
@@ -45,12 +44,12 @@ void main()
     vec3 tangent = normalize(normalRecalculationMatrix * vert.tangent.xyz);
     tangent = normalize(tangent - dot(tangent, normal) * normal);
     vec3 bitangent = cross(normal, tangent) * vert.tangent.w;
-    tbn = mat3(tangent, bitangent, normal);
+    vsOut.tbn = mat3(tangent, bitangent, normal);
 
-    tangentCameraPos = transpose(tbn) * scene.cameraPos.xyz;
-    tangentFragPos = transpose(tbn) * (model * vert.position).xyz;
+    vsOut.tangentCameraPos = transpose(vsOut.tbn) * scene.cameraPos.xyz;
+    vsOut.tangentFragPos = transpose(vsOut.tbn) * (model * vert.position).xyz;
 
-    uv = vert.uv.xy;
-    viewPos = (scene.view * model * vec4(vert.position.xyz, 1.f)).xyz;
-    pos = (model * vert.position).xyz;
+    vsOut.uv = vert.uv.xy;
+    vsOut.viewPos = (scene.view * model * vec4(vert.position.xyz, 1.f)).xyz;
+    vsOut.pos = (model * vec4(vert.position.xyz, 1.f)).xyz;
 }

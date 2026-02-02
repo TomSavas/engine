@@ -2,6 +2,9 @@
 
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
+#include "ImGuizmo.h"
+#include "glm/gtc/type_ptr.hpp"
+
 #include "GLFW/glfw3.h"
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
@@ -18,6 +21,7 @@
 #include "scene.h"
 #include "tracy/Tracy.hpp"
 #include "tracy/TracyVulkan.hpp"
+#include "debugUI.h"
 
 #include <vulkan/vulkan_core.h>
 #include <glm/glm.hpp>
@@ -408,7 +412,15 @@ auto VulkanBackend::initImgui() -> void
     }
     ImGui_ImplGlfw_InitForVulkan(window, true);
 
-    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    auto& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+    io.Fonts->AddFontDefault();
+    ImFontConfig config;
+    config.MergeMode = true;
+    config.GlyphMinAdvanceX = 13.0f;
+    io.Fonts->AddFontFromFileTTF("../assets/fa-regular-400.ttf", 13.0f, &config);
+    io.Fonts->AddFontFromFileTTF("../assets/fa-solid-900.ttf", 13.0f, &config);
 
     ImGui_ImplVulkan_InitInfo imguiInitInfo = {};
     imguiInitInfo.Instance = instance;
@@ -702,25 +714,37 @@ auto VulkanBackend::addOutputBlitPass(RenderGraph& graph, RenderGraphResource<Bi
     };
 }
 
-auto VulkanBackend::addImguiPass(RenderGraph& graph, RenderGraphResource<BindlessTexture> output) -> void
+auto VulkanBackend::addImguiPass(RenderGraph& graph, RenderGraphResource<BindlessTexture> output, DebugUI& debugUI) -> void
 {
     auto& pass = createPass(graph);
     pass.pass.debugName = std::format("Imgui pass");
 
     output = readResource<BindlessTexture>(graph, pass, output, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-    pass.pass.draw = [this, output](const RenderContext& ctx, RenderPass&)
+    pass.pass.draw = [this, output, &debugUI](const RenderContext& ctx, RenderPass&)
     {
         const auto bindlessOutput = *getResource<BindlessTexture>(ctx.graph, output);
         const auto& outputTexture = bindlessResources->getTexture(bindlessOutput);
-        if (ImGui::Begin("Render output", nullptr, ImGuiWindowFlags_NoDecoration))
+
+        addDebugUI(debugUI, OUTPUT, [&]()
         {
-            ImGui::PushStyleVar(ImGuiStyleVar_ImageBorderSize, 0.f);
-            ImGui::Image(*outputTexture.imguiDescriptorSet, ImGui::GetContentRegionMax());
-            ImGui::PopStyleVar();
-        }
-        ImGui::End();
-        
+            // For some reason there is a border around the image that I can't get rid of.
+            // Just force the cursor position and adjust the size
+            const auto padding = ImGui::GetCursorPos();
+            const auto windowSize = ImGui::GetWindowContentRegionMax();
+            const auto size = ImVec2(windowSize.x + padding.x, windowSize.y + padding.y);
+
+            imguiPos = ImGui::GetWindowPos();
+            imguiSize = size;
+
+            ImGui::SetCursorPos(ImVec2(0, 0));
+            ImGui::Image(*outputTexture.imguiDescriptorSet, size);
+        }, true);
+
+        debugDrawBindlessTextures(bindlessResources.value());
+        drawDebugUI(debugUI, *this, ctx.scene, 0.16);
+        debugUI.fns.clear();
+
         ImGui::Render();
 
         // TODO: perhaps we can move swapchain as a resource into render graph
@@ -808,7 +832,7 @@ auto VulkanBackend::copyBufferWithStaging(std::optional<VkCommandBuffer> cmd, vo
 
     if (size == 0)
     {
-        std::println("Attempting to copy buffer of size 0. Ignoring.");
+        // std::println("Attempting to copy buffer of size 0. Ignoring.");
         return;
     }
 

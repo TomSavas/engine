@@ -8,11 +8,13 @@
 #include "passes/blur.h"
 #include "passes/bloom.h"
 #include "passes/screenSpace.h"
+#include "passes/sceneData.h"
 #include "renderGraph.h"
 #include "rhi/vulkan/backend.h"
 #include "scene.h"
 #include "debugUI.h"
-#include "rhi/vulkan/utils/inits.h"
+#include "debugShapes.h"
+#include "ImGuizmo.h"
 
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
@@ -28,9 +30,12 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
-#include "passes/sceneData.h"
+#include <glm/ext/matrix_transform.hpp>
 
 #include <print>
+#include <array>
+
+#include "scenes.h"
 
 template <typename T>
 concept Renderer = requires(T t)
@@ -70,7 +75,8 @@ struct WorldRenderer
         };
 
         const auto [draws, lightList, perModelData] = sceneUploadPass(sceneDataUploader, backend, graph, scene);
-        const auto [culledDraws] = cpuFrustumCullingPass(culling, backend, graph);
+        // const auto [culledDraws] = cpuFrustumCullingPass(culling, backend, graph);
+        const auto culledDraws = draws; // TODO: temporarily disable culling while rewriting scene
         const auto [depthMap] = zPrePass(prePass, backend, graph, culledDraws, perModelData);
         const auto [shadowMap, cascadeData] = csmPass(shadows, backend, graph, 4, perModelData, draws);
         auto lightData = tiledLightCullingPass(lightCulling, backend, graph, scene, depthMap,
@@ -79,13 +85,16 @@ struct WorldRenderer
         output = ssrPass(ss, blur, backend, graph, colorOutput, normal, positions, reflections);
         output = atmospherePass(atmosphere, backend, graph, depthMap, output);
         output = bloomPass(bloom, blur, backend, graph, output);
+        // output = colorOutput;
         //output = reinhardTonemapPass(tonemapper, backend, graph, output);
         //smaaPass(antiAliaser, backend, graph, output);
 
         if (debugUI.enabled)
         {
             // Renders directly to swapchain, no resources required
-            backend.addImguiPass(graph, output);
+            // TODO: this should be moved out of the backend, it doesn't need to know about debugUI
+            // but for that to happen we need to be able to get swapchain from the render graph
+            backend.addImguiPass(graph, output, debugUI);
         }
         else
         {
@@ -105,17 +114,28 @@ struct WorldRenderer
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-
+        ImGuizmo::BeginFrame();
+        
         ImGui::SetNextWindowBgAlpha(0.0f);
         ImGui::DockSpaceOverViewport(0, nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
 
-        scene.update(dt, 0.f, backend.window);
+        scene.update(dt, 0.f, backend.window, !debugUI.enabled || debugUI.outputFocused);
+
+        {
+            static auto debugKeyWasPressed = false;
+            auto debugKeyPressed = glfwGetKey(backend.window, GLFW_KEY_F1) == GLFW_PRESS;
+            if (debugKeyWasPressed && !debugKeyPressed)
+            {
+                debugUI.enabled = !debugUI.enabled;
+            }
+            debugKeyWasPressed = debugKeyPressed;
+        }
 
         // Debug UI
-        debugDrawBindlessTextures(backend.bindlessResources.value());
+        // debugDrawBindlessTextures(backend.bindlessResources.value());
 
-        drawDebugUI(debugUI, backend, scene, dt);
-        debugUI.fns.clear();
+        // drawDebugUI(debugUI, backend, scene, dt);
+        // debugUI.fns.clear();
 
         // NOTE: for now let's just directly pass in the graph and let the
         // backend figure out what it wants to do. Generally we should transform
@@ -134,8 +154,12 @@ i32 main()
 {
     VulkanBackend* backend = initVulkanBackend().expect("Failed initialising Vulkan backend");
 
-    Scene scene = loadScene(*backend, "Sponza", "../assets/Sponza/Sponza.gltf", 4096 - 1)
-        .value_or(emptyScene(*backend));
+    Scene scene = sponzaScene(*backend);
+    // Scene scene = instancingTestScene(*backend);
+
+    debugDrawCube(scene, glm::vec3(0.f, 2.5f, 0.f), glm::vec3(1.f), glm::vec3(1.f, 0.f, 0.f));
+    debugDrawCube(scene, glm::vec3(0.f, 5.5f, 0.f), glm::vec3(1.f), glm::vec3(1.f, 0.f, 0.f));
+    debugDrawCube(scene, glm::vec3(1.f, 2.f, 3.f), glm::vec3(1.f), glm::vec3(1.f, 0.f, 0.f));
 
     WorldRenderer worldRenderer(*backend);
 

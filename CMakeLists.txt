@@ -62,7 +62,7 @@ add_compile_definitions(RESULT_NAMESPACE=result)
 
 add_definitions(-DGLFW_INCLUDE_NONE)
 
-find_program(GLSLC glslc HINTS /usr/bin /usr/local/bin $ENV{VULKAN_SDK}/Bin/ $ENV{VULKAN_SDK}/Bin32/)
+find_program(GLSLC glslang HINTS /usr/bin /usr/local/bin $ENV{VULKAN_SDK}/Bin/ $ENV{VULKAN_SDK}/Bin32/)
 set(SHADER_SRC_DIRECTORY "${PROJECT_SOURCE_DIR}/engine/shaders")
 file(GLOB_RECURSE GLSL_SOURCE_FILES
     "${SHADER_SRC_DIRECTORY}/*.glsl"
@@ -84,7 +84,7 @@ foreach(GLSL ${GLSL_SOURCE_FILES})
 
         add_custom_command(
             OUTPUT ${SPIRV}
-            COMMAND ${GLSLC} -g -I${SHADER_SRC_DIRECTORY} -fshader-stage=${SHADER_STAGE} ${GLSL} -o ${SPIRV}
+            COMMAND ${GLSLC} -gVS -I${SHADER_SRC_DIRECTORY} ${GLSL} -o ${SPIRV} --target-env vulkan1.1
             DEPENDS ${GLSL}
             COMMENT "Compiling ${GLSL} for stage: ${SHADER_STAGE}"
         )

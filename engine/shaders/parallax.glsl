@@ -1,4 +1,4 @@
-vec2 parallaxMap(vec2 vertUv, int bumpMapIndex)
+vec2 parallaxMap(vec2 vertUv, int bumpMapIndex, vec3 tangentCameraPos, vec3 tangentFragPos)
 {
 	const float heightScale = 0.01f;
 	vec3 viewDir = normalize(tangentCameraPos - tangentFragPos);
@@ -8,7 +8,7 @@ vec2 parallaxMap(vec2 vertUv, int bumpMapIndex)
     return vertUv - p;
 }
 
-vec2 steepParallaxMap(vec2 vertUv, int bumpMapIndex)
+vec2 steepParallaxMap(vec2 vertUv, int bumpMapIndex, vec3 tangentCameraPos, vec3 tangentFragPos)
 {
 	const float heightScale = 0.1f;
 	vec3 viewDir = normalize(tangentCameraPos - tangentFragPos);
@@ -34,7 +34,7 @@ vec2 steepParallaxMap(vec2 vertUv, int bumpMapIndex)
 	return uv;
 }
 
-vec2 parallaxOcclusionMap(vec2 vertUv, int bumpMapIndex)
+vec2 parallaxOcclusionMap(vec2 vertUv, int bumpMapIndex, vec3 tangentCameraPos, vec3 tangentFragPos)
 {
     if (bumpMapIndex == WHITE_BINDLESS)
     {
@@ -91,9 +91,10 @@ vec2 parallaxOcclusionMap(vec2 vertUv, int bumpMapIndex)
 	return finalTexCoords;
 }
 
-vec2 parallaxOcclusionMapBinarySearch(vec2 vertUv, int bumpMapIndex)
+vec2 parallaxOcclusionMapBinarySearch(vec2 vertUv, int bumpMapIndex, vec3 tangentCameraPos, vec3 tangentFragPos)
 {
-	const float heightScale = 0.025f;
+	// const float heightScale = 0.025f;
+	const float heightScale = 0.25f;
 	vec3 viewDir = normalize(tangentCameraPos - tangentFragPos);
 
     const float numLayers = 8.f;

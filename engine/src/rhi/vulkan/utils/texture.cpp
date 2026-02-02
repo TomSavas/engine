@@ -143,7 +143,7 @@ auto whiteTexture(VulkanBackend& backend, u32 dimension) -> Texture
         bytes.push_back(255);
         bytes.push_back(255);
     }
-    // return createTexture(backend, "builtin_white", bytes.data(), textureSize, dimension, dimension, false);
+    
     auto raw = RawTexture{bytes.data(), textureSize, {dimension, dimension, 1}};
     return backend.createTexture("builtin_white", raw,
         vkutil::init::defaultColorTextureCreateInfo(raw.extent, MipOptions::one().count(), VK_FORMAT_R8G8B8A8_UNORM),
@@ -162,11 +162,42 @@ auto blackTexture(VulkanBackend& backend, u32 dimension) -> Texture
         bytes.push_back(0);
         bytes.push_back(255);
     }
-    // return createTexture(backend, "builtin_black", bytes.data(), textureSize, dimension, dimension, false);
+    
     auto raw = RawTexture{bytes.data(), textureSize, {dimension, dimension, 1}};
     return backend.createTexture("builtin_black", raw,
         vkutil::init::defaultColorTextureCreateInfo(raw.extent, MipOptions::one().count(), VK_FORMAT_R8G8B8A8_UNORM),
         vkutil::init::defaultTextureAllocationCreateInfo(), MipOptions::one(), VK_IMAGE_ASPECT_COLOR_BIT);
+}
+
+auto rgbTextures(VulkanBackend& backend, u32 dimension) -> std::array<Texture, 3>
+{
+    const u32 textureSize = dimension * dimension * 4;
+    std::vector<u8> bytes(dimension * dimension * 4, 0);
+    
+    std::array<Texture, 3> textures;
+    constexpr std::array names {
+        "builtin_red",
+        "builtin_green",
+        "builtin_blue",
+    };
+    for (i32 i = 0; i < 3; ++i)
+    {
+        for (i32 j = 0; j < dimension * dimension; ++j)
+        {
+            bytes[j + 0] = i == 0 ? 255 : 0;
+            bytes[j + 1] = i == 1 ? 255 : 0;
+            bytes[j + 2] = i == 2 ? 255 : 0;
+            bytes[j + 3] = 255;
+        }
+
+        auto raw = RawTexture{bytes.data(), textureSize, {dimension, dimension, 1}};
+        textures[i] = backend.createTexture(names[i], raw,
+            vkutil::init::defaultColorTextureCreateInfo(raw.extent, MipOptions::one().count(), VK_FORMAT_R8G8B8A8_UNORM),
+            vkutil::init::defaultTextureAllocationCreateInfo(), MipOptions::one(), VK_IMAGE_ASPECT_COLOR_BIT);
+
+    }
+
+    return textures;
 }
 
 auto errorTexture(VulkanBackend& backend, u32 dimension) -> Texture
@@ -192,6 +223,33 @@ auto errorTexture(VulkanBackend& backend, u32 dimension) -> Texture
     // return createTexture(backend, "builtin_error", bytes.data(), textureSize, dimension, dimension, false);
     auto raw = RawTexture{bytes.data(), textureSize, {dimension, dimension, 1}};
     return backend.createTexture("builtin_error", raw,
+        vkutil::init::defaultColorTextureCreateInfo(raw.extent, MipOptions::one().count(), VK_FORMAT_R8G8B8A8_UNORM),
+        vkutil::init::defaultTextureAllocationCreateInfo(), MipOptions::one(), VK_IMAGE_ASPECT_COLOR_BIT);
+}
+
+auto transparencyTexture(VulkanBackend& backend, u32 dimension) -> Texture
+{
+    const u32 textureSize = dimension * dimension * 4;
+    std::vector<u8> bytes;
+    bytes.reserve(textureSize);
+    for (u32 y = 0; y < dimension; ++y)
+    {
+        for (u32 x = 0; x < dimension; ++x)
+        {
+            const u32 stridedY = y / 8;
+            const u32 stridedX = x / 8;
+            const bool magentaArea = (stridedX + stridedY) % 2 != 0;
+            const u8 greyWhite = magentaArea ? 118 : 200;
+
+            bytes.push_back(greyWhite);
+            bytes.push_back(greyWhite);
+            bytes.push_back(greyWhite);
+            bytes.push_back(255);
+        }
+    }
+    // return createTexture(backend, "builtin_error", bytes.data(), textureSize, dimension, dimension, false);
+    auto raw = RawTexture{bytes.data(), textureSize, {dimension, dimension, 1}};
+    return backend.createTexture("builtin_transparency", raw,
         vkutil::init::defaultColorTextureCreateInfo(raw.extent, MipOptions::one().count(), VK_FORMAT_R8G8B8A8_UNORM),
         vkutil::init::defaultTextureAllocationCreateInfo(), MipOptions::one(), VK_IMAGE_ASPECT_COLOR_BIT);
 }

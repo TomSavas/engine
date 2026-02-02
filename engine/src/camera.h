@@ -24,6 +24,9 @@ struct Camera
     auto view() const -> glm::mat4
     {
         return glm::inverse(glm::translate(glm::mat4(1.f), position) * rotation);
+
+        // glm::vec3 forward = rotation * glm::vec4(0.f, 0.f, -1.f, 0.f);
+        // return glm::lookAt(position, position+forward, glm::vec3(0, 1, 0));
     }
 
     [[nodiscard]]
