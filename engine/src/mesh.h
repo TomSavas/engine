@@ -43,6 +43,7 @@ struct DefaultMaterial
         WIREFRAME = 1 << 1,
         NORMAL_MAPPING = 1 << 2,
         PARALLAX = 1 << 3,
+        HIGHLIGHT = 1 << 4,
         ALL = ~(u64)0,
 
         DEFAULT = LIT | NORMAL_MAPPING | PARALLAX,

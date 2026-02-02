@@ -101,6 +101,17 @@ void main()
 
     vec4 sampledAlbedo = texture(textures[nonuniformEXT(textureIndices.x)], uv);
     vec3 albedo = material.baseColor.rgb * sampledAlbedo.rgb;
+
+    if ((uint(material.features.x) & HIGHLIGHT) != 0)
+    {
+        if (minBary == 0)
+        {
+            vec3 inverse = vec3(1.f) - albedo;
+            outColor = vec4(mix(albedo, inverse, sin(scene.time.x * 5.f) * 0.5 + 0.5), 1.f);
+            return;
+        }
+    }
+
     if (sampledAlbedo.a == 0.0)
     {
         discard;

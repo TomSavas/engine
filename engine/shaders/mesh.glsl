@@ -39,6 +39,7 @@ uint LIT = 1 << 0;
 uint WIREFRAME = 1 << 1;
 uint NORMAL_MAPPING = 1 << 2;
 uint PARALLAX = 1 << 3;
+uint HIGHLIGHT = 1 << 4;
 // uint ALL = ~(uint)0;
 
 layout(buffer_reference, std430) readonly buffer Materials

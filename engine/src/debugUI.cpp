@@ -148,6 +148,18 @@ auto drawDebugUI(DebugUI& debugUI, VulkanBackend& backend, Scene& scene, f64 dt)
     ImGui::End();
     
     static SceneGraph::NodeHandle selectedHandle = SceneGraph::kRootHandle;
+
+    // Unhighlight
+    {
+        auto& node = scene.sceneGraph.nodes[selectedHandle];
+        if (node.model && node.instance)
+        {
+            int materialHandle = static_cast<int>(scene.models.instances[*node.model][*node.instance].material.x);
+            DefaultMaterial& material = scene.materials.materials[materialHandle];
+            material.features = material.features & (DefaultMaterial::Features)~(u64)DefaultMaterial::Features::HIGHLIGHT;
+        }
+    }
+    
     if (ImGui::Begin(SCENE_CSTR, nullptr))
     {
         ImGui::Text("Currently selected: %d", selectedHandle);
@@ -198,6 +210,17 @@ auto drawDebugUI(DebugUI& debugUI, VulkanBackend& backend, Scene& scene, f64 dt)
         showNode(SceneGraph::kRootHandle);
     }
     ImGui::End();
+
+    // Highlight
+    {
+        auto& node = scene.sceneGraph.nodes[selectedHandle];
+        if (node.model && node.instance)
+        {
+            int materialHandle = static_cast<int>(scene.models.instances[*node.model][*node.instance].material.x);
+            DefaultMaterial& material = scene.materials.materials[materialHandle];
+            material.features = material.features | DefaultMaterial::Features::HIGHLIGHT;
+        }
+    }
 
     if (ImGui::Begin(INSPECTOR_CSTR, nullptr))
     {
