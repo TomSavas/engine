@@ -514,5 +514,21 @@ auto drawDebugUI(DebugUI& debugUI, VulkanBackend& backend, Scene& scene, f64 dt)
     }
     ImGui::End();
 
+    static bool fHeld = false;
+    if (glfwGetKey(backend.window, GLFW_KEY_F) == GLFW_PRESS && !fHeld)
+    {
+        fHeld = true;
+        glm::vec3 objectPosition = scene.sceneGraph.nodes[selectedHandle].globalTransform[3];
+        glm::vec3 currentCamToObj = glm::normalize(objectPosition - scene.activeCamera->position);
+
+        scene.activeCamera->position = objectPosition - currentCamToObj;
+        scene.activeCamera->rotation = glm::inverse(glm::lookAt(scene.activeCamera->position, objectPosition, glm::vec3(0, 1, 0)));
+        scene.activeCamera->rotation[3] = glm::vec4(0.f, 0.f, 0.f, 1.f);
+    }
+    if (glfwGetKey(backend.window, GLFW_KEY_F) == GLFW_RELEASE && fHeld)
+    {
+        fHeld = false;
+    }
+
     drawChildren(GLOBAL);
 }

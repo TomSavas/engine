@@ -61,8 +61,10 @@ void updateFreeCamera(f32 dt, GLFWwindow* window, Camera& camera, bool shouldHan
     static glm::dvec2 lastMousePos = glm::vec2(-1.f - 1.f);
     if (shouldHandleInput && glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
     {
-        static f64 radToVertical = .0;
-        static f64 radToHorizon = .0;
+        // static f64 radToVertical = .0;
+        // static f64 radToHorizon = .0;
+        f64 radToVertical = .0;
+        f64 radToHorizon = .0;
 
         if (lastMousePos.x == -1.f)
         {
@@ -73,6 +75,7 @@ void updateFreeCamera(f32 dt, GLFWwindow* window, Camera& camera, bool shouldHan
         glfwGetCursorPos(window, &mousePos.x, &mousePos.y);
         glm::dvec2 mousePosDif = mousePos - lastMousePos;
         lastMousePos = mousePos;
+
 
         radToVertical += mousePosDif.x * camera.rotationSpeed / camera.aspectRatio;
         while (radToVertical > glm::pi<f32>() * 2)
@@ -87,7 +90,8 @@ void updateFreeCamera(f32 dt, GLFWwindow* window, Camera& camera, bool shouldHan
         radToHorizon -= mousePosDif.y * camera.rotationSpeed;
         radToHorizon = std::min(std::max(radToHorizon, -glm::pi<f64>() / 2 + 0.01), glm::pi<f64>() / 2 - 0.01);
 
-        camera.rotation = glm::eulerAngleYX(-radToVertical, radToHorizon);
+        camera.rotation = glm::toMat4(glm::quat_cast(camera.rotation) * glm::quat_cast(glm::eulerAngleXY<f32>(radToHorizon, -radToVertical)));
+        camera.rotation = glm::inverse(glm::lookAt(glm::vec3(0.f), forward(camera.rotation), glm::vec3(0.f, 1.f, 0.f)));
     }
     else
     {
@@ -865,15 +869,11 @@ auto Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<gl
             sceneGraph.nodes[newNodes[i]] = SceneGraph::NewNode {
                 .name = std::format("{}_primitive{}", models.instanceDebug[modelHandle][instanceHandles[i]].name, i),
 
-                // .parent = sceneGraph.nodes[nodes[i]].parent,
                 .parent = parentNodes[i],
                 .dirty = SceneGraph::NewNode::TransformDirtiness::GLOBAL_DIRTY,
-                // .dirty = SceneGraph::NewNode::TransformDirtiness::CLEAN,
 
                 .localTransform = transforms[i],
-                // .localTransform = glm::mat4(1.f),
                 .globalTransform = glm::mat4(1.f),
-                // .globalTransform = transforms[i],
     
                 .model = modelHandle,
                 .instance = instanceHandles[i],
