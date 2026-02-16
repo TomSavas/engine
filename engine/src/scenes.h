@@ -20,7 +20,7 @@ auto sponzaScene(VulkanBackend& backend) -> Scene
             );
         }
     }
-    scene.addScene("../assets/Sponza/Sponza.gltf", transforms);
+    // scene.addScene("../assets/Sponza/Sponza.gltf", transforms);
     // scene.addScene("../assets/intelsponza/sponza.gltf", transforms);
     // scene.addScene("../assets/Suzanne/Suzanne.gltf", transforms);
 

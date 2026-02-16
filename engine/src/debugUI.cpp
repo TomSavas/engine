@@ -39,6 +39,8 @@ auto drawDebugUI(DebugUI& debugUI, VulkanBackend& backend, Scene& scene, f64 dt)
         return;
     }
     
+    ImGui::DockSpaceOverViewport(0, nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
+
     {
         constexpr f32 padding = 10.0f;
 

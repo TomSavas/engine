@@ -48,6 +48,14 @@ auto initVulkanBackend() -> result::result<VulkanBackend*, backendError>
 
 auto VulkanBackend::newFrame() -> Frame
 {
+    glfwPollEvents();
+
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+
+    ImGui::NewFrame();
+    ImGuizmo::BeginFrame();
+            
     return Frame{
         .stats =
             {
@@ -65,6 +73,8 @@ auto VulkanBackend::endFrame(Frame&& frame) -> FrameStats
     FrameMark;
     currentFrameNumber++;
     stats.finishedFrameCount++;
+
+    ImGui::EndFrame();
 
     return frame.stats;
 }
@@ -160,8 +170,8 @@ auto VulkanBackend::initVulkan() -> void
     graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
     graphicsQueueFamily = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
 
-    computeQueue = vkbDevice.get_queue(vkb::QueueType::compute).value();
-    computeQueueFamily = vkbDevice.get_queue_index(vkb::QueueType::compute).value();
+    // computeQueue = vkbDevice.get_queue(vkb::QueueType::compute).value();
+    // computeQueueFamily = vkbDevice.get_queue_index(vkb::QueueType::compute).value();
 
     VmaAllocatorCreateInfo allocatorInfo = {};
     allocatorInfo.physicalDevice = gpu;
@@ -224,19 +234,19 @@ auto VulkanBackend::initSwapchain() -> void
 
 auto VulkanBackend::initCommandBuffers() -> void
 {
-    auto commandPoolInfo = vkutil::init::commandPoolCreateInfo(
-        computeQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-    auto cmdAllocInfo = vkutil::init::commandBufferAllocateInfo(1, VK_COMMAND_BUFFER_LEVEL_PRIMARY, VK_NULL_HANDLE);
-    for (i32 i = 0; i < MaxFramesInFlight; i++)
-    {
-        VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &frames[i].cmdComputePool));
-        cmdAllocInfo.commandPool = frames[i].cmdComputePool;
-        VK_CHECK(vkAllocateCommandBuffers(device, &cmdAllocInfo, &frames[i].cmdComputeBuffer));
-    }
+    // auto commandPoolInfo = vkutil::init::commandPoolCreateInfo(
+    //     computeQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+    // auto cmdAllocInfo = vkutil::init::commandBufferAllocateInfo(1, VK_COMMAND_BUFFER_LEVEL_PRIMARY, VK_NULL_HANDLE);
+    // for (i32 i = 0; i < MaxFramesInFlight; i++)
+    // {
+    //     VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &frames[i].cmdComputePool));
+    //     cmdAllocInfo.commandPool = frames[i].cmdComputePool;
+    //     VK_CHECK(vkAllocateCommandBuffers(device, &cmdAllocInfo, &frames[i].cmdComputeBuffer));
+    // }
 
-    commandPoolInfo = vkutil::init::commandPoolCreateInfo(
+    auto commandPoolInfo = vkutil::init::commandPoolCreateInfo(
         graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-    cmdAllocInfo = vkutil::init::commandBufferAllocateInfo(1, VK_COMMAND_BUFFER_LEVEL_PRIMARY, VK_NULL_HANDLE);
+    auto cmdAllocInfo = vkutil::init::commandBufferAllocateInfo(1, VK_COMMAND_BUFFER_LEVEL_PRIMARY, VK_NULL_HANDLE);
     for (i32 i = 0; i < MaxFramesInFlight; i++)
     {
         VK_CHECK(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &frames[i].cmdPool));
