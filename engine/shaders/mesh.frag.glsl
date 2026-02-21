@@ -116,7 +116,6 @@ void main()
     {
         discard;
     }
-    vec3 texNormal = texture(textures[nonuniformEXT(textureIndices.y)], uv).rgb;
 
     vec2 metallicRoughnessFactors = vec2(1.0, 1.0);
     vec2 metallicRoughness = texture(textures[nonuniformEXT(textureIndices.z)], uv).bg;
@@ -132,10 +131,28 @@ void main()
 		}
 	}
 
+	// vec3 colors[] = {
+ //        vec3(1.f, 0.f, 0.f),
+ //        vec3(0.f, 1.f, 0.f),
+ //        vec3(1.f, 1.f, 0.f),
+ //        vec3(0.f, 0.f, 1.f),
+ //        vec3(1.f, 0.f, 1.f),
+ //    };
+ //    albedo *= colors[cascadeIndex];
+
 	float shadow = shadowIntensity(constants.shadowData.lightViewProj[cascadeIndex], cascadeIndex, float(constants.shadowData.cascadeCount), fsIn.pos);
 
-    const bool normalMappingEnabled = constants.enabledFeatures.x != 0.f;
-	vec3 n = normalMappingEnabled ? normalize(fsIn.tbn * (texNormal * vec3(2.f) - vec3(1.f))) : fsIn.tbn[2];
+	vec3 n = fsIn.tbn[2];
+    if ((uint(material.features.x) & NORMAL_MAPPING) != 0)
+    {
+        const bool normalMappingEnabled = constants.enabledFeatures.x != 0.f;
+        // TODO: remove
+        if (normalMappingEnabled)
+        {
+            vec3 texNormal = texture(textures[nonuniformEXT(textureIndices.y)], uv).rgb;
+        	n = normalMappingEnabled ? normalize(fsIn.tbn * (texNormal * vec3(2.f) - vec3(1.f))) : fsIn.tbn[2];
+        }
+    }
 	outNormal = vec4(n, 1.f);
 
 	outPos = vec4(fsIn.pos, 1.f);

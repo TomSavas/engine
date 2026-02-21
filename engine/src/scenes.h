@@ -115,10 +115,10 @@ auto physicsZoo(VulkanBackend& backend) -> Scene
     if (raw.data != nullptr)
     {
         mat.albedo = texture;
-        // mat.uvScaleOffset[0] = 0.1f;
-        // mat.uvScaleOffset[1] = 0.1f;
         mat.features = mat.features | DefaultMaterial::Features::MAINTAIN_UV_DENSITY;
     }
+
+    // scene.addScene("../assets/Sponza/Sponza.gltf", {glm::mat4(1.f)});
 
     return scene;
 }
