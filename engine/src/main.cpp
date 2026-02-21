@@ -9,6 +9,7 @@
 #include "passes/bloom.h"
 #include "passes/screenSpace.h"
 #include "passes/sceneData.h"
+#include "passes/imgui.h"
 #include "renderGraph.h"
 #include "rhi/vulkan/backend.h"
 #include "scene.h"
@@ -91,10 +92,7 @@ struct WorldRenderer
 
         if (debugUI.enabled)
         {
-            // Renders directly to swapchain, no resources required
-            // TODO: this should be moved out of the backend, it doesn't need to know about debugUI
-            // but for that to happen we need to be able to get swapchain from the render graph
-            backend.addImguiPass(graph, output, debugUI);
+            imguiPass(backend, graph, output);
         }
         else
         {
@@ -109,16 +107,6 @@ struct WorldRenderer
     {
         compileRenderGraph(scene);
         
-        glfwPollEvents();
-
-        ImGui_ImplVulkan_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-        ImGuizmo::BeginFrame();
-        
-        ImGui::SetNextWindowBgAlpha(0.0f);
-        ImGui::DockSpaceOverViewport(0, nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
-
         scene.update(dt, 0.f, backend.window, !debugUI.enabled || debugUI.outputFocused);
 
         {
@@ -145,8 +133,6 @@ struct WorldRenderer
         {
             backend.render(frame, *compiledRenderGraph, scene, output);
         }
-
-        ImGui::EndFrame();
     }
 };
 

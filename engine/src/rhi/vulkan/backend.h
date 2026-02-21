@@ -169,7 +169,6 @@ struct VulkanBackend
     auto render(const Frame& frame, CompiledRenderGraph& compiledRenderGraph, Scene& scene, RenderGraphResource<BindlessTexture> output) -> void;
 
     auto addOutputBlitPass(RenderGraph& graph, RenderGraphResource<BindlessTexture> output) -> void;
-    auto addImguiPass(RenderGraph& graph, RenderGraphResource<BindlessTexture> output, DebugUI& debugUI) -> void;
 
     auto immediateSubmit(std::function<void(VkCommandBuffer)>&& f) -> void;
     auto copyBuffer(std::optional<VkCommandBuffer> cmd, VkBuffer src, VkBuffer dst, VkBufferCopy copyRegion) -> void;
