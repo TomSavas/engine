@@ -56,10 +56,6 @@ auto imguiPass(VulkanBackend& backend, RenderGraph& graph,
             ImGui::Image(*outputTexture.imguiDescriptorSet, size);
         }, true);
 
-        debugDrawBindlessTextures(backend.bindlessResources.value());
-        drawDebugUI(debugUI, backend, ctx.scene, 0.16);
-        debugUI.fns.clear();
-
         ImGui::Render();
 
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), ctx.cmd);
