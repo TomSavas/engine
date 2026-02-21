@@ -48,12 +48,7 @@ void updateFreeCamera(f32 dt, GLFWwindow* window, Camera& camera, bool shouldHan
 {
     ZoneScoped;
 
-    static bool scrollCallbackSet = false;
-    if (!scrollCallbackSet)
-    {
-        glfwSetScrollCallback(window, scrollCallback);
-        scrollCallbackSet = true;
-    }
+    glfwSetScrollCallback(window, shouldHandleInput ? scrollCallback : nullptr);
 
     f32 scrollWheelChange = yOffsetAtomic.exchange(0.0);
     camera.moveSpeed = std::max(0.f, camera.moveSpeed + scrollWheelChange);

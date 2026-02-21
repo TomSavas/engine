@@ -852,20 +852,28 @@ auto debugDrawBindlessTextures(BindlessResources& bindlessResources) -> void
             }
             ImGui::End();
 
+            const auto aspectRatioConstraint = [](ImGuiSizeCallbackData* data)
+            {
+                const float aspectRatio = *(float*)data->UserData;
+                data->DesiredSize.y = data->DesiredSize.x / aspectRatio; 
+            };
+            const float aspectRatio = static_cast<f32>(texture.image.extent.width) / texture.image.extent.height;
+            ImGui::SetNextWindowSizeConstraints(
+                ImVec2(100, 100.f / aspectRatio),
+                ImVec2(FLT_MAX, FLT_MAX),
+                aspectRatioConstraint,
+                (void*)&aspectRatio
+            );
+
             if (ImGui::Begin(texture.name.c_str(), &open, ImGuiWindowFlags_NoCollapse))
             {
                 const auto padding = ImGui::GetCursorPos();
-                const auto windowSize = ImGui::GetWindowContentRegionMax();
-                const auto size = ImVec2(windowSize.x + padding.x, windowSize.y + padding.y);
+                const auto size = ImGui::GetContentRegionAvail();
 
-                auto backgroundTextureTiles = ImVec2(windowSize.x / 64, windowSize.y / 64);
+                auto backgroundTextureTiles = ImVec2(size.x / 64, size.y / 64);
 
-                ImGui::SetCursorPos(ImVec2(0, 0));
-                // ImGui::Image(*outputTexture.imguiDescriptorSet, size);
-                // ImGui::Image(*bindlessResources.textures[BindlessResources::kError].imguiDescriptorSet, size, ImVec2(0, 0), ImVec2(20, 20));
                 ImGui::Image(*bindlessResources.textures[BindlessResources::kTransparency].imguiDescriptorSet, size, ImVec2(0, 0), backgroundTextureTiles);
-                // ImGui::ImageWithBg(*texture.imguiDescriptorSet, size, ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 1));
-                ImGui::SetCursorPos(ImVec2(0, 0));
+                ImGui::SetCursorPos(padding);
                 ImGui::Image(*texture.imguiDescriptorSet, size);
             }
             ImGui::End();

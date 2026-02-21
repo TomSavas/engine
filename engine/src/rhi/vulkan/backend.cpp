@@ -482,7 +482,7 @@ auto VulkanBackend::initProfiler() -> void
 
 auto VulkanBackend::currentFrame() -> FrameCtx& { return frames[currentFrameNumber % MaxFramesInFlight]; }
 
-auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene& scene,
+auto VulkanBackend::render(Frame& frame, CompiledRenderGraph& graph, Scene& scene,
     RenderGraphResource<BindlessTexture> output)
     -> void
 {
@@ -570,7 +570,7 @@ auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
 
             RenderContext renderCtx =
             {
-               // .frame = frame,
+               .frame = frame,
                .graph = graph,
                .cmd = cmd,
                .scene = scene,

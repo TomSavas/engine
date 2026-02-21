@@ -79,7 +79,7 @@ struct CurrentSwapchain
 
 struct RenderContext
 {
-    // Frame& frame;
+    Frame& frame;
     CompiledRenderGraph& graph;
     VkCommandBuffer& cmd;
     Scene& scene;
@@ -166,7 +166,7 @@ struct VulkanBackend
     auto newFrame() -> Frame;
     auto endFrame(Frame&& frame) -> FrameStats;
 
-    auto render(const Frame& frame, CompiledRenderGraph& compiledRenderGraph, Scene& scene, RenderGraphResource<BindlessTexture> output) -> void;
+    auto render(Frame& frame, CompiledRenderGraph& compiledRenderGraph, Scene& scene, RenderGraphResource<BindlessTexture> output) -> void;
 
     auto addOutputBlitPass(RenderGraph& graph, RenderGraphResource<BindlessTexture> output) -> void;
 

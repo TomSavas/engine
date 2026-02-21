@@ -119,11 +119,6 @@ struct WorldRenderer
             debugKeyWasPressed = debugKeyPressed;
         }
 
-        // Debug UI
-        debugDrawBindlessTextures(backend.bindlessResources.value());
-        drawDebugUI(debugUI, backend, scene, dt);
-        debugUI.fns.clear();
-
         // NOTE: for now let's just directly pass in the graph and let the
         // backend figure out what it wants to do. Generally we should transform
         // compiledRenderGraph into a command buffer or a list of secondary

@@ -46,15 +46,13 @@ auto imguiPass(VulkanBackend& backend, RenderGraph& graph,
 
         addDebugUI(debugUI, OUTPUT, [&]()
         {
-            // For some reason there is a border around the image that I can't get rid of.
-            // Just force the cursor position and adjust the size
-            const auto padding = ImGui::GetCursorPos();
-            const auto windowSize = ImGui::GetWindowContentRegionMax();
-            const auto size = ImVec2(windowSize.x + padding.x, windowSize.y + padding.y);
-
-            ImGui::SetCursorPos(ImVec2(0, 0));
-            ImGui::Image(*outputTexture.imguiDescriptorSet, size);
+            ImGui::Image(*outputTexture.imguiDescriptorSet, ImGui::GetContentRegionAvail());
         }, true);
+            
+        // Debug UI
+        debugDrawBindlessTextures(backend.bindlessResources.value());
+        drawDebugUI(debugUI, backend, ctx.scene, ctx.frame.stats.pastFrameDt);
+        debugUI.fns.clear();
 
         ImGui::Render();
 

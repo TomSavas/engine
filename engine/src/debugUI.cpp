@@ -436,6 +436,9 @@ auto drawDebugUI(DebugUI& debugUI, VulkanBackend& backend, Scene& scene, f64 dt)
     }
     ImGui::End();
 
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+
     if (ImGui::Begin(OUTPUT_CSTR, nullptr))
     {
         debugUI.outputFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
@@ -449,8 +452,7 @@ auto drawDebugUI(DebugUI& debugUI, VulkanBackend& backend, Scene& scene, f64 dt)
 
         drawChildren(OUTPUT);
 
-        static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::TRANSLATE);
-        static ImGuizmo::MODE mCurrentGizmoMode(ImGuizmo::WORLD);
+        static ImGuizmo::OPERATION currentGizmoOp(ImGuizmo::TRANSLATE);
         {
             ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration | //ImGuiWindowFlags_AlwaysAutoResize |
                                             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
@@ -462,52 +464,28 @@ auto drawDebugUI(DebugUI& debugUI, VulkanBackend& backend, Scene& scene, f64 dt)
             {
                 ImGuiStyle& style = ImGui::GetStyle();
                 ImVec4* colors = style.Colors;
-                auto color = colors[ImGuiCol_Button] + ImVec4(-0.3, -0.3, -0.3, 0.4);
+                auto selectedColor = colors[ImGuiCol_Button] + ImVec4(-0.3, -0.3, -0.3, 0.4);
 
-                const auto translate = mCurrentGizmoOperation == ImGuizmo::TRANSLATE;
-                if (translate)
+                const auto addManipulateButton = [&currentGizmoOp, &selectedColor](ImGuizmo::OPERATION gizmoOp, const char* icon, ImGuiKey key)
                 {
-                    ImGui::PushStyleColor(ImGuiCol_Button, color);
-                }
-                if (ImGui::Button(ICON_FA_ARROWS_ALT))
-                {
-                    mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
-                }
-                ImGui::SameLine();
-                if (translate)
-                {
-                    ImGui::PopStyleColor();
-                }
-
-                const auto rotate = mCurrentGizmoOperation == ImGuizmo::ROTATE;
-                if (rotate)
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Button, color);
-                }
-                if (ImGui::Button(ICON_FA_SYNC_ALT))
-                {
-                    mCurrentGizmoOperation = ImGuizmo::ROTATE;
-                }
-                ImGui::SameLine();
-                if (rotate)
-                {
-                    ImGui::PopStyleColor();
-                }
-
-                const auto scale = mCurrentGizmoOperation == ImGuizmo::SCALE;
-                if (scale)
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Button, color);
-                }
-                if (ImGui::Button(ICON_FA_EXPAND_ALT))
-                {
-                    mCurrentGizmoOperation = ImGuizmo::SCALE;
-                }
-                ImGui::SameLine();
-                if (scale)
-                {
-                    ImGui::PopStyleColor();
-                }
+                    const auto usingThisOp = currentGizmoOp == gizmoOp;
+                    if (usingThisOp)
+                    {
+                        ImGui::PushStyleColor(ImGuiCol_Button, selectedColor);
+                    }
+                    if (ImGui::Button(icon) || ImGui::IsKeyPressed(key, false))
+                    {
+                        currentGizmoOp = gizmoOp;
+                    }
+                    ImGui::SameLine();
+                    if (usingThisOp)
+                    {
+                        ImGui::PopStyleColor();
+                    }
+                };
+                addManipulateButton(ImGuizmo::TRANSLATE, ICON_FA_ARROWS_ALT, ImGuiKey_1);
+                addManipulateButton(ImGuizmo::ROTATE, ICON_FA_SYNC_ALT, ImGuiKey_2);
+                addManipulateButton(ImGuizmo::SCALE, ICON_FA_EXPAND_ALT, ImGuiKey_3);
             }
             ImGui::EndChild();
         }
@@ -520,7 +498,7 @@ auto drawDebugUI(DebugUI& debugUI, VulkanBackend& backend, Scene& scene, f64 dt)
             glm::mat4 proj = scene.activeCamera->proj();
             proj[1][1] *= -1.f;
             auto& node = scene.sceneGraph.nodes[selectedHandle];
-            if (ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(proj), mCurrentGizmoOperation, mCurrentGizmoMode,
+            if (ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(proj), currentGizmoOp, ImGuizmo::WORLD,
                 glm::value_ptr(node.globalTransform), NULL, NULL))
             {
                 node.dirty = SceneGraph::NewNode::TransformDirtiness::LOCAL_DIRTY;
@@ -528,6 +506,8 @@ auto drawDebugUI(DebugUI& debugUI, VulkanBackend& backend, Scene& scene, f64 dt)
         }
     }
     ImGui::End();
+
+    ImGui::PopStyleVar(2);
 
     static bool fHeld = false;
     if (glfwGetKey(backend.window, GLFW_KEY_F) == GLFW_PRESS && !fHeld)
