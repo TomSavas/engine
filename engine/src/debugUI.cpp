@@ -384,6 +384,14 @@ auto drawDebugUI(DebugUI& debugUI, VulkanBackend& backend, Scene& scene, f64 dt)
                 ImGui::SameLine();
                 ImGui::ColorEdit4("##Base Color", &material.baseColor[0]);
 
+                ImGui::Text("UV scale:");
+                ImGui::SameLine();
+                ImGui::SliderFloat2("##UV scale", &material.uvScaleOffset[0], 0.0001f, 100.f);
+
+                ImGui::Text("UV offset:");
+                ImGui::SameLine();
+                ImGui::SliderFloat2("##UV offset", &material.uvScaleOffset[2], -10.f, 10.f);
+
                 if (ImGui::CollapsingHeader("Features", ImGuiTreeNodeFlags_DefaultOpen))
                 {
                     bool lit = (material.features & DefaultMaterial::Features::LIT) != DefaultMaterial::Features::NONE;
@@ -405,6 +413,11 @@ auto drawDebugUI(DebugUI& debugUI, VulkanBackend& backend, Scene& scene, f64 dt)
                     if (ImGui::Checkbox("Parallax mapping", &parallax))
                     {
                         material.features = material.features ^ DefaultMaterial::Features::PARALLAX;
+                    }
+                    bool maintainUvDensity = (material.features & DefaultMaterial::Features::MAINTAIN_UV_DENSITY) != DefaultMaterial::Features::NONE;
+                    if (ImGui::Checkbox("Maintain UV density", &maintainUvDensity))
+                    {
+                        material.features = material.features ^ DefaultMaterial::Features::MAINTAIN_UV_DENSITY;
                     }
                 }
             }

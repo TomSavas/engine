@@ -10,6 +10,8 @@ struct Scene;
 auto cubeModelData() -> Models::ModelData;
 // auto sphereModelData(u8 verticalSubdivisions = 8, u8 horizontalSubdivisions = 8) -> Models::ModelData;
 auto sphereModelData() -> Models::ModelData;
+auto planeModelData() -> Models::ModelData;
 
 auto debugDrawCube(Scene& scene, glm::vec3 center, glm::vec3 scale, glm::vec3 color) -> void;
 auto debugDrawSphere(Scene& scene, glm::vec3 center, glm::vec3 scale, glm::vec3 color) -> void;
+auto debugDrawPlane(Scene& scene, glm::vec3 center, glm::vec3 scale, glm::vec3 color) -> SceneGraph::NodeHandle;

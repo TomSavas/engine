@@ -16,7 +16,7 @@ layout (location = 0) out vec4 color;
 #include "consts.glsl"
 
 #define SAMPLE_ITERATIONS 16
-#define OPTICAL_DEPTH_ITERATIONS 8
+#define OPTICAL_DEPTH_ITERATIONS 32
 
 const float eR = 6360e3; // Earth radius, in m
 const float aR = 6420e3; // Atmosphere radius, in m
@@ -28,7 +28,7 @@ const float mieAsymmetryParam = 0.76f;
 const float mieExtinctionCoeff = 1.1f;
 
 // Default values used by Bruneton and Neyret
-// const vec3 rScatteringCoeff = vec3(5.8e-6, 13.5e-6, 33.1e-6); // Usually marked with betaR
+// const vec3 rScatteringCoeff = vec3(3.8e-6, 13.5e-6, 33.1e-6); // Usually marked with betaR
 // const vec3 mScatteringCoeff = vec3(21e-6); // Usually marked with betaM
 
 float rayleighPhase(float mu)
@@ -57,7 +57,9 @@ vec2 opticalDepthTowards(vec3 samplePoint, vec3 dir, float rayLength, vec3 plane
     for (int j = 0; j < OPTICAL_DEPTH_ITERATIONS; j++)
     {
         rOpticalDepth += opticalDepth(samplePoint, planetCenter, eR * earthAtmosphereScale.x, rHeightScale * earthAtmosphereScale.x) * stepLength / earthAtmosphereScale.x;
-        mOpticalDepth += opticalDepth(samplePoint, planetCenter, eR * earthAtmosphereScale.x, mHeightScale * earthAtmosphereScale.x) * stepLength / earthAtmosphereScale.x;
+        float a = opticalDepth(samplePoint, planetCenter, eR * earthAtmosphereScale.x, mHeightScale * earthAtmosphereScale.x) * stepLength / earthAtmosphereScale.x;
+        // if (!isinf(a))
+        mOpticalDepth += a;
         samplePoint += dir * stepLength;
     }
 
@@ -72,23 +74,27 @@ void main()
     const vec3 fragmentWS = deproject(vec3(uv * 2.f - 1.f, 1.f), inverse(scene.proj * scene.view));
     const vec3 rayDir = normalize(fragmentWS - scene.cameraPos.xyz);
 
-    // Let's assume we're a little bit above the center of the planet
     const vec3 up = vec3(0.f, 1.f, 0.f);
-    const vec3 planetCenter = -(eR * earthAtmosphereScale.x) * up;
+    vec3 planetCenter = -(eR * earthAtmosphereScale.x) * up;
 
-    Hit atmosphereHit = raySphereIntersection(scene.cameraPos.xyz, rayDir, planetCenter, aR * earthAtmosphereScale.y);
-    if (!atmosphereHit.hit || atmosphereHit.t1 < 0.f)
+    // Prevent the player from going inside the planet
+    Hit earthHit = raySphereIntersection(scene.cameraPos.xyz, rayDir, planetCenter, eR * earthAtmosphereScale.x);
+    if (earthHit.hit)
     {
-        color = vec4(0.f, 0.f, 0.f, 1.f);
-        return;
+        if (earthHit.t0 < 0.f && earthHit.t1 > 0.f)
+        {
+            planetCenter += scene.cameraPos.xyz - up;
+        }
     }
 
-    const Hit earthHit = raySphereIntersection(scene.cameraPos.xyz, rayDir, planetCenter, eR * earthAtmosphereScale.x);
-    if (earthHit.hit && earthHit.t0 > 0.f)
+    Hit atmosphereHit = raySphereIntersection(scene.cameraPos.xyz, rayDir, planetCenter, aR * earthAtmosphereScale.y);
+    earthHit = raySphereIntersection(scene.cameraPos.xyz, rayDir, planetCenter, eR * earthAtmosphereScale.x);
+    if (earthHit.hit)
     {
-        // Limit raymarching until the surface of the earth.
-        // We could replace this with the value from depth buffer to apply atmospheric haze to the entire scene.
-        atmosphereHit.t1 = min(earthHit.t0, atmosphereHit.t1);
+        if (earthHit.t0 > 0.f && earthHit.t1 > 0.f)
+        {
+            atmosphereHit.t1 = earthHit.t0;       
+        }
     }
 
     vec3 rSum = vec3(0.f);
@@ -103,8 +109,10 @@ void main()
     {
         const float rOpticalDepthAtSample = opticalDepth(samplePoint, planetCenter, eR * earthAtmosphereScale.x, rHeightScale * earthAtmosphereScale.x) * stepLength / earthAtmosphereScale.x;
         const float mOpticalDepthAtSample = opticalDepth(samplePoint, planetCenter, eR * earthAtmosphereScale.x, mHeightScale * earthAtmosphereScale.x) * stepLength / earthAtmosphereScale.x;
-        rOpticalDepth += rOpticalDepthAtSample;
-        mOpticalDepth += mOpticalDepthAtSample;
+        if (!isinf(rOpticalDepthAtSample))
+            rOpticalDepth += rOpticalDepthAtSample;
+        if (!isinf(mOpticalDepthAtSample))
+            mOpticalDepth += mOpticalDepthAtSample;
 
         const float sampleToAtmosphereLen = raySphereIntersection(samplePoint, sunDirAndIntensity.xyz, planetCenter, aR * earthAtmosphereScale.y).t1;
         const vec2 opticalDepthTowardsSun = opticalDepthTowards(samplePoint, sunDirAndIntensity.xyz, sampleToAtmosphereLen, planetCenter);
@@ -114,7 +122,9 @@ void main()
         const vec3 opticalDepth = rScatteringCoeff * (rOpticalDepth + rOpticalDepthTowardsSun) +
                                   mScatteringCoeff * (mOpticalDepth + mOpticalDepthTowardsSun) * mieExtinctionCoeff;
         const vec3 attenuation = exp(-opticalDepth);
+        // if (!isinf(rOpticalDepthAtSample))
         rSum += attenuation * rOpticalDepthAtSample;
+        // if (!isinf(mOpticalDepthAtSample))
         mSum += attenuation * mOpticalDepthAtSample;
 
         samplePoint += rayDir * stepLength;

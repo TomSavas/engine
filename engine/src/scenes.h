@@ -34,11 +34,11 @@ auto instancingTestScene(VulkanBackend& backend) -> Scene
     scene.materials = initMaterials<DefaultMaterial>(backend, 8);
     constexpr auto w = BindlessResources::kWhite;
     std::array mats = {
-        DefaultMaterial{w, w, w, w, {1.f, 1.f, 1.f, 1.f}},
-        DefaultMaterial{w, w, w, w, {1.f, 0.f, 0.f, 1.f}},
-        DefaultMaterial{w, w, w, w, {0.f, 1.f, 0.f, 1.f}},
-        DefaultMaterial{w, w, w, w, {0.f, 0.f, 1.f, 1.f}},
-        DefaultMaterial{w, w, w, w, {1.f, 0.f, 1.f, 1.f}},
+        DefaultMaterial{w, w, w, w, {1.f, 1.f, 1.f, 1.f}, {1.f, 1.f, 0.f, 0.f}},
+        DefaultMaterial{w, w, w, w, {1.f, 0.f, 0.f, 1.f}, {1.f, 1.f, 0.f, 0.f}},
+        DefaultMaterial{w, w, w, w, {0.f, 1.f, 0.f, 1.f}, {1.f, 1.f, 0.f, 0.f}},
+        DefaultMaterial{w, w, w, w, {0.f, 0.f, 1.f, 1.f}, {1.f, 1.f, 0.f, 0.f}},
+        DefaultMaterial{w, w, w, w, {1.f, 0.f, 1.f, 1.f}, {1.f, 1.f, 0.f, 0.f}},
     };
     const auto materials = addMaterials<DefaultMaterial>(backend, scene.materials, std::span(mats));
 
@@ -80,6 +80,45 @@ auto instancingTestScene(VulkanBackend& backend) -> Scene
         }
     }
     // addInstances(backend, scene.models, modelHandles[1], instances);
+
+    return scene;
+}
+
+auto physicsZoo(VulkanBackend& backend) -> Scene
+{
+    Scene scene = emptyScene(backend);
+    
+    scene.materials = initMaterials<DefaultMaterial>(backend, 8192);
+    scene.models = initModels(backend, 4096 * 10000, 4096 * 10000, 8192);
+
+    RawTexture raw {};
+    i32 components;
+    raw.data = stbi_load("../assets/dark_default_tex.png", (int*)&raw.extent.width, (int*)&raw.extent.height, &components, STBI_rgb_alpha);
+    raw.extent.depth = 1;
+    raw.size = raw.extent.width * raw.extent.height * components;
+    const auto mips = MipOptions::generateAll(raw);
+    auto texture = backend.bindlessResources->addTexture(
+        backend.createTexture(
+            "dark_default_tex.png",
+            raw,
+            vkutil::init::defaultColorTextureCreateInfo(raw.extent, mips.count(), VK_FORMAT_R8G8B8A8_UNORM),
+            vkutil::init::defaultTextureAllocationCreateInfo(),
+            mips,
+            VK_IMAGE_ASPECT_COLOR_BIT
+        )
+    );
+
+    auto handle = debugDrawPlane(scene, glm::vec3(0.f, -10.f, 0.f), glm::vec3(100.f), glm::vec3(1.f, 0.f, 0.f));
+    auto sceneNode = scene.sceneGraph.nodes[handle];
+    auto& instance = scene.models.instances[*sceneNode.model][*sceneNode.instance];
+    auto& mat = scene.materials.materials[static_cast<u32>(instance.material.x)];
+    if (raw.data != nullptr)
+    {
+        mat.albedo = texture;
+        // mat.uvScaleOffset[0] = 0.1f;
+        // mat.uvScaleOffset[1] = 0.1f;
+        mat.features = mat.features | DefaultMaterial::Features::MAINTAIN_UV_DENSITY;
+    }
 
     return scene;
 }

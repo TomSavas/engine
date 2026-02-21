@@ -1,1 +1,3 @@
 const float PI = 3.1415926535897932384626433832795;
+const float FLT_MAX = 3.402823466e+38;
+const float FLT_MIN = 1.175494351e-38;

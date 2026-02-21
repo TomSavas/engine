@@ -44,7 +44,7 @@ struct std::hash<DefaultMaterial>
     std::size_t operator()(const DefaultMaterial& v) const noexcept
     {
         auto hash = static_cast<u64>(v.raw[0]);
-        for (u32 i = 1; i < 11; i++)
+        for (u32 i = 1; i < std::size(v.raw); i++)
         {
             hash ^= static_cast<u64>(v.raw[i]) + static_cast<u64>(0x9e3779b9) + (hash << 6) + (hash >> 2);
         }

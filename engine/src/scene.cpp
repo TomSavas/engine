@@ -840,6 +840,7 @@ auto Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<gl
                 .metallicRoughnessTexture = loadTexture(backend, model, pbr.metallicRoughnessTexture.index),
                 .bumpTexture = BindlessResources::kWhite,
                 .baseColor = {pbr.baseColorFactor[0], pbr.baseColorFactor[1], pbr.baseColorFactor[2], pbr.baseColorFactor[3]},
+                .uvScaleOffset = {1.f, 1.f, 0.f, 0.f},
                 .features = DefaultMaterial::Features::DEFAULT,
                 .padding = 0,
             }

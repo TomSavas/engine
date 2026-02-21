@@ -44,6 +44,7 @@ struct DefaultMaterial
         NORMAL_MAPPING = 1 << 2,
         PARALLAX = 1 << 3,
         HIGHLIGHT = 1 << 4,
+        MAINTAIN_UV_DENSITY = 1 << 5,
         ALL = ~(u64)0,
 
         DEFAULT = LIT | NORMAL_MAPPING | PARALLAX,
@@ -58,10 +59,13 @@ struct DefaultMaterial
             u32 metallicRoughnessTexture;
             u32 bumpTexture;
             f32 baseColor[4];
+            f32 uvScaleOffset[4];
             Features features;
             u64 padding;
+            // f32 uvScaleOffset[4];
         };
-        f32 raw[12];
+        f32 raw[16];
+        // f32 raw[12];
     };
 };
 

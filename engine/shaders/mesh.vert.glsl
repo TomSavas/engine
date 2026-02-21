@@ -37,6 +37,7 @@ void main()
 	gl_Position = scene.proj * scene.view * model * vec4(vert.position.xyz, 1.f);
 
     vsOut.materialIndex = int(instance.material.x);
+    const DefaultMaterial material = constants.materials.materials[vsOut.materialIndex];
 
     mat3 normalRecalculationMatrix = transpose(inverse(mat3(model)));
 
@@ -49,7 +50,13 @@ void main()
     vsOut.tangentCameraPos = transpose(vsOut.tbn) * scene.cameraPos.xyz;
     vsOut.tangentFragPos = transpose(vsOut.tbn) * (model * vert.position).xyz;
 
-    vsOut.uv = vert.uv.xy;
+    vsOut.uv = fma(vert.uv.xy, material.uvScaleOffset.xy, material.uvScaleOffset.zw);
+    if ((uint(material.features.x) & MAINTAIN_UV_DENSITY) != 0)
+    {
+    	vsOut.uv *= vec2(model[0][0], model[1][1]);
+	}
+
+    // vsOut.uv = vert.uv.xy;
     vsOut.viewPos = (scene.view * model * vec4(vert.position.xyz, 1.f)).xyz;
     vsOut.pos = (model * vec4(vert.position.xyz, 1.f)).xyz;
 }

@@ -199,6 +199,58 @@ auto sphereModelData() -> Models::ModelData
     return data;
 }
 
+auto planeModelData() -> Models::ModelData
+{
+    Models::ModelData data;
+    data.vertices.insert(data.vertices.begin(),
+        {
+            Vertex
+            {
+                .pos = {-0.5f, 0.f, 0.5f, 1.f},
+                .uv = {0.f, 1.f},
+                .normal = {0.f, 1.f, 0.f, 0.f},
+                .tangent = {1.f, 0.f, 0.f, 0.f},
+            },
+            Vertex
+            {
+                .pos = {0.5f, 0.f, 0.5f, 1.f},
+                .uv = {1.f, 1.f},
+                .normal = {0.f, 1.f, 0.f, 0.f},
+                .tangent = {1.f, 0.f, 0.f, 0.f},
+            },
+            Vertex
+            {
+                .pos = {0.5f, 0.f, -0.5f, 1.f},
+                .uv = {1.f, 0.f},
+                .normal = {0.f, 1.f, 0.f, 0.f},
+                .tangent = {1.f, 0.f, 0.f, 0.f},
+            },
+            Vertex
+            {
+                .pos = {-0.5f, 0.f, -0.5f, 1.f},
+                .uv = {0.f, 0.f},
+                .normal = {0.f, 1.f, 0.f, 0.f},
+                .tangent = {1.f, 0.f, 0.f, 0.f},
+            },
+        });
+    data.indices.insert(data.indices.begin(),
+        {
+            0, 1, 3,
+            1, 2, 3,
+        });
+
+    for (const auto& vertex : data.vertices)
+    {
+        data.hash ^= std::hash<Vertex>{}(vertex) + static_cast<u64>(0x9e3779b9) + (data.hash << 6) + (data.hash >> 2);
+    }
+    for (const auto& index : data.indices)
+    {
+        data.hash ^= static_cast<u64>(index) + static_cast<u64>(0x9e3779b9) + (data.hash << 6) + (data.hash >> 2);
+    }
+
+    return data;
+}
+
 auto blankMat(std::array<f32, 4> color) -> DefaultMaterial
 {
     return DefaultMaterial {
@@ -208,6 +260,7 @@ auto blankMat(std::array<f32, 4> color) -> DefaultMaterial
         .bumpTexture = BindlessResources::kWhite,
         .baseColor = {color[0], color[1], color[2], color[3]},
         // .features = DefaultMaterial::Features::ALL,
+        .uvScaleOffset = {1.f, 1.f, 0.f, 0.f},
         .features = DefaultMaterial::Features::WIREFRAME,
     };
 }
@@ -283,4 +336,49 @@ auto debugDrawSphere(Scene& scene, glm::vec3 center, glm::vec3 scale, glm::vec3 
         node.instance = instanceHandles.back();
     }
     
+}
+
+auto debugDrawPlane(Scene& scene, glm::vec3 center, glm::vec3 scale, glm::vec3 color) -> SceneGraph::NodeHandle
+{
+    std::array mat {
+        DefaultMaterial {
+            .albedo = BindlessResources::kError,
+            .normalTexture = BindlessResources::kWhite,
+            .metallicRoughnessTexture = BindlessResources::kWhite,
+            .bumpTexture = BindlessResources::kWhite,
+            .baseColor = {1.f, 1.f, 1.f, 1.f},
+            .uvScaleOffset = {1.f, 1.f, 0.f, 0.f},
+            .features = DefaultMaterial::Features::LIT,
+        }
+    };
+    const auto materials = addMaterials<DefaultMaterial>(scene.backend, scene.materials, mat);
+
+    std::array models = {
+        planeModelData()
+    };
+    std::array modelDebugs = {
+        Models::ModelDebug{"plane"}
+    };
+    const auto modelHandles = loadModels(scene.backend, scene.models, models, modelDebugs);
+
+    glm::mat4 transform = glm::scale(glm::translate(glm::mat4(1.f), center), scale);
+    std::array instances {
+        Models::InstanceData {
+                .transform = transform,
+                .material = glm::vec4(materials.back()),
+        }
+    };
+    const auto instanceHandles = addInstances(scene.backend, scene.models, modelHandles.back(), instances);
+
+    std::vector<SceneGraph::NodeHandle> rootHandle {SceneGraph::kRootHandle};
+
+    auto nodeHandle = scene.sceneGraph.addEmptyChildNodes(rootHandle).back();
+    auto& node = scene.sceneGraph.nodes[nodeHandle];
+    node.localTransform = glm::mat4(1.f);
+    node.globalTransform = transform;
+    node.dirty = SceneGraph::NewNode::TransformDirtiness::LOCAL_DIRTY;
+    node.model = modelHandles.back();
+    node.instance = instanceHandles.back();
+
+    return nodeHandle;
 }
