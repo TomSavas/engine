@@ -65,8 +65,6 @@ struct WorldRenderer
     std::optional<BlurRenderer> blur;
     std::optional<BloomRenderer> bloom;
 
-    std::optional<ImguiRenderer> imgui;
-
     RenderGraphResource<BindlessTexture> output;
 
     explicit WorldRenderer(VulkanBackend& backend) : backend(backend) {}
@@ -86,26 +84,16 @@ struct WorldRenderer
             1.f / 20.f);
         auto [colorOutput, normal, positions, reflections] = opaqueForwardPass(opaque, backend, graph, culledDraws, depthMap, cascadeData, shadowMap, lightData, perModelData);
         output = ssrPass(ss, blur, backend, graph, colorOutput, normal, positions, reflections);
-        // output = atmospherePass(atmosphere, backend, graph, depthMap, output);
+        output = atmospherePass(atmosphere, backend, graph, depthMap, output);
         output = bloomPass(bloom, blur, backend, graph, output);
         // output = colorOutput;
         //output = reinhardTonemapPass(tonemapper, backend, graph, output);
         //smaaPass(antiAliaser, backend, graph, output);
 
-        // output = graph.addPass(imguiPass);
-
         if (debugUI.enabled)
         {
-            output = imguiPass(imgui, backend, graph, output);
+            imguiPass(backend, graph, output);
         }
-
-        // if (debugUI.enabled)
-        // {
-        //     // Renders directly to swapchain, no resources required
-        //     // TODO: this should be moved out of the backend, it doesn't need to know about debugUI
-        //     // but for that to happen we need to be able to get swapchain from the render graph
-        //     backend.addImguiPass(graph, output, debugUI);
-        // }
         else
         {
             // TODO: perhaps this can be removed once the rg is smart enough for marking the output buffer

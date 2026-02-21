@@ -6,12 +6,6 @@
 
 class VulkanBackend;
 
-struct ImguiRenderer
-{  
-    BindlessTexture composite;
-};
-
-[[nodiscard]]
-auto imguiPass(std::optional<ImguiRenderer>& imguiRenderer, VulkanBackend& backend,
-    RenderGraph& graph, RenderGraphResource<BindlessTexture> finalOutput)
-    -> RenderGraphResource<BindlessTexture>;
+auto imguiPass(VulkanBackend& backend, RenderGraph& graph,
+    RenderGraphResource<BindlessTexture> output)
+    -> void;

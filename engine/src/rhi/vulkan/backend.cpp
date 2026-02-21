@@ -616,22 +616,21 @@ auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
                     // std::println("image memory barriers: {}", node.imageBarriers.size());
                 }
 
+                if (pass.prepare)
+                {
+                    pass.prepare.value()(renderCtx);
+                }
+
+                // ZoneScopedN("Render using pipeline");
+                if (pass.beginRendering)
+                {
+                    ZoneScopedN("Begin rendering");
+                    pass.beginRendering.value()(renderCtx);
+                }
+
                 if (pass.pipeline)
                 {
-                    if (pass.prepare)
-                    {
-                        pass.prepare.value()(renderCtx);
-                    }
-
-                    ZoneScopedN("Render using pipeline");
-                    if (pass.beginRendering)
-                    {
-                        ZoneScopedN("Begin rendering");
-                        pass.beginRendering.value()(renderCtx);
-                    }
-
                     vkCmdBindPipeline(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipeline);
-
                     // TEMP: each renderpass should specify this themselves
                     // if (node.pass.debugName != "CSM pass" && node.pass.debugName != "Tiled light culling pass")
                     if (node.pass.debugName != "CSM pass")
@@ -639,25 +638,20 @@ auto VulkanBackend::render(const Frame& frame, CompiledRenderGraph& graph, Scene
                         vkCmdBindDescriptorSets(cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 0,
                             1, &sceneDescriptorSet, 0, nullptr);
                     }
-
-                    vkCmdSetViewport(cmd, 0, 1, &viewport);
-                    vkCmdSetScissor(cmd, 0, 1, &scissor);
-
-                    {
-                        ZoneScopedN("Draw");
-                        pass.draw(renderCtx, pass);
-                    }
-
-                    if (pass.beginRendering)
-                    {
-                        ZoneScopedN("End rendering");
-                        vkCmdEndRendering(cmd);
-                    }
                 }
-                else
+
+                vkCmdSetViewport(cmd, 0, 1, &viewport);
+                vkCmdSetScissor(cmd, 0, 1, &scissor);
+
                 {
-                    ZoneScopedN("Draw without pipeline");
+                    ZoneScopedN("Draw");
                     pass.draw(renderCtx, pass);
+                }
+
+                if (pass.beginRendering)
+                {
+                    ZoneScopedN("End rendering");
+                    vkCmdEndRendering(cmd);
                 }
 
                 vkCmdEndDebugUtilsLabelEXT(cmd);
@@ -721,63 +715,6 @@ auto VulkanBackend::addOutputBlitPass(RenderGraph& graph, RenderGraphResource<Bi
         vkutil::image::blitImageToImage(ctx.cmd, outputTexture.image.image,
             VkExtent2D{outputTexture.image.extent.width, outputTexture.image.extent.height},
             ctx.swapchain.image, VkExtent2D{rawResolution.x, rawResolution.y});
-    };
-}
-
-auto VulkanBackend::addImguiPass(RenderGraph& graph, RenderGraphResource<BindlessTexture> output, DebugUI& debugUI) -> void
-{
-    auto& pass = createPass(graph);
-    pass.pass.debugName = std::format("Imgui pass");
-
-    output = readResource<BindlessTexture>(graph, pass, output, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-    pass.pass.draw = [this, output, &debugUI](const RenderContext& ctx, RenderPass&)
-    {
-        const auto bindlessOutput = *getResource<BindlessTexture>(ctx.graph, output);
-        const auto& outputTexture = bindlessResources->getTexture(bindlessOutput);
-
-        addDebugUI(debugUI, OUTPUT, [&]()
-        {
-            // For some reason there is a border around the image that I can't get rid of.
-            // Just force the cursor position and adjust the size
-            const auto padding = ImGui::GetCursorPos();
-            const auto windowSize = ImGui::GetWindowContentRegionMax();
-            const auto size = ImVec2(windowSize.x + padding.x, windowSize.y + padding.y);
-
-            imguiPos = ImGui::GetWindowPos();
-            imguiSize = size;
-
-            ImGui::SetCursorPos(ImVec2(0, 0));
-            ImGui::Image(*outputTexture.imguiDescriptorSet, size);
-        }, true);
-
-        debugDrawBindlessTextures(bindlessResources.value());
-        drawDebugUI(debugUI, *this, ctx.scene, 0.16);
-        debugUI.fns.clear();
-
-        ImGui::Render();
-
-        // TODO: perhaps we can move swapchain as a resource into render graph
-        vkutil::image::transitionImage(ctx.cmd, ctx.swapchain.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-        VkRenderingAttachmentInfo colorAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(
-            ctx.swapchain.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        VkRenderingInfo renderingInfo = vkutil::init::renderingInfo(
-            ctx.swapchain.size, &colorAttachmentInfo, 1, nullptr);
-
-        // TODO: we should probably leverage render graph for these transitions. However, currently we cannot identify
-        // images + there are some resources that are not injected into render graph resource system.
-        // Quite hacky, but needed for debug capabilities
-        for (auto& texture : bindlessResources->textures)
-        {
-            vkutil::image::transitionImage(ctx.cmd, texture.image.image, texture.layout,
-                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, texture.image.format == VK_FORMAT_D32_SFLOAT);
-        }
-
-        vkCmdBeginRendering(ctx.cmd, &renderingInfo);
-        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), ctx.cmd);
-        vkCmdEndRendering(ctx.cmd);
     };
 }
 
