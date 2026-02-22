@@ -48,3 +48,27 @@ float cookTorranceBDRF()
 {
     return 0.f;
 }
+
+vec3 pbrLight(vec3 lightDir, float intensity, vec3 cameraDir, vec3 n, float shadow, vec3 albedo,vec2 metallicRoughness, vec3 f0)
+{
+    vec3 L = lightDir;
+    vec3 H = normalize(cameraDir + L);
+    vec3 radiance     = vec3(1.f - shadow) * intensity;
+
+    // cook-torrance brdf
+    float NDF = trowbridgeReitzGgx(n, H, metallicRoughness.y);
+    float G   = smithGeometry(n, cameraDir, L, metallicRoughness.y);
+    vec3 F    = fresnelSchlick(max(dot(H, cameraDir), 0.0), f0);
+
+    vec3 kS = F;
+    vec3 kD = vec3(1.0) - kS;
+    kD *= 1.0 - metallicRoughness.x;
+
+    vec3 numerator    = NDF * G * F;
+    float denominator = 4.0 * max(dot(n, cameraDir), 0.0) * max(dot(n, L), 0.0) + 0.0001;
+    vec3 specular     = numerator / denominator;
+
+    // add to outgoing radiance Lo
+    float NdotL = max(dot(n, L), 0.0);
+    return (kD * albedo / PI + specular) * radiance * NdotL;
+}

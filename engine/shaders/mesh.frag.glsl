@@ -202,29 +202,40 @@ void main()
         Lo += (kD * albedo / PI + specular) * radiance * NdotL;
     }
 
+    Lo += pbrLight(
+        vec3(-scene.lightDirIntensity.x, -scene.lightDirIntensity.y, scene.lightDirIntensity.z),
+        scene.lightDirIntensity.w,
+        cameraDir,
+        n,
+        shadow,
+        albedo,
+        metallicRoughness,
+        f0
+    );
+
     // Global directional light
-    {
-        vec3 L = vec3(-scene.lightDirIntensity.x, -scene.lightDirIntensity.y, scene.lightDirIntensity.z);
-        vec3 H = normalize(cameraDir + L);
-        vec3 radiance     = vec3(1.f - shadow) * scene.lightDirIntensity.w;
+    // {
+    //     vec3 L = vec3(-scene.lightDirIntensity.x, -scene.lightDirIntensity.y, scene.lightDirIntensity.z);
+    //     vec3 H = normalize(cameraDir + L);
+    //     vec3 radiance     = vec3(1.f - shadow) * scene.lightDirIntensity.w;
 
-        // cook-torrance brdf
-        float NDF = trowbridgeReitzGgx(n, H, metallicRoughness.y);
-        float G   = smithGeometry(n, cameraDir, L, metallicRoughness.y);
-        vec3 F    = fresnelSchlick(max(dot(H, cameraDir), 0.0), f0);
+    //     // cook-torrance brdf
+    //     float NDF = trowbridgeReitzGgx(n, H, metallicRoughness.y);
+    //     float G   = smithGeometry(n, cameraDir, L, metallicRoughness.y);
+    //     vec3 F    = fresnelSchlick(max(dot(H, cameraDir), 0.0), f0);
 
-        vec3 kS = F;
-        vec3 kD = vec3(1.0) - kS;
-        kD *= 1.0 - metallicRoughness.x;
+    //     vec3 kS = F;
+    //     vec3 kD = vec3(1.0) - kS;
+    //     kD *= 1.0 - metallicRoughness.x;
 
-        vec3 numerator    = NDF * G * F;
-        float denominator = 4.0 * max(dot(n, cameraDir), 0.0) * max(dot(n, L), 0.0) + 0.0001;
-        vec3 specular     = numerator / denominator;
+    //     vec3 numerator    = NDF * G * F;
+    //     float denominator = 4.0 * max(dot(n, cameraDir), 0.0) * max(dot(n, L), 0.0) + 0.0001;
+    //     vec3 specular     = numerator / denominator;
 
-        // add to outgoing radiance Lo
-        float NdotL = max(dot(n, L), 0.0);
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
-    }
+    //     // add to outgoing radiance Lo
+    //     float NdotL = max(dot(n, L), 0.0);
+    //     Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+    // }
 
     vec3 ambient = vec3(0.02) * albedo;
     vec3 color = ambient + Lo;
@@ -236,6 +247,7 @@ void main()
     // }
 
     // SSR v2.0
+    if (false)
     {
         const mat4 mvp = scene.proj * scene.view;
         const float maxDist = 10.f;

@@ -7,7 +7,7 @@
 
 struct Camera
 {
-    f32 verticalFov = M_PI / 4;
+    f32 verticalFov = M_PI / 6;
 
     f32 moveSpeed = 7.f;
     f32 rotationSpeed = 0.002f;

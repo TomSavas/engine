@@ -10,6 +10,7 @@
 #include "passes/screenSpace.h"
 #include "passes/sceneData.h"
 #include "passes/imgui.h"
+#include "passes/sdf.h"
 #include "renderGraph.h"
 #include "rhi/vulkan/backend.h"
 #include "scene.h"
@@ -57,6 +58,7 @@ struct WorldRenderer
     std::optional<ShadowRenderer> shadows;
     std::optional<ForwardOpaqueRenderer> opaque;
     std::optional<LightCulling> lightCulling;
+    std::optional<SdfRenderer> sdf;
 
     // Postpro fx
     std::optional<AtmosphereRenderer> atmosphere;
@@ -64,7 +66,7 @@ struct WorldRenderer
     std::optional<ScreenSpaceRenderer> ss;
     std::optional<BlurRenderer> blur;
     std::optional<BloomRenderer> bloom;
-
+    
     RenderGraphResource<BindlessTexture> output;
 
     explicit WorldRenderer(VulkanBackend& backend) : backend(backend) {}
@@ -83,8 +85,9 @@ struct WorldRenderer
         auto lightData = tiledLightCullingPass(lightCulling, backend, graph, scene, depthMap,
             1.f / 20.f);
         auto [colorOutput, normal, positions, reflections] = opaqueForwardPass(opaque, backend, graph, culledDraws, depthMap, cascadeData, shadowMap, lightData, perModelData);
+        colorOutput = sdfGeometryPass(sdf, backend, graph, colorOutput);
         output = ssrPass(ss, blur, backend, graph, colorOutput, normal, positions, reflections);
-        output = atmospherePass(atmosphere, backend, graph, depthMap, output);
+        // output = atmospherePass(atmosphere, backend, graph, depthMap, output);
         output = bloomPass(bloom, blur, backend, graph, output);
         // output = colorOutput;
         //output = reinhardTonemapPass(tonemapper, backend, graph, output);
@@ -138,9 +141,9 @@ i32 main()
     // Scene scene = sponzaScene(*backend);
     // Scene scene = instancingTestScene(*backend);
 
-    debugDrawCube(scene, glm::vec3(0.f, 2.5f, 0.f), glm::vec3(1.f), glm::vec3(1.f, 0.f, 0.f));
-    debugDrawCube(scene, glm::vec3(0.f, 5.5f, 0.f), glm::vec3(1.f), glm::vec3(1.f, 0.f, 0.f));
-    debugDrawCube(scene, glm::vec3(1.f, 2.f, 3.f), glm::vec3(1.f), glm::vec3(1.f, 0.f, 0.f));
+    // debugDrawCube(scene, glm::vec3(0.f, 2.5f, 0.f), glm::vec3(1.f), glm::vec3(1.f, 0.f, 0.f));
+    // debugDrawCube(scene, glm::vec3(0.f, 5.5f, 0.f), glm::vec3(1.f), glm::vec3(1.f, 0.f, 0.f));
+    // debugDrawCube(scene, glm::vec3(1.f, 2.f, 3.f), glm::vec3(1.f), glm::vec3(1.f, 0.f, 0.f));
 
     WorldRenderer worldRenderer(*backend);
 

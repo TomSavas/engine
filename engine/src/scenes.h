@@ -88,8 +88,8 @@ auto physicsZoo(VulkanBackend& backend) -> Scene
 {
     Scene scene = emptyScene(backend);
     
-    scene.materials = initMaterials<DefaultMaterial>(backend, 8192);
-    scene.models = initModels(backend, 4096 * 10000, 4096 * 10000, 8192);
+    scene.materials = initMaterials<DefaultMaterial>(backend, 1);
+    scene.models = initModels(backend, 4096, 4096, 1);
 
     RawTexture raw {};
     i32 components;
