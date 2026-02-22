@@ -22,6 +22,6 @@ struct SdfRenderGraphData
 
 [[nodiscard]]
 auto sdfGeometryPass(std::optional<SdfRenderer>& sdfRenderer, VulkanBackend& backend,
-    RenderGraph& graph, RenderGraphResource<BindlessTexture> output)
+    RenderGraph& graph, RenderGraphResource<BindlessTexture> output,  RenderGraphResource<BindlessTexture> depth)
     // -> SdfRenderGraphData;
     -> RenderGraphResource<BindlessTexture>;

@@ -85,9 +85,9 @@ struct WorldRenderer
         auto lightData = tiledLightCullingPass(lightCulling, backend, graph, scene, depthMap,
             1.f / 20.f);
         auto [colorOutput, normal, positions, reflections] = opaqueForwardPass(opaque, backend, graph, culledDraws, depthMap, cascadeData, shadowMap, lightData, perModelData);
-        colorOutput = sdfGeometryPass(sdf, backend, graph, colorOutput);
+        colorOutput = sdfGeometryPass(sdf, backend, graph, colorOutput, depthMap);
         output = ssrPass(ss, blur, backend, graph, colorOutput, normal, positions, reflections);
-        // output = atmospherePass(atmosphere, backend, graph, depthMap, output);
+        output = atmospherePass(atmosphere, backend, graph, depthMap, output);
         output = bloomPass(bloom, blur, backend, graph, output);
         // output = colorOutput;
         //output = reinhardTonemapPass(tonemapper, backend, graph, output);

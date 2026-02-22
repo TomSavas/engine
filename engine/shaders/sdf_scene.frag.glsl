@@ -10,6 +10,8 @@
 #include "pbr.glsl"
 #include "debug_utils.glsl"
 
+layout(depth_any) out float gl_FragDepth;
+
 layout(set = 1, binding = 0) uniform sampler2D textures[];
 
 // layout(push_constant) uniform Constants
@@ -21,74 +23,88 @@ layout (location = 1) in vec3 pos;
 
 layout (location = 0) out vec4 outColor;
 
-float de( vec3 p0 ){
-vec4 p = vec4(p0, 1.);
-for(int i = 0; i < 8; i++){
-  p.xyz = mod(p.xyz-1.,2.)-1.;
-  p*=1.4/dot(p.xyz,p.xyz);
-}
-return (length(p.xz/p.w)*0.25);
+float de(vec3 p0){
+    vec4 p = vec4(p0, 1.f);
+    for (int i = 0; i < 8; i++){
+        p.xyz = mod(p.xyz - 1.f, 2.f) - 1.f;
+        p *= 1.4f / dot(p.xyz, p.xyz);
+    }
+    return (length(p.xz / p.w) * 0.25f);
 }
 
-sdfResult testScene(vec3 p)
+// float de ( vec3 p ) {
+// p = mod( p, 2.0f ) - 1.0f;
+// p = abs( p ) - 1.0f;
+// if ( p.x < p.z ) p.xz = p.zx;
+// if ( p.y < p.z ) p.yz = p.zy;
+// if ( p.x < p.y ) p.xy = p.yx;
+// float s = 1.0f;
+// for ( int i = 0; i < 10; i++ ) {
+//   float r2 = 2.0f / clamp( dot( p, p ), 0.1f, 1.0f );
+//   p = abs( p ) * r2 - vec3( 0.6f, 0.6f, 3.5f );
+//   s *= r2;
+// }
+// return length( p ) / s;
+// }
+
+sdfResult fractal(vec3 p)
 {
     sdfResult r;
     float scale = 100.f;
     r.dist = de(p/scale) * scale;
-    r.color = vec3(1.f);
+    r.color = heatmapGradient(fract(dot(p,p) / 50.f));
     return r;
-        
-    // sdfResult s = sphere(p, 5.f * (sin(scene.time.x) * 0.5 + 0.5 + 0.25));
-    // sdfResult b = box(p - vec3(3.f, 0.f, 0.f), vec3(5.f, 2.f, 2.f));
-
-    // // float mixFactor = sdfSmoothUnion(s, b, 0.2f);
-    // // float mixFactor = sdfUnion(s, b);
-
-    // float width = 0.5f;
-    // float factor = clamp(0.5 + (s.dist - b.dist) / (2.0 * width), 0.0, 1.0);
-
-    // sdfResult r;
-    // // r.dist = mix(s.dist, b.dist, mixFactor);
-    // r.dist = sdfSmoothUnion(s, b, 0.5f);
-    // r.normal = mix(s.normal, b.normal, factor);
-    // r.color = mix(vec3(1.f, 0.f, 0.f), vec3(0.f, 0.f, 1.f), factor);
-
-    // {
-    //     s = sphere(p - vec3(9, cos(scene.time.x) * 5.f, 2.f), 1);
-    //     width *= 2.f;
-    //     factor = clamp(0.5 + (r.dist - s.dist) / (2.0 * width), 0.0, 1.0);
-
-    //     // sdfResult r;
-    //     // r.dist = mix(s.dist, b.dist, mixFactor);
-    //     r.dist = sdfSmoothUnion(r, s, 0.5f);
-    //     r.normal = mix(r.normal, s.normal, factor);
-    //     r.color = mix(r.color, vec3(0.f, 1.f, 0.f), factor);
-    // }
-
-    // {
-    //     s = cylinder(p + vec3(2.f, 0.f, 0.f) - vec3(10.f, 0.f, 0.f) * (sin(scene.time.x * PI) * 0.5f + 0.5f), vec3(0.f, 0.f, -7.5f), vec3(0.f, 0.f, 15.f), 0.5f);
-    //     width /= 2.f;
-    //     factor = clamp(0.5 + (r.dist - s.dist) / (2.0 * width), 0.0, 1.0);
-
-    //     // r.dist = sdfSubtraction(s, r);
-    //     r.dist = sdfSmoothSubtraction(s, r, 0.25f);
-    //     // r.dist = sdfUnion(r, s);
-    //     r.normal = mix(r.normal, s.normal, factor);
-    //     r.color = mix(r.color, vec3(1.f, 1.f, 1.f), factor);
-    // }
-
-    
-    // return r;
 }
 
-vec3 calcNormal(vec3 p) // for function f(p)
+sdfResult testScene(vec3 p)
 {
-    const float h = 0.0001; // replace by an appropriate value
+    // sdfResult s = sphere(p, 5.f);
+    // s.color = vec3(1.f, 0.f, 0.f);
+    // return s;
+    sdfResult s = sphere(p, 5.f * (sin(scene.time.x) * 0.5 + 0.5 + 0.25));
+    sdfResult b = box(p - vec3(3.f, 0.f, 0.f), vec3(5.f, 2.f, 2.f));
+
+    float width = 0.5f;
+    float factor = clamp(0.5 + (s.dist - b.dist) / (2.0 * width), 0.0, 1.0);
+
+    sdfResult r;
+    r.dist = sdfSmoothUnion(s, b, 0.5f);
+    r.normal = mix(s.normal, b.normal, factor);
+    r.color = mix(vec3(1.f, 0.f, 0.f), vec3(0.f, 0.f, 1.f), factor);
+
+    {
+        s = sphere(p - vec3(9, cos(scene.time.x) * 5.f, 2.f), 1);
+        width *= 2.f;
+        factor = clamp(0.5 + (r.dist - s.dist) / (2.0 * width), 0.0, 1.0);
+
+        r.dist = sdfSmoothUnion(r, s, 0.5f);
+        r.normal = mix(r.normal, s.normal, factor);
+        r.color = mix(r.color, vec3(0.f, 1.f, 0.f), factor);
+    }
+
+    {
+        s = cylinder(p + vec3(2.f, 0.f, 0.f) - vec3(10.f, 0.f, 0.f) * (sin(scene.time.x * PI) * 0.5f + 0.5f), vec3(0.f, 0.f, -7.5f), vec3(0.f, 0.f, 15.f), 0.5f);
+        width /= 2.f;
+        factor = clamp(0.5 + (r.dist - s.dist) / (2.0 * width), 0.0, 1.0);
+
+        r.dist = sdfSmoothSubtraction(s, r, 0.25f);
+        r.normal = mix(r.normal, s.normal, factor);
+        r.color = mix(r.color, vec3(1.f, 1.f, 1.f), factor);
+    }
+
+    return r;
+}
+
+#define SCENE fractal
+
+vec3 calcNormal(vec3 p)
+{
+    const float h = 0.0001;
     const vec2 k = vec2(1,-1);
-    return normalize( k.xyy*testScene( p + k.xyy*h ).dist + 
-                      k.yyx*testScene( p + k.yyx*h ).dist + 
-                      k.yxy*testScene( p + k.yxy*h ).dist + 
-                      k.xxx*testScene( p + k.xxx*h ).dist );
+    return normalize( k.xyy*SCENE( p + k.xyy*h ).dist + 
+                      k.yyx*SCENE( p + k.yyx*h ).dist + 
+                      k.yxy*SCENE( p + k.yxy*h ).dist + 
+                      k.xxx*SCENE( p + k.xxx*h ).dist );
 }
 
 sdfResult raymarch(vec3 initialPos, vec3 dir)
@@ -102,11 +118,12 @@ sdfResult raymarch(vec3 initialPos, vec3 dir)
     float t = 0;
     for (int i = 0; i < MAX_STEPS && t < MAX_DIST; ++i)
     {
-        result = testScene(pos);
+        result = SCENE(pos);
         if (result.dist < 0.001)
         {
             result.normal = calcNormal(pos);
-            result.color = heatmapGradient(fract(t * 5.f));
+            // result.color = heatmapGradient(fract(t * 5.f));
+            result.dist = t;
             return result;       
         }
         t += result.dist;
@@ -120,11 +137,13 @@ sdfResult raymarch(vec3 initialPos, vec3 dir)
 
 void main()
 {
-    vec4 rayClip = vec4(uv, -1.0, 1.0);
-    
-    vec4 rayEye = inverse(scene.proj) * rayClip;
-    rayEye = vec4(rayEye.xy, -1.0, 0.0);
-    vec3 rayDir = normalize((inverse(scene.view) * rayEye).xyz);
+    vec4 rayEye = inverse(scene.view) * inverse(scene.proj) * vec4(uv * 2.0 - 1.f, 1.0, 1.0);
+    vec3 a = rayEye.xyz / rayEye.w;
+
+    vec3 rayDir = normalize(a - scene.cameraPos.xyz);
+
+    // vec4 target = inverse(scene.proj) * vec4(uv * 2.0 - 1.0, 1.0, 1.0);
+    // vec3 rayDir = (inverse(scene.view) * vec4(normalize(target.xyz), 0.0)).xyz;
 
     sdfResult result = raymarch(scene.cameraPos.xyz, rayDir);
 
@@ -145,9 +164,13 @@ void main()
         );
         c = c + result.color * 0.005;
         outColor = vec4(c, 1.f);
+
+        vec4 point = scene.proj * scene.view * vec4(scene.cameraPos.xyz + rayDir * result.dist, 1.f);
+        float depth = point.z / point.w;
+        gl_FragDepth = clamp(depth, 0.f, 1.f);
     }
     else
     {
-        outColor = vec4(0.f, 0.f, 0.f, 1.f);
+        discard;
     }
 }

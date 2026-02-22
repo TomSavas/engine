@@ -108,7 +108,7 @@ auto physicsZoo(VulkanBackend& backend) -> Scene
         )
     );
 
-    auto handle = debugDrawPlane(scene, glm::vec3(0.f, -10.f, 0.f), glm::vec3(100.f), glm::vec3(1.f, 0.f, 0.f));
+    auto handle = debugDrawPlane(scene, glm::vec3(0.f, -2.f, 0.f), glm::vec3(100.f), glm::vec3(1.f, 0.f, 0.f));
     auto sceneNode = scene.sceneGraph.nodes[handle];
     auto& instance = scene.models.instances[*sceneNode.model][*sceneNode.instance];
     auto& mat = scene.materials.materials[static_cast<u32>(instance.material.x)];

@@ -9,6 +9,7 @@ layout(push_constant) uniform Constants
 };
 
 layout (location = 0) in vec2 uv;
+layout (location = 1) in vec3 pos;
 layout (location = 0) out vec4 color;
 
 #include "scene.glsl"

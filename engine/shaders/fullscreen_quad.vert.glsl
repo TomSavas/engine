@@ -25,10 +25,10 @@ void main()
 		vec2(0.f, 2.f)
 	);
 
-	vec4 ndcPos = vec4(positions[gl_VertexIndex], 0.99f, 1.0f);
+	vec4 ndcPos = vec4(positions[gl_VertexIndex], fullscreenQuadDepth.x, 1.0f);
 	gl_Position = ndcPos;
 
 	uv = uvs[gl_VertexIndex];
-	vec4 p = ndcPos * inverse(scene.proj * scene.view);
+	vec4 p = inverse(scene.view) * inverse(scene.proj) * ndcPos;
 	pos = p.xyz / p.w;
 }
