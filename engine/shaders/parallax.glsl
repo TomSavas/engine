@@ -93,8 +93,7 @@ vec2 parallaxOcclusionMap(vec2 vertUv, int bumpMapIndex, vec3 tangentCameraPos, 
 
 vec2 parallaxOcclusionMapBinarySearch(vec2 vertUv, int bumpMapIndex, vec3 tangentCameraPos, vec3 tangentFragPos)
 {
-	// const float heightScale = 0.025f;
-	const float heightScale = 0.25f;
+	const float heightScale = 0.025f;
 	vec3 viewDir = normalize(tangentCameraPos - tangentFragPos);
 
     const float numLayers = 8.f;

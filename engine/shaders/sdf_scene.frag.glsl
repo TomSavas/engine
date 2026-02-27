@@ -58,6 +58,8 @@ sdfResult fractal(vec3 p)
 
 sdfResult testScene(vec3 p)
 {
+    p -= vec3(0.f, 0.f, 30.f);
+    // 
     // sdfResult s = sphere(p, 5.f);
     // s.color = vec3(1.f, 0.f, 0.f);
     // return s;
@@ -95,7 +97,7 @@ sdfResult testScene(vec3 p)
     return r;
 }
 
-#define SCENE fractal
+#define SCENE testScene
 
 vec3 calcNormal(vec3 p)
 {

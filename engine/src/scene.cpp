@@ -828,12 +828,62 @@ auto Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<gl
         tinygltf::Material& material = model.materials[primitive.material];
         tinygltf::PbrMetallicRoughness& pbr = material.pbrMetallicRoughness;
 
+        auto bump = BindlessResources::kWhite;
+        if (material.normalTexture.index != -1)
+        {
+            tinygltf::Texture& texture = model.textures[material.normalTexture.index];
+            tinygltf::Image& normalImg = model.images[texture.source];
+
+            std::string bumpFilename = "generatedBump_" + normalImg.uri + ".png";
+
+            i32 bumpWidth = normalImg.width;
+            i32 bumpHeight = normalImg.height;
+            i32 components;
+            u8* loadRes = stbi_load(bumpFilename.c_str(), &bumpWidth, &bumpHeight, &components, STBI_rgb_alpha);
+            std::vector<u8> bumpMapData;
+            if (loadRes == nullptr)
+            {
+                std::println("Generating bump map: {}... ", bumpFilename);
+                bumpMapData = tangentNormalMapToBumpMap(normalImg.image.data(), normalImg.width, normalImg.height);
+                components = 4;
+
+                stbi_write_png(bumpFilename.c_str(), bumpHeight, bumpWidth, 4, bumpMapData.data(), 0);
+
+                loadRes = bumpMapData.data();
+            }
+            else
+            {
+                std::println("Loaded bump map: {}... ", bumpFilename);
+            }
+
+            RawTexture rawTexture {
+                .data = loadRes,
+                .size = static_cast<u32>(bumpWidth * bumpHeight * components),
+                .extent = VkExtent3D {
+                    .width = static_cast<u32>(bumpWidth),
+                    .height = static_cast<u32>(bumpHeight),
+                    .depth = 1
+                }
+            };
+            const auto mips = MipOptions::generateAll(rawTexture);
+            bump = backend.bindlessResources->addTexture(
+                backend.createTexture(
+                    bumpFilename,
+                    rawTexture,
+                    vkutil::init::defaultColorTextureCreateInfo(rawTexture.extent, mips.count(), VK_FORMAT_R8G8B8A8_UNORM),
+                    vkutil::init::defaultTextureAllocationCreateInfo(),
+                    mips,
+                    VK_IMAGE_ASPECT_COLOR_BIT
+                )
+            );
+        }
+
         std::array mats {
             DefaultMaterial {
                 .albedo = loadTexture(backend, model, pbr.baseColorTexture.index),
                 .normalTexture = loadTexture(backend, model, material.normalTexture.index),
                 .metallicRoughnessTexture = loadTexture(backend, model, pbr.metallicRoughnessTexture.index),
-                .bumpTexture = BindlessResources::kWhite,
+                .bumpTexture = bump,
                 .baseColor = {pbr.baseColorFactor[0], pbr.baseColorFactor[1], pbr.baseColorFactor[2], pbr.baseColorFactor[3]},
                 .uvScaleOffset = {1.f, 1.f, 0.f, 0.f},
                 .features = DefaultMaterial::Features::DEFAULT,
@@ -875,51 +925,6 @@ auto Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<gl
                 .instance = instanceHandles[i],
             };
         }
-
-        // instance = {
-        //     Models::InstanceData {
-        //         .transform = glm::translate(transform, glm::vec3(0.f, 0.f, 3000.f)),
-        //         .material = glm::vec4(defaultMaterials.back())
-        //     }
-        // };
-        // instanceHandle = addInstances(backend, models, modelHandle, instance);
-        
-        //     std::string bumpFilename = "generatedBump_" + normalImg.uri + ".png";
-        //     // TODO: allow specifying format
-        //     m.bumpTexture = BindlessResources::kWhite;
-
-        //     i32 bumpWidth = normalImg.width;
-        //     i32 bumpHeight = normalImg.height;
-        //     i32 components;
-        //     u8* loadRes = stbi_load(bumpFilename.c_str(), &bumpWidth, &bumpHeight, &components, STBI_rgb_alpha);
-        //     rawTexture.data = loadRes;
-        //     if (loadRes == nullptr)
-        //     {
-        //         //bumpWidth = normalImg.width;
-        //         //bumpHeight = normalImg.height;
-
-        //         //std::println("Generating bump map: {}... ", bumpFilename);
-        //         //std::vector<u8> bumpMapData = tangentNormalMapToBumpMap(normalImg.image.data(), normalImg.width,
-        //         //    normalImg.height);
-
-        //         //stbi_write_png(bumpFilename.c_str(), bumpHeight, bumpWidth, 4, bumpMapData.data(), 0);
-        //         //maybeTexture = backend.textures->loadRaw(bumpMapData.data(), bumpMapData.size(), bumpWidth,
-        //         //    bumpHeight, true, true, bumpFilename);
-        //     }
-        //     else
-        //     {
-        //         m.bumpTexture = backend.bindlessResources->addTexture(
-        //             backend.createTexture(
-        //                 bumpFilename,
-        //                 rawTexture,
-        //                 vkutil::init::defaultColorTextureCreateInfo(rawTexture.extent, mips.count(), VK_FORMAT_R8G8B8A8_UNORM),
-        //                 vkutil::init::defaultTextureAllocationCreateInfo(),
-        //                 mips,
-        //                 VK_IMAGE_ASPECT_COLOR_BIT
-        //             )
-        //         );
-        //     }
-        // }
     }
 }
 

@@ -100,8 +100,8 @@ auto zPrePass(std::optional<ZPrePassRenderer>& renderer, VulkanBackend& backend,
         vkCmdBindDescriptorSets(ctx.cmd, pass.pipeline->pipelineBindPoint, pass.pipeline->pipelineLayout, 1, 1,
             &backend.bindlessResources->bindlessTexDesc, 0, nullptr);
         vkCmdBindIndexBuffer(ctx.cmd, ctx.scene.models.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-        // vkCmdDrawIndexedIndirect(ctx.cmd, getResource<Buffer>(ctx.graph, culledDraws)->buffer, 0, ctx.scene.models.models.size(),
-        //     sizeof(VkDrawIndexedIndirectCommand));
+        vkCmdDrawIndexedIndirect(ctx.cmd, getResource<Buffer>(ctx.graph, culledDraws)->buffer, 0, ctx.scene.models.models.size(),
+            sizeof(VkDrawIndexedIndirectCommand));
     };
 
     return data;

@@ -64,7 +64,7 @@ auto initForwardOpaque(VulkanBackend& backend) -> ForwardOpaqueRenderer
             .enableAlphaBlending()
             .depthFormat(VK_FORMAT_D32_SFLOAT) // TEMP: this should be taken from bindless
             .addViewportScissorDynamicStates()
-            .enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL)
+            .enableDepthTest(false, VK_COMPARE_OP_LESS_OR_EQUAL)
             .build(),
         .color = backend.bindlessResources->addTexture(
             backend.allocateTexture(

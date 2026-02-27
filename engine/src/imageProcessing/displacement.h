@@ -9,7 +9,7 @@ auto idx(u16 x, u16 y, u16 w, u16 h, u16 componentCount, u16 component) -> u32
     return componentCount * y * w + (componentCount * x + component);
 }
 
-auto tangentNormalMapToBumpMap(u8* normal, u16 width, u16 height) -> std::vector<u8>
+auto tangentNormalMapToBumpMap(u8* normal, u16 width, u16 height, u8 iterationCount = 500) -> std::vector<u8>
 {
     // TODO: this could be done in a compute shader much faster
 
@@ -45,8 +45,7 @@ auto tangentNormalMapToBumpMap(u8* normal, u16 width, u16 height) -> std::vector
     f32 hi = -INFINITY;
 
     // Number of Poisson iterations
-    constexpr u16 N = 500;
-    for (u16 t = 0; t < N; ++t) {
+    for (u16 t = 0; t < iterationCount; ++t) {
         // Swap buffers
         f32* tmp = src;
         src = dst;

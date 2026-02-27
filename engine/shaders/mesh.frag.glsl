@@ -96,8 +96,12 @@ void main()
         }
     }
 
+    vec2 uv = fsIn.uv;
     const bool parallaxMappingEnabled = constants.enabledFeatures.y != 0.f;
-    vec2 uv = parallaxMappingEnabled ? parallaxOcclusionMapBinarySearch(fsIn.uv, int(textureIndices.w), fsIn.tangentCameraPos, fsIn.tangentFragPos) : fsIn.uv;
+    if ((uint(material.features.x) & PARALLAX) != 0 && parallaxMappingEnabled)
+    {
+        uv = parallaxOcclusionMapBinarySearch(fsIn.uv, int(textureIndices.w), fsIn.tangentCameraPos, fsIn.tangentFragPos);
+    }
 
     vec4 sampledAlbedo = texture(textures[nonuniformEXT(textureIndices.x)], uv);
     vec3 albedo = material.baseColor.rgb * sampledAlbedo.rgb;
@@ -247,7 +251,6 @@ void main()
     // }
 
     // SSR v2.0
-    if (false)
     {
         const mat4 mvp = scene.proj * scene.view;
         const float maxDist = 10.f;
