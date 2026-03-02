@@ -96,7 +96,7 @@ vec2 parallaxOcclusionMapBinarySearch(vec2 vertUv, int bumpMapIndex, vec3 tangen
 	const float heightScale = 0.025f;
 	vec3 viewDir = normalize(tangentCameraPos - tangentFragPos);
 
-    const float numLayers = 8.f;
+    const float numLayers = 32.f;
     float layerDepth = 1.f / numLayers;
     float currentLayerDepth = 0.0;
     // the amount to shift the texture coordinates per layer (from vector P)
