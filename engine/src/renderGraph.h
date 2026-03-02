@@ -22,6 +22,184 @@ using ImageBarrier = VkImageMemoryBarrier2;
 using BufferBarrier = VkBufferMemoryBarrier2;
 using MemoryBarrier = VkMemoryBarrier2;
 
+
+template<typename T>
+concept Resource = requires(T t, typename T::TransitionValue transitionValue)
+{
+    typename T::TransitionValue;
+
+    { t.readTransition(transitionValue); } -> std::same_as<void>;
+    { t.writeTransition(transitionValue); } -> std::same_as<void>;
+};
+
+template <typename T, typename... Args>
+concept RenderPass = requires(T t, typename T::Resources resources, Args&&... args)
+{
+    typename T::Resources;
+
+    { t.resources(std::forward<Args>(args)...); } -> std::same_as<typename T::Resources>;
+
+    { t.hasSideEffects; } -> std::convertable_to<bool>;
+
+    // TODO: temporary hack until I discover how to do this nicely and without dynamic dispatch
+    { t.registerCallbacks(resources); } -> std::same_as<void>;
+    // {
+    //     t.prepare(
+    //         std::declval<NewCompiledRenderGraph>(),
+    //         std::declval<const RenderContext&>(),
+    //         std::declval<typename T::Resource>
+    //     );
+    // } -> std::same_as<void>;
+
+    // {
+    //     t.render(
+    //         std::declval<NewCompiledRenderGraph>(),
+    //         std::declval<const RenderContext&>(),
+    //         std::declval<typename T::Resource>
+    //     );
+    // } -> std::same_as<void>;
+};
+
+
+struct NewRenderGraph
+{
+    template<typename T, typename... Inputs, typename... Outputs>
+        requires RenderPass<T, Inputs...>
+    auto addPass(T&& pass, Inputs&&... inputs) -> auto
+    {
+        auto result = pass.resources(inputs);
+
+        // TEMP: for compatibility
+        pass.registerCallbacks(result);
+        
+        // TEMP: this is too for compatibility
+        auto renderPass = createPass(*this);
+        renderPass.pass.debugName = pass.name; 
+        renderPass.pass.pipeline = pass.pipeline;
+    }
+
+    template<typename T>
+        require Resource<T>
+    auto importResource(T res) -> RenderGraphResource<T>
+    {
+        auto handle = getHandle(graph);
+        graph.resources[handle] = RenderGraph::Resource {
+            .data = data,
+        };
+        graph.layouts[handle] = layout;
+        return handle;
+    }
+
+    template<typename T>
+        requires Resource<T>
+    auto readResource(RenderGraphResource<T> res, typename T::TransitionValue transitionValue) -> RenderGraphResource<T>
+    {
+        res.readTransition(u);
+    }
+
+    template<typename T>
+        requires Resource<T>
+    auto writeResource(RenderGraphResource<T> res, typename T::TransitionValue transitionValue) -> RenderGraphResource<T>
+    {
+        res.writeTransition(u);
+    }
+
+    auto compile() -> NewCompiledRenderGraph;
+};
+
+struct NewCompiledRenderGraph
+{
+    template<typename T>
+        requires Resource<T>
+    auto getResource(RenderGraphResource<T> res) -> T*
+    {
+        // TODO: would be nice to implement some sort of ensurance that this casting is valid
+        return static_cast<T*>(graph.resources[handle]);
+    }
+
+    auto execute(const RenderContext& ctx)
+    {
+        for (auto& pass : passes)
+        {
+            pass.prepare(*this, ctx, pass.resources)
+            pass.render(*this, ctx, pass.resources)
+        }
+    }
+};
+
+struct SDFPass
+{
+    struct GBuffer
+    {
+        RenderGraphResource<BindlessTexture> color;  
+    };
+
+    using Resources = GBuffer;
+    
+    auto resources(RenderGraph rg, ResourceHandle<BindlessTexture> color) -> GBuffer
+    {
+        return
+        {
+            .color = rg.writeResource(color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        };
+    }
+
+    auto prepare(CompiledRenderGraph& rg, const RenderContext& ctx, GBuffer resources) -> void
+    {
+        
+    }
+
+    auto render(CompiledRenderGraph rg, const RenderContext& ctx, GBuffer resources) -> void
+    {
+        
+    }
+};
+
+
+void renderer()
+{
+    RenderGraph rg {
+        .allowResourceAliasing = true
+    };
+
+    const auto [draws, lights, instanceData] = rg.addPass(SceneDataUploader{});
+    const auto depth = rg.addPass(ZPrePass{}, draws);
+    const auto shadows = rg.addPass(CSMPass{}, draws);
+    const auto lightData = rg.addPass(TiledLightCullingPass{}, lights, depth);
+    auto [color, normal] = rg.addPass(OpaqueForwardPass{}, draws, depth, shadows, lightData);
+    std::tie(color, normal) = rg.addPass(SDFGeometryPass{}, color, depth);
+
+    auto output = color;
+
+    // Post processing
+    output = rg.addPass(AtmospherePass{}, output, depth);
+    output = rg.addPass(BloomPass{}, output);
+    output = rg.addPass(ReinhardTonemapPass{}, output);
+    output = rg.addPass(SMAAPass{}, output);
+
+    output = rg.addPass(ImguiPass{}, swapchainRes);
+    rg.addPass(BlitPass{}, output, swapchainRes);
+
+    // if (rg.hash() != compiledRenderGraph.hash())
+    // {
+    //     compiledRenderGraph = rg.compile();
+    // }
+    compiledRenderGraph = rg.compile();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 struct CompiledRenderGraph
 {
     struct Node
@@ -39,6 +217,7 @@ struct CompiledRenderGraph
 struct RenderGraph
 {
     VulkanBackend& backend;
+    const bool allowResourceAliasing;
 
     struct ResourceAccess
     {

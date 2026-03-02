@@ -615,18 +615,21 @@ void Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, glm::mat4 tran
             i32 components;
             u8* loadRes = stbi_load(bumpFilename.c_str(), &bumpWidth, &bumpHeight, &components, STBI_rgb_alpha);
             rawTexture.data = loadRes;
+            std::vector<u8> bumpMapData;
             if (loadRes == nullptr)
             {
-                //bumpWidth = normalImg.width;
-                //bumpHeight = normalImg.height;
+                bumpWidth = normalImg.width;
+                bumpHeight = normalImg.height;
 
-                //std::println("Generating bump map: {}... ", bumpFilename);
-                //std::vector<u8> bumpMapData = tangentNormalMapToBumpMap(normalImg.image.data(), normalImg.width,
-                //    normalImg.height);
+                std::println("Generating bump map: {}... ", bumpFilename);
+                bumpMapData = tangentNormalMapToBumpMap(normalImg.image.data(), normalImg.width,
+                    normalImg.height);
 
-                //stbi_write_png(bumpFilename.c_str(), bumpHeight, bumpWidth, 4, bumpMapData.data(), 0);
-                //maybeTexture = backend.textures->loadRaw(bumpMapData.data(), bumpMapData.size(), bumpWidth,
-                //    bumpHeight, true, true, bumpFilename);
+                stbi_write_png(bumpFilename.c_str(), bumpHeight, bumpWidth, 4, bumpMapData.data(), 0);
+
+                rawTexture.data = bumpMapData.data();
+                // maybeTexture = backend.textures->loadRaw(bumpMapData.data(), bumpMapData.size(), bumpWidth,
+                //     bumpHeight, true, true, bumpFilename);
             }
             else
             {
@@ -844,7 +847,7 @@ auto Scene::addMesh(tinygltf::Model& model, tinygltf::Mesh& mesh, std::vector<gl
             if (loadRes == nullptr)
             {
                 std::println("Generating bump map: {}... ", bumpFilename);
-                bumpMapData = tangentNormalMapToBumpMap(normalImg.image.data(), normalImg.width, normalImg.height);
+                bumpMapData = tangentNormalMapToBumpMap(normalImg.image.data(), normalImg.width, normalImg.height, 50);
                 components = 4;
 
                 stbi_write_png(bumpFilename.c_str(), bumpHeight, bumpWidth, 4, bumpMapData.data(), 0);
