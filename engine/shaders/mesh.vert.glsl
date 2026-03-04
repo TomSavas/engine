@@ -30,6 +30,8 @@ layout (location = 0) out MESH_VS_OUT vsOut;
 
 void main()
 {
+	vsOut.objectId = gl_InstanceIndex;
+		
     const Instance instance = constants.instances.instances[nonuniformEXT(gl_InstanceIndex)];
     const mat4 model = instance.transform;
 

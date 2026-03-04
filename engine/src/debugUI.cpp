@@ -34,6 +34,8 @@ auto addDebugUI(DebugUI& debugUI, std::string parentId, std::function<void()> fn
 
 auto drawDebugUI(DebugUI& debugUI, VulkanBackend& backend, Scene& scene, f64 dt) -> void
 {
+    glfwGetCursorPos(backend.window, &debugUI.adjustedMousePos.x, &debugUI.adjustedMousePos.y);
+    
     if (!debugUI.enabled)
     {
         return;
@@ -186,7 +188,7 @@ auto drawDebugUI(DebugUI& debugUI, VulkanBackend& backend, Scene& scene, f64 dt)
                 const auto hasChildren = hierarchy[handle].size() != 0;
                 if (hasChildren)
                 {
-                    flags = static_cast<ImGuiTreeNodeFlags_>(flags | ImGuiTreeNodeFlags_OpenOnArrow);
+                    flags = static_cast<ImGuiTreeNodeFlags_>(flags | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_DefaultOpen);
                 }
                 else
                 {
@@ -212,17 +214,6 @@ auto drawDebugUI(DebugUI& debugUI, VulkanBackend& backend, Scene& scene, f64 dt)
         showNode(SceneGraph::kRootHandle);
     }
     ImGui::End();
-
-    // Highlight
-    {
-        auto& node = scene.sceneGraph.nodes[selectedHandle];
-        if (node.model && node.instance)
-        {
-            int materialHandle = static_cast<int>(scene.models.instances[*node.model][*node.instance].material.x);
-            DefaultMaterial& material = scene.materials.materials[materialHandle];
-            material.features = material.features | DefaultMaterial::Features::HIGHLIGHT;
-        }
-    }
 
     if (ImGui::Begin(INSPECTOR_CSTR, nullptr))
     {
@@ -447,6 +438,17 @@ auto drawDebugUI(DebugUI& debugUI, VulkanBackend& backend, Scene& scene, f64 dt)
         const auto windowSize = ImGui::GetWindowContentRegionMax();
         const auto size = ImVec2(windowSize.x + padding.x, windowSize.y + padding.y);
 
+        // std::println("Mouse x:{}, y:{}", debugUI.adjustedMousePos.x, debugUI.adjustedMousePos.y);
+        glm::dvec2 mouseUv = debugUI.adjustedMousePos / glm::dvec2(backend.rawResolution);
+        debugUI.adjustedMousePos = mouseUv * glm::dvec2(size.x, size.y);
+        // std::println("Window size: {} {}", backend.rawResolution.x, backend.rawResolution.y);
+        // std::println("Mouse u:{}, v:{}", mouseUv.x, mouseUv.y);
+        // std::println("ImGui size: {} {}", size.x, size.y);
+        // std::println("Mouse (remapped) x:{}, y:{}", debugUI.adjustedMousePos.x, debugUI.adjustedMousePos.y);
+
+        debugUI.adjustedMousePos.x = std::max(0.0, std::min(static_cast<f64>(backend.rawResolution.x), debugUI.adjustedMousePos.x));
+        debugUI.adjustedMousePos.y = std::max(0.0, std::min(static_cast<f64>(backend.rawResolution.y), debugUI.adjustedMousePos.y));
+
         auto imguiPos = ImGui::GetWindowPos();
         auto imguiSize = size;
 
@@ -503,6 +505,24 @@ auto drawDebugUI(DebugUI& debugUI, VulkanBackend& backend, Scene& scene, f64 dt)
             {
                 node.dirty = SceneGraph::NewNode::TransformDirtiness::LOCAL_DIRTY;
             }
+
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && debugUI.outputFocused && !ImGuizmo::IsOver(currentGizmoOp))
+            {
+                if (debugUI.mouseOverObject > 0 && debugUI.mouseOverObject < scene.sceneGraph.nodes.size())
+                {
+                    std::println("Picking object {}", debugUI.mouseOverObject + 3);
+                    selectedHandle = debugUI.mouseOverObject + 3;
+                }
+                else
+                {
+                    std::println("Attempted picking invalid object {}", debugUI.mouseOverObject + 3);
+                }
+            }
+        }
+
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+        {
+            selectedHandle = SceneGraph::kRootHandle;
         }
     }
     ImGui::End();
@@ -526,4 +546,16 @@ auto drawDebugUI(DebugUI& debugUI, VulkanBackend& backend, Scene& scene, f64 dt)
     }
 
     drawChildren(GLOBAL);
+    
+    // Highlight
+    {
+        auto& node = scene.sceneGraph.nodes[selectedHandle];
+        if (node.model && node.instance)
+        {
+            int materialHandle = static_cast<int>(scene.models.instances[*node.model][*node.instance].material.x);
+            DefaultMaterial& material = scene.materials.materials[materialHandle];
+            material.features = material.features | DefaultMaterial::Features::HIGHLIGHT;
+        }
+    }
+
 }

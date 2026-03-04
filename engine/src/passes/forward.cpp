@@ -62,6 +62,8 @@ auto initForwardOpaque(VulkanBackend& backend) -> ForwardOpaqueRenderer
             .enableAlphaBlending()
             .colorAttachmentFormat(vkutil::init::kDefaultColorFormat)
             .enableAlphaBlending()
+            .colorAttachmentFormat(VK_FORMAT_R32_UINT)
+            .disableBlending()
             .depthFormat(VK_FORMAT_D32_SFLOAT) // TEMP: this should be taken from bindless
             .addViewportScissorDynamicStates()
             .enableDepthTest(false, VK_COMPARE_OP_LESS_OR_EQUAL)
@@ -102,6 +104,15 @@ auto initForwardOpaque(VulkanBackend& backend) -> ForwardOpaqueRenderer
                 VK_IMAGE_ASPECT_COLOR_BIT
             )
         ),
+        .objectIds = backend.bindlessResources->addTexture(
+            backend.allocateTexture(
+                "ObjectIds",
+                vkutil::init::defaultColorAttachmentTextureCreateInfo(backend.scaledResolution, 1, VK_FORMAT_R32_UINT),
+                vkutil::init::defaultTextureAllocationCreateInfo(),
+                MipOptions::one(),
+                VK_IMAGE_ASPECT_COLOR_BIT
+            )
+        ),
     };
 }
 
@@ -133,6 +144,7 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
         RenderGraphResource<BindlessTexture> normal;
         RenderGraphResource<BindlessTexture> positions;
         RenderGraphResource<BindlessTexture> reflections;
+        RenderGraphResource<BindlessTexture> objectIds;
         RenderGraphResource<Buffer> perModelData;
     } data = {
         .culledDraws = readResource<Buffer>(graph, pass, culledDraws),
@@ -155,13 +167,16 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
         .reflections = writeResource<BindlessTexture>(graph, pass,
             importResource<BindlessTexture>(graph, pass, &forwardOpaqueRenderer->reflections),
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL),
+        .objectIds = writeResource<BindlessTexture>(graph, pass,
+            importResource<BindlessTexture>(graph, pass, &forwardOpaqueRenderer->objectIds),
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL),
         .perModelData = readResource<Buffer>(graph, pass, perModelData),
     };
 
     pass.pass.beginRendering = [data, &backend](const RenderContext& ctx)
     {
         VkClearValue colorClear = {
-            .color = {.uint32 = {0, 0, 0, 255}}
+            .color = {.uint32 = {0, 0, 0, 0}}
         };
         const auto& colorImage = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(ctx.graph,
             data.color));
@@ -179,11 +194,16 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
             data.reflections));
         auto reflectionAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(reflectionImage.image.view, &colorClear,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        const auto& objectIdsImage = backend.bindlessResources->getTexture(*getResource<BindlessTexture>(ctx.graph,
+            data.objectIds));
+        auto ojbectIdsAttachmentInfo = vkutil::init::renderingColorAttachmentInfo(objectIdsImage.image.view, &colorClear,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         VkRenderingAttachmentInfo attachments[] = {
             colorAttachmentInfo,
             normalAttachmentInfo,
             positionAttachmentInfo,
             reflectionAttachmentInfo,
+            ojbectIdsAttachmentInfo
         };
         auto depthAttachmentInfo = vkutil::init::renderingDepthAttachmentInfo(
             backend.bindlessResources->getTexture(
@@ -266,6 +286,7 @@ auto opaqueForwardPass(std::optional<ForwardOpaqueRenderer>& forwardOpaqueRender
         .color = data.color,
         .normal = data.normal,
         .positions = data.positions,
-        .reflections = data.reflections
+        .reflections = data.reflections,
+        .objectIds = data.objectIds,
     };
 }

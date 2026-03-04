@@ -2,6 +2,8 @@
 
 #include "engine.h"
 
+#include <glm/glm.hpp>
+
 #include <functional>
 #include <string>
 
@@ -36,6 +38,9 @@ struct DebugUI
 
     bool enabled;
     bool outputFocused;
+    
+    u32 mouseOverObject;
+    glm::dvec2 adjustedMousePos;
 };
 
 extern DebugUI debugUI;

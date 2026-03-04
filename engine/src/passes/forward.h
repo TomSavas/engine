@@ -15,6 +15,7 @@ struct ForwardOpaqueRenderer
     BindlessTexture normal;
     BindlessTexture positions;
     BindlessTexture reflections;
+    BindlessTexture objectIds;
 };
 
 struct ForwardRenderGraphData
@@ -23,6 +24,7 @@ struct ForwardRenderGraphData
     RenderGraphResource<BindlessTexture> normal;
     RenderGraphResource<BindlessTexture> positions;
     RenderGraphResource<BindlessTexture> reflections;
+    RenderGraphResource<BindlessTexture> objectIds;
 };
 
 [[nodiscard]]

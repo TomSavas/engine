@@ -40,12 +40,13 @@ layout(push_constant) uniform Constants
 } constants;
 
 layout (location = 10) in MESH_VS_OUT fsIn;
-layout (location = 21) in vec3 barycentric;
+layout (location = 22) in vec3 barycentric;
 
 layout (location = 0) out vec4 outColor;
 layout (location = 1) out vec4 outNormal;
 layout (location = 2) out vec4 outPos;
 layout (location = 3) out vec4 outReflection;
+layout (location = 4) out uint outObjectId;
 
 #include "parallax.glsl"
 
@@ -399,4 +400,6 @@ void main()
     {
         discard;
     }
+
+    outObjectId = fsIn.objectId;
 }

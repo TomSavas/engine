@@ -65,6 +65,7 @@ layout(buffer_reference, std430) readonly buffer Instances
 
 #define MESH_VS_OUT_COMPONENT(F) \
 	F(smooth, vec2, uv);\
+	F(flat, uint, objectId);   \
 	F(flat, int, materialIndex);   \
 	F(smooth, vec3, viewPos);             \
 	F(smooth, vec3, pos);                 \
