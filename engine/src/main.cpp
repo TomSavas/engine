@@ -137,13 +137,8 @@ i32 main()
 {
     VulkanBackend* backend = initVulkanBackend().expect("Failed initialising Vulkan backend");
 
-    Scene scene = physicsZoo(*backend);
-    // Scene scene = sponzaScene(*backend);
-    // Scene scene = instancingTestScene(*backend);
-
-    // debugDrawCube(scene, glm::vec3(0.f, 2.5f, 0.f), glm::vec3(1.f), glm::vec3(1.f, 0.f, 0.f));
-    // debugDrawCube(scene, glm::vec3(0.f, 5.5f, 0.f), glm::vec3(1.f), glm::vec3(1.f, 0.f, 0.f));
-    // debugDrawCube(scene, glm::vec3(1.f, 2.f, 3.f), glm::vec3(1.f), glm::vec3(1.f, 0.f, 0.f));
+    Scene scene = wipScene(*backend, 128);
+    // Scene scene = testScene(*backend);
 
     WorldRenderer worldRenderer(*backend);
 

@@ -114,7 +114,7 @@ auto ssrPass(std::optional<ScreenSpaceRenderer>& ssRenderer, std::optional<BlurR
             BLEND,
             ERROR
         } mode = BLEND;
-        static float reflectionIntensity = 0.5f;
+        static float reflectionIntensity = 5.f;
         static float blurIntensity = 0.75f;
         addDebugUI(debugUI, GRAPHICS_PASSES, [&]()
         {

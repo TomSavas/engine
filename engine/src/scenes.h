@@ -1,5 +1,7 @@
 #pragma once
 
+#include <random>
+
 auto sponzaScene(VulkanBackend& backend) -> Scene
 {
     Scene scene = emptyScene(backend);
@@ -84,12 +86,10 @@ auto instancingTestScene(VulkanBackend& backend) -> Scene
     return scene;
 }
 
-auto physicsZoo(VulkanBackend& backend) -> Scene
+auto wipScene(VulkanBackend& backend, u32 lightCount) -> Scene
 {
     Scene scene = emptyScene(backend);
     
-    // scene.materials = initMaterials<DefaultMaterial>(backend, 1);
-    // scene.models = initModels(backend, 4096, 4096, 1);
     scene.materials = initMaterials<DefaultMaterial>(backend, 8192);
     scene.models = initModels(backend, 4096 * 10000, 4096 * 10000, 8192);
 
@@ -122,8 +122,75 @@ auto physicsZoo(VulkanBackend& backend) -> Scene
 
     scene.addScene("../assets/Sponza/Sponza.gltf", {glm::mat4(1.f)});
 
+    // Lights
+    {
+        // std::random_device rd;
+        std::mt19937 gen {0}; // Have deterministic gen
+        std::uniform_real_distribution<f32> uniformDistribution(0, 1);
+        scene.pointLights.reserve(lightCount);
+
+        for (i32 i = 0; i < lightCount; ++i)
+        {
+            scene.pointLights.push_back(PointLight{
+                .pos = glm::vec4(
+                    (uniformDistribution(gen) - 0.5f) * 10.f,
+                    uniformDistribution(gen) * 5.f,
+                    (uniformDistribution(gen) - 0.5f) * 10.f,
+                    1.f),
+                .color = glm::vec4(
+                    uniformDistribution(gen) * 0.8 + 0.2,
+                    uniformDistribution(gen) * 0.8 + 0.2,
+                    uniformDistribution(gen) * 0.8 + 0.2,
+                    1.f
+                ),
+                .rangeAndStrength = glm::vec4(uniformDistribution(gen) * 3.5f + 0.2f, uniformDistribution(gen) * 10.f + 1.f, 0.f, 0.f) // [20; 200]
+            });
+
+            // auto& light = scene.pointLights.back();
+            // debugDrawSphere(scene, glm::vec3(light.pos), glm::vec3(light.rangeAndStrength.x), glm::vec3(light.color));
+        }
+    }
+
     return scene;
 }
+
+auto testScene(VulkanBackend& backend) -> Scene
+{
+    Scene scene = emptyScene(backend);
+    
+    scene.materials = initMaterials<DefaultMaterial>(backend, 8192);
+    scene.models = initModels(backend, 4096 * 10000, 4096 * 10000, 8192);
+
+    RawTexture raw {};
+    i32 components;
+    raw.data = stbi_load("../assets/dark_default_tex.png", (int*)&raw.extent.width, (int*)&raw.extent.height, &components, STBI_rgb_alpha);
+    raw.extent.depth = 1;
+    raw.size = raw.extent.width * raw.extent.height * components;
+    const auto mips = MipOptions::generateAll(raw);
+    auto texture = backend.bindlessResources->addTexture(
+        backend.createTexture(
+            "dark_default_tex.png",
+            raw,
+            vkutil::init::defaultColorTextureCreateInfo(raw.extent, mips.count(), VK_FORMAT_R8G8B8A8_UNORM),
+            vkutil::init::defaultTextureAllocationCreateInfo(),
+            mips,
+            VK_IMAGE_ASPECT_COLOR_BIT
+        )
+    );
+
+    auto handle = debugDrawPlane(scene, glm::vec3(0.f, -2.f, 0.f), glm::vec3(100.f), glm::vec3(1.f, 0.f, 0.f));
+    auto sceneNode = scene.sceneGraph.nodes[handle];
+    auto& instance = scene.models.instances[*sceneNode.model][*sceneNode.instance];
+    auto& mat = scene.materials.materials[static_cast<u32>(instance.material.x)];
+    if (raw.data != nullptr)
+    {
+        mat.albedo = texture;
+        mat.features = mat.features | DefaultMaterial::Features::MAINTAIN_UV_DENSITY;
+    }
+
+    return scene;
+}
+
 
 /*
 // Bad apple meme monitor simulation scene

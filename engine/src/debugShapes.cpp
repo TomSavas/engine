@@ -181,11 +181,68 @@ auto cubeModelData() -> Models::ModelData
     return data;
 }
 
-// auto sphereModelData(u32 verticalSubdivisions, u32 horizontalSubdivisions) -> Models::ModelData
-auto sphereModelData() -> Models::ModelData
+auto sphereModelData(u8 horizontalSubdivisions, u8 verticalSubdivisions) -> Models::ModelData
 {
-    // Models::ModelData data = loadMesh("../assets/box/Box.gltf");
-    Models::ModelData data = loadMesh("../assets/Suzanne/Suzanne.gltf");
+    Models::ModelData data;
+
+    horizontalSubdivisions = std::max<u8>(horizontalSubdivisions, 2);
+    verticalSubdivisions = std::max<u8>(verticalSubdivisions, 3);
+
+    const f32 radius = 0.5f;
+    const f32 pi = std::numbers::pi_v<f32>;
+
+    data.vertices.reserve((horizontalSubdivisions + 1) * (verticalSubdivisions + 1));
+    data.indices.reserve(horizontalSubdivisions * verticalSubdivisions * 6);
+
+    for (u8 i = 0; i <= horizontalSubdivisions; ++i)
+    {
+        f32 v = 1.0f - static_cast<f32>(i) / horizontalSubdivisions;
+        f32 phi = static_cast<f32>(i) / horizontalSubdivisions * pi;
+
+        for (u8 j = 0; j <= verticalSubdivisions; ++j)
+        {
+            f32 u = static_cast<f32>(j) / verticalSubdivisions;
+            f32 theta = u * 2.0f * pi;
+
+            f32 x = -radius * std::sin(phi) * std::sin(theta);
+            f32 y = radius * std::cos(phi);
+            f32 z = radius * std::sin(phi) * std::cos(theta);
+
+            f32 nx = x / radius;
+            f32 ny = y / radius;
+            f32 nz = z / radius;
+
+            f32 tx = -std::cos(theta);
+            f32 ty = 0.0f;
+            f32 tz = -std::sin(theta);
+
+            data.vertices.push_back(Vertex{
+                .pos = {x, y, z, 1.0f},
+                .uv = {u, v},
+                .normal = {nx, ny, nz, 0.0f},
+                .tangent = {tx, ty, tz, 0.0f}
+            });
+        }
+    }
+
+    for (u8 i = 0; i < horizontalSubdivisions; ++i)
+    {
+        for (u8 j = 0; j < verticalSubdivisions; ++j)
+        {
+            u8 topLeft = i * (verticalSubdivisions + 1) + j;
+            u8 topRight = topLeft + 1;
+            u8 bottomLeft = (i + 1) * (verticalSubdivisions + 1) + j;
+            u8 bottomRight = bottomLeft + 1;
+
+            data.indices.push_back(topLeft);
+            data.indices.push_back(topRight);
+            data.indices.push_back(bottomLeft);
+
+            data.indices.push_back(topRight);
+            data.indices.push_back(bottomRight);
+            data.indices.push_back(bottomLeft);
+        }
+    }
     
     for (const auto& vertex : data.vertices)
     {
@@ -304,7 +361,15 @@ auto debugDrawCube(Scene& scene, glm::vec3 center, glm::vec3 scale, glm::vec3 co
 auto debugDrawSphere(Scene& scene, glm::vec3 center, glm::vec3 scale, glm::vec3 color) -> void
 {
     std::array mat {
-        blankMat({color.r, color.g, color.b, 1.f})
+        DefaultMaterial {
+            .albedo = BindlessResources::kWhite,
+            .normalTexture = BindlessResources::kWhite,
+            .metallicRoughnessTexture = BindlessResources::kWhite,
+            .bumpTexture = BindlessResources::kWhite,
+            .baseColor = {color.r, color.g, color.b, 1.f},
+            .uvScaleOffset = {1.f, 1.f, 0.f, 0.f},
+            .features = DefaultMaterial::Features::LIT,
+        }
     };
     const auto materials = addMaterials<DefaultMaterial>(scene.backend, scene.materials, mat);
 

@@ -253,7 +253,7 @@ void main()
     // SSR v2.0
     {
         const mat4 mvp = scene.proj * scene.view;
-        const float maxDist = 10.f;
+        const float maxDist = 20.f;
         const int maxStepCount = 64;
         const float thickness = 0.005;
 
@@ -340,7 +340,7 @@ void main()
             vec2 reflectedUv = (q.xy / q.w) * 0.5 + 0.5;
 
             vec3 worldPos = inverse(mat3(scene.view)) * mix(q0, q1, w1);
-            float distFactor = clamp(0.f, 1.f, length(worldPos - startWS.xyz) / maxDist);
+            float distFactor = clamp(0.f, 1.f, length(worldPos - startWS.xyz) * 3.f / maxDist);
 
             vec3 L = reflectionDir;
             vec3 H = normalize(cameraDir + L);
@@ -363,7 +363,8 @@ void main()
 
             // add to outgoing radiance Lo
             float NdotL = max(dot(n, L), 0.0);
-            float reflectionIntensity = clamp(0.f, 1.f, (specular * NdotL).r);
+            // float reflectionIntensity = clamp(0.f, 1.f, (specular * NdotL).r);
+            float reflectionIntensity = (specular * NdotL).r;
 
             float visibility = 1.f
                 // Alignment with the camera
@@ -375,11 +376,10 @@ void main()
                 * (reflectedUv.y < 0.002f || reflectedUv.y > 0.998f ? 0.f : 1.f)
                 ;
 
-            outReflection = vec4(reflectedUv, clamp(0.f, 1.f, visibility * reflectionIntensity), 1.f);
+            outReflection = vec4(reflectedUv, visibility * reflectionIntensity, 1.f);
         }
     }
 
-    //outColor = vec4(color * heatmapGradient(float(lightCount) / 32.f), 1.f);
 
     outColor = vec4(albedo, 1.f);
     if ((uint(material.features.x) & LIT) != 0)
@@ -391,6 +391,8 @@ void main()
     {
         outColor.a *= 1.f - ceil(minBary);
     }
+
+    // outColor = vec4(outColor.xyz * heatmapGradient(float(lightCount) / 32.f), 1.f);
 
     // TODO: nearly zero
     if (outColor.a == 0.0)
