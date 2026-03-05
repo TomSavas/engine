@@ -38,7 +38,6 @@ auto colorPickerPass(std::optional<ColorPicker>& colorPicker, VulkanBackend& bac
     
     auto& pass = createPass(graph);
     pass.pass.debugName = "Color picker readback";
-    // pass.pass.pipeline = sdfRenderer->pipeline;
 
     auto ids = readResource<BindlessTexture>(graph, pass, objectIds, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
@@ -72,11 +71,7 @@ auto colorPickerPass(std::optional<ColorPicker>& colorPicker, VulkanBackend& bac
         // Readback from buffer N+1
         u8* dataOnGpu;
         vmaMapMemory(backend.allocator, readbackBuffer.allocation, (void**)&dataOnGpu);
-        memcpy(&colorPicker->lastHoveredObject, dataOnGpu, sizeof(colorPicker->lastHoveredObject));
+        memcpy(&colorPicker->lastHoveredInstance, dataOnGpu, sizeof(colorPicker->lastHoveredInstance));
         vmaUnmapMemory(backend.allocator, readbackBuffer.allocation);
-
-        // BUG: I think due to messed up object insertion this is off by one
-        colorPicker->lastHoveredObject -= 1;
-        // std::println("Last hovered object: {}", colorPicker->lastHoveredObject);
     };
 }

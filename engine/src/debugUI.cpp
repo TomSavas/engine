@@ -436,15 +436,11 @@ auto drawDebugUI(DebugUI& debugUI, VulkanBackend& backend, Scene& scene, f64 dt)
         
         const auto padding = ImGui::GetCursorPos();
         const auto windowSize = ImGui::GetWindowContentRegionMax();
-        const auto size = ImVec2(windowSize.x + padding.x, windowSize.y + padding.y);
+        const auto size = ImVec2(windowSize.x - padding.x, windowSize.y - padding.y);
 
-        // std::println("Mouse x:{}, y:{}", debugUI.adjustedMousePos.x, debugUI.adjustedMousePos.y);
-        glm::dvec2 mouseUv = debugUI.adjustedMousePos / glm::dvec2(backend.rawResolution);
-        debugUI.adjustedMousePos = mouseUv * glm::dvec2(size.x, size.y);
-        // std::println("Window size: {} {}", backend.rawResolution.x, backend.rawResolution.y);
-        // std::println("Mouse u:{}, v:{}", mouseUv.x, mouseUv.y);
-        // std::println("ImGui size: {} {}", size.x, size.y);
-        // std::println("Mouse (remapped) x:{}, y:{}", debugUI.adjustedMousePos.x, debugUI.adjustedMousePos.y);
+        glm::dvec2 windowPos = glm::dvec2(ImGui::GetWindowPos().x + padding.x, ImGui::GetWindowPos().y + padding.y);
+        glm::dvec2 mouseUv = (debugUI.adjustedMousePos - windowPos) / glm::dvec2(size.x, size.y);
+        debugUI.adjustedMousePos = mouseUv * glm::dvec2(backend.rawResolution);
 
         debugUI.adjustedMousePos.x = std::max(0.0, std::min(static_cast<f64>(backend.rawResolution.x), debugUI.adjustedMousePos.x));
         debugUI.adjustedMousePos.y = std::max(0.0, std::min(static_cast<f64>(backend.rawResolution.y), debugUI.adjustedMousePos.y));
@@ -506,17 +502,19 @@ auto drawDebugUI(DebugUI& debugUI, VulkanBackend& backend, Scene& scene, f64 dt)
                 node.dirty = SceneGraph::NewNode::TransformDirtiness::LOCAL_DIRTY;
             }
 
-            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && debugUI.outputFocused && !ImGuizmo::IsOver(currentGizmoOp))
+        }
+
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && debugUI.outputFocused && !ImGuizmo::IsOver(currentGizmoOp))
+        {
+            // BUG: the picker returns picked instance, not object. Currently this will only work on sponza scene.
+            // Once scene graph is rewritten this needs to be fixed.
+            if (debugUI.mouseOverInstance >= 0 && debugUI.mouseOverInstance < scene.sceneGraph.nodes.size())
             {
-                if (debugUI.mouseOverObject > 0 && debugUI.mouseOverObject < scene.sceneGraph.nodes.size())
-                {
-                    std::println("Picking object {}", debugUI.mouseOverObject + 3);
-                    selectedHandle = debugUI.mouseOverObject + 3;
-                }
-                else
-                {
-                    std::println("Attempted picking invalid object {}", debugUI.mouseOverObject + 3);
-                }
+                selectedHandle = debugUI.mouseOverInstance + 2;
+            }
+            else
+            {
+                std::println("Attempted picking invalid object {}", debugUI.mouseOverInstance + 2);
             }
         }
 

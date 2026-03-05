@@ -127,7 +127,7 @@ struct WorldRenderer
 
             if (colorPicker)
             {
-                debugUI.mouseOverObject = colorPicker->lastHoveredObject;
+                debugUI.mouseOverInstance = colorPicker->lastHoveredInstance;
                 colorPicker->mousePos = debugUI.adjustedMousePos;
             }
         }

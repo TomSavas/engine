@@ -39,7 +39,7 @@ struct DebugUI
     bool enabled;
     bool outputFocused;
     
-    u32 mouseOverObject;
+    u32 mouseOverInstance;
     glm::dvec2 adjustedMousePos;
 };
 

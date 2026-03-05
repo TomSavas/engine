@@ -93,6 +93,8 @@ auto wipScene(VulkanBackend& backend, u32 lightCount) -> Scene
     scene.materials = initMaterials<DefaultMaterial>(backend, 8192);
     scene.models = initModels(backend, 4096 * 10000, 4096 * 10000, 8192);
 
+    scene.addScene("../assets/Sponza/Sponza.gltf", {glm::mat4(1.f)});
+
     RawTexture raw {};
     i32 components;
     raw.data = stbi_load("../assets/dark_default_tex.png", (int*)&raw.extent.width, (int*)&raw.extent.height, &components, STBI_rgb_alpha);
@@ -120,8 +122,6 @@ auto wipScene(VulkanBackend& backend, u32 lightCount) -> Scene
         mat.features = mat.features | DefaultMaterial::Features::MAINTAIN_UV_DENSITY;
     }
 
-    scene.addScene("../assets/Sponza/Sponza.gltf", {glm::mat4(1.f)});
-
     // Lights
     {
         // std::random_device rd;
@@ -146,8 +146,8 @@ auto wipScene(VulkanBackend& backend, u32 lightCount) -> Scene
                 .rangeAndStrength = glm::vec4(uniformDistribution(gen) * 3.5f + 0.2f, uniformDistribution(gen) * 10.f + 1.f, 0.f, 0.f) // [20; 200]
             });
 
-            // auto& light = scene.pointLights.back();
-            // debugDrawSphere(scene, glm::vec3(light.pos), glm::vec3(light.rangeAndStrength.x), glm::vec3(light.color));
+            auto& light = scene.pointLights.back();
+            debugDrawSphere(scene, glm::vec3(light.pos), glm::vec3(light.rangeAndStrength.x), glm::vec3(light.color));
         }
     }
 

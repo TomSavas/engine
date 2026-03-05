@@ -40,6 +40,7 @@
 //         updateTransform(*child, glm::mat4(1.f));
 //     }
 // }
+static i32 genNodeNameCount = 0;
 
 auto SceneGraph::addChildNodes(std::vector<NodeHandle>& parents, std::vector<glm::mat4>& transforms, std::string_view baseName) -> std::vector<NodeHandle>
 {
@@ -59,7 +60,6 @@ auto SceneGraph::addChildNodes(std::vector<NodeHandle>& parents, std::vector<glm
     std::vector<NodeHandle> newNodes(parents.size());
     std::iota(newNodes.begin(), newNodes.end(), static_cast<NodeHandle>(nodes.size()));
 
-    static i32 genNodeNameCount = 0;
     i32 nodeNameCount = 0;
 
     // TODO: should be a touch smarter
@@ -104,8 +104,6 @@ auto SceneGraph::addEmptyChildNodes(std::vector<NodeHandle>& parents) -> std::ve
 
     std::vector<NodeHandle> newNodes(parents.size());
     std::iota(newNodes.begin(), newNodes.end(), static_cast<NodeHandle>(nodes.size()));
-
-    static i32 genNodeNameCount = 0;
 
     // TODO: should be a touch smarter
     nodes.resize(nodes.size() + parents.size());

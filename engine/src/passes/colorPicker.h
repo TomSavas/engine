@@ -15,7 +15,7 @@ struct ColorPicker
 {
     AllocatedBuffer readbackBuffers[2];
     glm::dvec2 mousePos;
-    u32 lastHoveredObject;
+    u32 lastHoveredInstance;
 };
 
 auto colorPickerPass(std::optional<ColorPicker>& sdfRenderer, VulkanBackend& backend,
