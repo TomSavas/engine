@@ -11,7 +11,7 @@
 #include "passes/sceneData.h"
 #include "passes/imgui.h"
 #include "passes/sdf.h"
-#include "passes/colorPicker.h"
+#include "passes/instancePicker.h"
 #include "renderGraph.h"
 #include "rhi/vulkan/backend.h"
 #include "scene.h"
@@ -61,7 +61,7 @@ struct WorldRenderer
     std::optional<LightCulling> lightCulling;
     std::optional<SdfRenderer> sdf;
 
-    std::optional<ColorPicker> colorPicker;
+    std::optional<InstancePicker> instancePicker;
 
     // Postpro fx
     std::optional<AtmosphereRenderer> atmosphere;
@@ -88,7 +88,7 @@ struct WorldRenderer
         auto lightData = tiledLightCullingPass(lightCulling, backend, graph, scene, depthMap,
             1.f / 20.f);
         auto [colorOutput, normal, positions, reflections, objectIds] = opaqueForwardPass(opaque, backend, graph, culledDraws, depthMap, cascadeData, shadowMap, lightData, perModelData);
-        colorPickerPass(colorPicker, backend, graph, objectIds); // TODO: mark as having side effects
+        instancePickerPass(instancePicker, backend, graph, objectIds); // TODO: mark as having side effects
         colorOutput = sdfGeometryPass(sdf, backend, graph, colorOutput, depthMap);
         output = ssrPass(ss, blur, backend, graph, colorOutput, normal, positions, reflections);
         output = atmospherePass(atmosphere, backend, graph, depthMap, output);
@@ -125,10 +125,10 @@ struct WorldRenderer
             }
             debugKeyWasPressed = debugKeyPressed;
 
-            if (colorPicker)
+            if (instancePicker)
             {
-                debugUI.mouseOverInstance = colorPicker->lastHoveredInstance;
-                colorPicker->mousePos = debugUI.adjustedMousePos;
+                debugUI.mouseOverInstance = instancePicker->lastHoveredInstance;
+                instancePicker->mousePos = debugUI.adjustedMousePos;
             }
         }
 

@@ -146,8 +146,8 @@ auto wipScene(VulkanBackend& backend, u32 lightCount) -> Scene
                 .rangeAndStrength = glm::vec4(uniformDistribution(gen) * 3.5f + 0.2f, uniformDistribution(gen) * 10.f + 1.f, 0.f, 0.f) // [20; 200]
             });
 
-            auto& light = scene.pointLights.back();
-            debugDrawSphere(scene, glm::vec3(light.pos), glm::vec3(light.rangeAndStrength.x), glm::vec3(light.color));
+            // auto& light = scene.pointLights.back();
+            // debugDrawSphere(scene, glm::vec3(light.pos), glm::vec3(light.rangeAndStrength.x), glm::vec3(light.color));
         }
     }
 

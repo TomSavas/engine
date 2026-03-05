@@ -11,13 +11,13 @@
 class VulkanBackend;
 struct RenderGraph;
 
-struct ColorPicker
+struct InstancePicker
 {
     AllocatedBuffer readbackBuffers[2];
     glm::dvec2 mousePos;
     u32 lastHoveredInstance;
 };
 
-auto colorPickerPass(std::optional<ColorPicker>& sdfRenderer, VulkanBackend& backend,
+auto instancePickerPass(std::optional<InstancePicker>& sdfRenderer, VulkanBackend& backend,
     RenderGraph& graph, RenderGraphResource<BindlessTexture> objectIds)
     -> void;

@@ -1,4 +1,4 @@
-#include "passes/colorPicker.h"
+#include "passes/instancePicker.h"
 
 #include "engine.h"
 
@@ -19,25 +19,25 @@
 
 #include <print>
 
-auto colorPickerPass(std::optional<ColorPicker>& colorPicker, VulkanBackend& backend,
+auto instancePickerPass(std::optional<InstancePicker>& colorPicker, VulkanBackend& backend,
     RenderGraph& graph, RenderGraphResource<BindlessTexture> objectIds)
     -> void
 {
     if (!colorPicker)
     {
-        colorPicker = ColorPicker{};
+        colorPicker = InstancePicker{};
 
         auto info = vkutil::init::bufferCreateInfo(sizeof(u32), VK_BUFFER_USAGE_TRANSFER_DST_BIT);
         for (size_t i{}; i < std::size(colorPicker->readbackBuffers); ++i)
         {
-            const auto name = std::format("Color picker readback #{}", i);
+            const auto name = std::format("Instance picker readback #{}", i);
             colorPicker->readbackBuffers[i] = backend.allocateBuffer(name, info, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
                 VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
         }
     }
     
     auto& pass = createPass(graph);
-    pass.pass.debugName = "Color picker readback";
+    pass.pass.debugName = "Instance picker readback";
 
     auto ids = readResource<BindlessTexture>(graph, pass, objectIds, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
